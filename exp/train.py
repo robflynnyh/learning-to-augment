@@ -13,6 +13,12 @@ import logging
 from tqdm import tqdm
 import random
 
+AUDIO_CHUNK_SIZE_DEFAULT = 4096
+NUM_WORKERS_DEFAULT = 8
+PIN_MEMORY_DEFAULT = False
+PREFETCH_DEFAULT = 2
+
+
 def load_rl_models(*args, **kwargs): #TODO!
     return None, None
 
@@ -38,7 +44,7 @@ def train_step(
     ):
         audio, audio_lengths, txt, ids = batch
 
-        chunk_size = config["training"].get("audio_chunk_size", 4096)
+        chunk_size = config["training"].get("audio_chunk_size", AUDIO_CHUNK_SIZE_DEFAULT)
         chunk_overlap = 0
         audio_chunks_ = chunk_spectogram(spec = audio, chunk_size = chunk_size, chunk_overlap = chunk_overlap)
         txt_chunks = [chunk_text_json(text = el, chunk_size = chunk_size, chunk_overlap = chunk_overlap, spectogram_length = audio.shape[-1]) for el in txt] 
@@ -127,16 +133,16 @@ def main(config):
 
     random_seed = get_random_seed(config=config)
 
-    paired_data = load_json(args.config['data']['path'])
+    paired_data = load_json(config['data']['path'])
     dataloader = VariableBatchSimpleDataloader(
         pairs = paired_data, 
         tokenizer = tokenizer, 
-        batch_size = args.config['training']['batch_size'],
-        chunk_size = args.config.audio_chunking['size'],
-        chunk_overlap = args.config.audio_chunking['overlap'],
-        num_workers = args.num_workers,
-        pin_memory = args.pin_memory,
-        prefetch = args.prefetch_factor,
+        batch_size = config['training']['batch_size'],
+        chunk_size = config['training'].get('audio_chunk_size', AUDIO_CHUNK_SIZE_DEFAULT),
+        chunk_overlap = 0,
+        num_workers = config['training'].get('num_workers', NUM_WORKERS_DEFAULT),
+        pin_memory = config['training'].get('pin_memory', PIN_MEMORY_DEFAULT),
+        prefetch = config['training'].get('prefetch_factor', PREFETCH_DEFAULT),
         seen_ids = [], #TODO
         random_seed = random_seed,
     )
