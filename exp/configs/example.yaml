@@ -1,0 +1,5 @@
+checkpointing:
+  asr_model: "/store/store5/data/acp21rjf_checkpoints/spotifyASR/lcasr-6L-256D-8H-RB-1p5M/step_105360.pt"
+
+training:
+  random_seed: 1234
