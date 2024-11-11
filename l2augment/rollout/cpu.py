@@ -2,7 +2,7 @@ import torch
 from madgrad import MADGRAD
 from torch import Tensor
 from typing import List, Dict, Any, Callable
-from torch import Module
+from torch.nn import Module
 from lcasr.decoding.greedy import GreedyCTCDecoder
 
 DEFAULT_OPTIMIZER_CLASS = MADGRAD
