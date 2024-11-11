@@ -1,7 +1,7 @@
 import torch
 from madgrad import MADGRAD
 from torch import Tensor
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Callable
 from torch import Module
 from lcasr.decoding.greedy import GreedyCTCDecoder
 
@@ -9,17 +9,14 @@ DEFAULT_OPTIMIZER_CLASS = MADGRAD
 
 def cpu_rollout(
         policy:Module,
-        asr_model_class:Module,
-        asr_model_kwargs:Dict[str, Any],
-        state_dict:Dict[str, Tensor], 
+        load_asr_model_fn:Callable,
         utterances:List[Tensor], 
         references:List[str],
         tokenizer,
-        optim_args:Dict[str, Any] = {},
+        optim_args:Dict[str, Any] = {"lr":1e-6},
         **kwargs
     ):
-    asr_model = asr_model_class(**asr_model_kwargs)
-    asr_model.load_state_dict(state_dict)
+    asr_model = load_asr_model_fn()
     optimizer = kwargs.get("optimizer_class", DEFAULT_OPTIMIZER_CLASS)(asr_model.parameters(), **optim_args)
 
     decoder = GreedyCTCDecoder(tokenizer = tokenizer, blank_id = asr_model.decoder.num_classes-1)
