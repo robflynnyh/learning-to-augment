@@ -6,6 +6,7 @@ from lcasr.utils.audio_tools import load_tokenizer
 from lcasr.utils.general import load_model as load_asr_model, get_model_class
 # from l2augment.modelling import load_model as load_rl_models
 from l2augment.rollout import cpu_rollout
+from l2augment.modelling.models import Policy, Value
 from lcasr.utils.audio_tools import load_json
 from lcasr.utils.dataloading import VariableBatchSimpleDataloader, chunk_spectogram, chunk_text_json, reset_seen_ids
 import time
@@ -20,10 +21,16 @@ AUDIO_CHUNK_OVERLAP_DEFAULT = 0
 NUM_WORKERS_DEFAULT = 8
 PIN_MEMORY_DEFAULT = False
 PREFETCH_DEFAULT = 2
+POLICY_OUTPUT_DIM_DEFAULT = 80
 
 
-def load_rl_models(*args, **kwargs): #TODO!
-    return None, None
+def load_rl_models(config): #TODO!
+    policy_net = Policy(
+        input_dim=config['policy']['input_dim'],
+        output_dim=config['policy'].get('output_dim', POLICY_OUTPUT_DIM_DEFAULT)
+    )
+    value_net = None #TODO:!
+    return policy_net, value_net
 
 def load_asr_model_fn(asr_model, state_dict):
     asr_model.load_state_dict(state_dict)

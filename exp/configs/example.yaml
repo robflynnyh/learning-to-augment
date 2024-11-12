@@ -5,6 +5,9 @@ training:
   random_seed: 1234
   batch_size: 4
 
+policy:
+  input_dim: 256
+
 data:
   path: /store/store5/data/spotify/renamed_audio_text_pairs_10_percent.json
   base: /store/store5/data/spotify/spotify_10percent/
