@@ -51,8 +51,8 @@ class Policy(base):
         augmentation_probs = self.forward(seed=seed)
         augmentation_mask = torch.bernoulli(augmentation_probs)[:,:,None]
   
-        data = data * augmentation_mask
-        output = (data, seed) if return_seed else data
+        augmented_data = data * augmentation_mask
+        output = (augmented_data, seed) if return_seed else augmented_data
         return output
         
     def forward(self, seed):

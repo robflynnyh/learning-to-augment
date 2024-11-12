@@ -63,19 +63,23 @@ def train_step(
         tokenizer,
         seen_ids:List[str] = []
     ):
-        audio, audio_lengths, _, ids = batch
+        audio, audio_lengths, txt, ids = batch
 
         chunk_size = config["training"].get("audio_chunk_size", AUDIO_CHUNK_SIZE_DEFAULT)
         chunk_overlap = AUDIO_CHUNK_OVERLAP_DEFAULT
 
         chunk_audio_function = partial(chunk_spectogram, chunk_size = chunk_size, chunk_overlap = chunk_overlap)
+        chunk_text_function = partial(chunk_text_json, chunk_size = chunk_size, chunk_overlap = chunk_overlap)
 
         cur_audio = audio[0,:,:audio_lengths[0]][None]
+        cur_text = txt[0]
  
         rollout_fn(
             policy = policy_net,
             audio = cur_audio,
-            chunk_audio_function = chunk_audio_function
+            text = cur_text,
+            chunk_audio_function = chunk_audio_function,
+            chunk_text_function = chunk_text_function
         )
     
 
