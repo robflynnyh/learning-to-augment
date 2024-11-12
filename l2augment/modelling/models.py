@@ -37,8 +37,8 @@ class Policy(base):
         self.input_dim = input_dim
 
         self.network = nn.Sequential(
-            SwiGlu(input),
-            SwiGlu(input, output_dim),
+            SwiGlu(input_dim),
+            SwiGlu(input_dim, output_dim),
         )
 
     @staticmethod
