@@ -21,7 +21,7 @@ class SwiGlu(base):
         self.act = nn.SiLU()
         
     def forward(self, x:Tensor):
-        a, b = self.in_layer(x).chunk(2)
+        a, b = self.in_layer(x).chunk(2, dim=-1)
         c = a * self.act(b)
         return self.out_layer(c)
 
