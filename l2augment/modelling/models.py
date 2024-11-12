@@ -41,9 +41,20 @@ class Policy(base):
             SwiGlu(input, output_dim),
         )
 
-    def forward(self, batch_size):
-        x = torch.normal(mean=0, std=1.0, size=(batch_size, self.input_dim))
-        x = self.network(x)
+    @staticmethod
+    def get_seed(batch_size, input_dim):
+        return torch.normal(mean=0, std=1.0, size=(batch_size, input_dim))
+
+    def augment(self, data, return_seed=False):
+        batch_size = data.size(0)
+        seed = self.get_seed(batch_size=batch_size, input_dim=self.input_dim)
+        augmentation_mask = self.forward(seed=seed)
+        data = data * augmentation_mask
+        output = (data, seed) if return_seed else data
+        return output
+        
+    def forward(self, seed):
+        x = self.network(seed)
         x = x.sigmoid()
         return x
     
