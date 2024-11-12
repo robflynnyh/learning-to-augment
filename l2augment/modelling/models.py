@@ -48,7 +48,9 @@ class Policy(base):
     def augment(self, data, return_seed=False):
         batch_size = data.size(0)
         seed = self.get_seed(batch_size=batch_size, input_dim=self.input_dim)
-        augmentation_mask = self.forward(seed=seed)
+        augmentation_probs = self.forward(seed=seed)
+        augmentation_mask = torch.bernoulli(augmentation_probs)[:,:,None]
+  
         data = data * augmentation_mask
         output = (data, seed) if return_seed else data
         return output
