@@ -12,8 +12,11 @@ import time
 import logging
 from tqdm import tqdm
 import random
+from typing import List
+from os.path import join
 
 AUDIO_CHUNK_SIZE_DEFAULT = 4096
+AUDIO_CHUNK_OVERLAP_DEFAULT = 0
 NUM_WORKERS_DEFAULT = 8
 PIN_MEMORY_DEFAULT = False
 PREFETCH_DEFAULT = 2
@@ -22,8 +25,7 @@ PREFETCH_DEFAULT = 2
 def load_rl_models(*args, **kwargs): #TODO!
     return None, None
 
-def load_asr_model_fn(config, vocab_size, model_class, state_dict):
-    asr_model = load_asr_model(config, vocab_size, model_class)
+def load_asr_model_fn(asr_model, state_dict):
     asr_model.load_state_dict(state_dict)
     return asr_model
 
@@ -34,46 +36,44 @@ def get_random_seed(config):
         logging.info(f'random seed: {random_seed}')
     return random_seed
     
+def add_base_path_to_paired_data(paired_data, base_path):
+    for key in paired_data:
+        paired_data[key]['audio'] = join(base_path, "audio", paired_data[key]['audio'])
+        paired_data[key]['txt'] = join(base_path, "text", paired_data[key]['txt'])
+    return paired_data
+
+def load_paired_data(config):
+    paired_data = load_json(config['data']['path'])
+    paired_data = add_base_path_to_paired_data(paired_data=paired_data, base_path=config['data']['base'])
+    return paired_data
+
 def train_step(
         config,
         batch,
         rollout_fn,
         policy_net,
         value_net,
-        tokenizer
+        tokenizer,
+        seen_ids:List[str] = []
     ):
         audio, audio_lengths, txt, ids = batch
 
         chunk_size = config["training"].get("audio_chunk_size", AUDIO_CHUNK_SIZE_DEFAULT)
-        chunk_overlap = 0
-        audio_chunks_ = chunk_spectogram(spec = audio, chunk_size = chunk_size, chunk_overlap = chunk_overlap)
-        txt_chunks = [chunk_text_json(text = el, chunk_size = chunk_size, chunk_overlap = chunk_overlap, spectogram_length = audio.shape[-1]) for el in txt] 
+        chunk_overlap = AUDIO_CHUNK_OVERLAP_DEFAULT
 
-        del audio
-        backwards_every_loss, steps_since_backwards = 0.0, 0
-        chunks, culm_lengths_audio, nans_in_a_row = [], torch.zeros_like(audio_lengths), 0
-        pad_id = tokenizer.pad_id()
+        chunk_text_function = partial(chunk_text_json, chunk_size = chunk_size, chunk_overlap = chunk_overlap)
+        chunk_audio_function = partial(chunk_spectogram, chunk_size = chunk_size, chunk_overlap = chunk_overlap)
 
-        for ix, el in enumerate(audio_chunks_):
-
-            remove_mask = ~(culm_lengths_audio > audio_lengths)
-            cur_chunks, cur_culm_lengths = el[remove_mask], culm_lengths_audio[remove_mask]
-            cur_lengths = cur_chunks.shape[-1] - (cur_culm_lengths + cur_chunks.shape[-1] - audio_lengths[remove_mask] - chunk_overlap).clamp(0)
-          
-            enc_txt_chunks = [torch.LongTensor(tokenizer.encode(el[ix])) for i, el in enumerate(txt_chunks) if remove_mask[i]]
-            enc_txt_chunks_lengths = torch.LongTensor([el.shape[0] for el in enc_txt_chunks])
-            enc_txt_chunks = torch.nn.utils.rnn.pad_sequence(enc_txt_chunks, batch_first=True, padding_value=pad_id)
-            if enc_txt_chunks_lengths.max() == 0:
-                continue # skip if none contain text (bad batch)
-            chunks.append({
-                'audio':cur_chunks,
-                'txt':enc_txt_chunks,
-                'txt_lengths':enc_txt_chunks_lengths,
-                'audio_lengths':cur_lengths,
-                'selection_mask':remove_mask,
-                'cur_culm_lengths':cur_culm_lengths,
-            })
-            culm_lengths_audio[remove_mask] += cur_chunks.shape[-1] - (chunk_overlap if ix != 0 else 0)
+        cur_audio = audio[0,:,:audio_lengths[0]][None]
+ 
+        rollout_fn(
+            policy = policy_net,
+            audio = cur_audio,
+            text = txt[0],
+            chunk_text_function = chunk_text_function,
+            chunk_audio_function = chunk_audio_function
+        )
+    
 
 
 def train_loop(
@@ -81,7 +81,9 @@ def train_loop(
         dataloader,
         rollout_fn,
         policy_net,
-        value_net   
+        value_net,
+        epoch:int=0,
+        seen_ids:List[str] = []   
     ):
     max_epochs = config.get("training", {}).get("max_epochs", 1)
     i, finished = -1, False
@@ -107,7 +109,7 @@ def train_loop(
                 dataloader_iter = iter(dataloader)
                 pbar = tqdm(total = len(dataloader), desc = f'Training - Epoch {epoch}')
             continue
-        train_step(config, batch, rollout_fn, policy_net, value_net, dataloader.tokenizer)
+        train_step(config, batch, rollout_fn, policy_net, value_net, dataloader.tokenizer, seen_ids=seen_ids)
     
 
     # for epoch in range(epochs):
@@ -121,19 +123,19 @@ def main(config):
     tokenizer = load_tokenizer()
     asr_model_class = get_model_class(config = config)
     
-    asr_model_state_dict = torch.load(config["checkpointing"]["asr_model"], map_location="cpu")["model"]
+    asr_model_checkpoint = torch.load(config["checkpointing"]["asr_model"], map_location="cpu", weights_only=False)
+    asr_model_config = asr_model_checkpoint['config']
+    asr_model_state_dict = asr_model_checkpoint['model']
+
     partial_load_asr_model_fn = partial(
-        load_asr_model_fn, 
-        config, 
-        tokenizer.vocab_size(), 
-        asr_model_class, 
-        asr_model_state_dict
+        load_asr_model_fn,
+        load_asr_model(asr_model_config, tokenizer.vocab_size(), asr_model_class),
+        asr_model_state_dict,
     )
     policy_net, value_net = load_rl_models(config)
-
     random_seed = get_random_seed(config=config)
+    paired_data = load_paired_data(config=config)
 
-    paired_data = load_json(config['data']['path'])
     dataloader = VariableBatchSimpleDataloader(
         pairs = paired_data, 
         tokenizer = tokenizer, 
@@ -146,9 +148,14 @@ def main(config):
         seen_ids = [], #TODO
         random_seed = random_seed,
     )
-
-
     rollout_fn = partial(cpu_rollout, load_asr_model_fn = partial_load_asr_model_fn, tokenizer = tokenizer, verbose = True)
+    train_loop(
+        config=config,
+        dataloader=dataloader,
+        rollout_fn=rollout_fn,
+        policy_net=policy_net,
+        value_net=value_net
+    )
 
 
 if __name__ == "__main__":

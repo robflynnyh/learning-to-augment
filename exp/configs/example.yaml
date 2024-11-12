@@ -7,3 +7,4 @@ training:
 
 data:
   path: /store/store5/data/spotify/renamed_audio_text_pairs_10_percent.json
+  base: /store/store5/data/spotify/spotify_10percent/
