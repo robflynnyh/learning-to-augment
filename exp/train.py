@@ -15,6 +15,7 @@ from tqdm import tqdm
 import random
 from typing import List
 from os.path import join
+from madgrad import MADGRAD
 
 AUDIO_CHUNK_SIZE_DEFAULT = 4096
 AUDIO_CHUNK_OVERLAP_DEFAULT = 0
@@ -30,11 +31,14 @@ def load_rl_models(config): #TODO!
         input_dim=config['policy']['input_dim'],
         output_dim=config['policy'].get('output_dim', POLICY_OUTPUT_DIM_DEFAULT)
     )
+    policy_optim = MADGRAD(policy_net.parameters(), lr=1e-5)
     value_net = Value(
         input_dim=config['value']['input_dim'],
         output_dim=config['policy'].get('output_dim', VALUE_OUTPUT_DIM_DEFAULT)
     )
-    return policy_net, value_net
+    value_optim = MADGRAD(value_net.parameters(), lr=1e-5)
+    optimizers = [policy_optim, value_optim]
+    return policy_net, value_net, optimizers
 
 def load_asr_model_fn(asr_model, state_dict):
     asr_model.load_state_dict(state_dict)
@@ -65,6 +69,7 @@ def train_step(
         policy_net,
         value_net,
         tokenizer,
+        optmizers,
         seen_ids:List[str] = [],
         device='cuda',
     ):
@@ -99,11 +104,19 @@ def train_step(
         value_net.train()
 
         predicted_rewards = value_net(masks).squeeze(-1)
-  
+        advantage = rewards - predicted_rewards
+    
         probs = policy_net(seed=seeds)
         log_prob_at_i = (masks*probs + (1-masks)*(1-probs)).log()
+
         prob_of_mask = torch.sum(log_prob_at_i, dim=-1)
-      
+        loss_at_t = prob_of_mask*advantage
+
+        loss = loss_at_t.mean()
+        
+        for optim in optmizers: optim.zero_grad()
+        loss.backward()
+        for optim in optmizers: optim.step()
         
     
 
@@ -114,6 +127,7 @@ def train_loop(
         rollout_fn,
         policy_net,
         value_net,
+        optimizers,
         epoch:int=0,
         seen_ids:List[str] = []   
     ):
@@ -141,7 +155,17 @@ def train_loop(
                 dataloader_iter = iter(dataloader)
                 pbar = tqdm(total = len(dataloader), desc = f'Training - Epoch {epoch}')
             continue
-        train_step(config, batch, rollout_fn, policy_net, value_net, dataloader.tokenizer, seen_ids=seen_ids)
+
+        train_step(
+            config, 
+            batch, 
+            rollout_fn, 
+            policy_net, 
+            value_net, 
+            dataloader.tokenizer,
+            optimizers, 
+            seen_ids=seen_ids
+        )
     
 
     # for epoch in range(epochs):
@@ -164,7 +188,7 @@ def main(config):
         load_asr_model(asr_model_config, tokenizer.vocab_size(), asr_model_class),
         asr_model_state_dict,
     )
-    policy_net, value_net = load_rl_models(config)
+    policy_net, value_net, optimizers = load_rl_models(config)
     random_seed = get_random_seed(config=config)
     paired_data = load_paired_data(config=config)
 
@@ -186,7 +210,8 @@ def main(config):
         dataloader=dataloader,
         rollout_fn=rollout_fn,
         policy_net=policy_net,
-        value_net=value_net
+        value_net=value_net,
+        optimizers=optimizers
     )
 
 
