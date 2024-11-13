@@ -98,8 +98,12 @@ def train_step(
         policy_net.train()
         value_net.train()
 
-        predicted_rewards = value_net(masks)
-        print(predicted_rewards.shape)
+        predicted_rewards = value_net(masks).squeeze(-1)
+  
+        probs = policy_net(seed=seeds)
+        log_prob_at_i = (masks*probs + (1-masks)*(1-probs)).log()
+        prob_of_mask = torch.sum(log_prob_at_i, dim=-1)
+      
         
     
 
