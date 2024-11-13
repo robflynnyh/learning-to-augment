@@ -8,6 +8,9 @@ training:
 policy:
   input_dim: 256
 
+value:
+  input_dim: 80
+
 data:
   path: /store/store5/data/spotify/renamed_audio_text_pairs_10_percent.json
   base: /store/store5/data/spotify/spotify_10percent/

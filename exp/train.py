@@ -22,6 +22,7 @@ NUM_WORKERS_DEFAULT = 8
 PIN_MEMORY_DEFAULT = False
 PREFETCH_DEFAULT = 2
 POLICY_OUTPUT_DIM_DEFAULT = 80
+VALUE_OUTPUT_DIM_DEFAULT = 1
 
 
 def load_rl_models(config): #TODO!
@@ -29,7 +30,10 @@ def load_rl_models(config): #TODO!
         input_dim=config['policy']['input_dim'],
         output_dim=config['policy'].get('output_dim', POLICY_OUTPUT_DIM_DEFAULT)
     )
-    value_net = None #TODO:!
+    value_net = Value(
+        input_dim=config['value']['input_dim'],
+        output_dim=config['policy'].get('output_dim', VALUE_OUTPUT_DIM_DEFAULT)
+    )
     return policy_net, value_net
 
 def load_asr_model_fn(asr_model, state_dict):
@@ -61,7 +65,8 @@ def train_step(
         policy_net,
         value_net,
         tokenizer,
-        seen_ids:List[str] = []
+        seen_ids:List[str] = [],
+        device='cuda',
     ):
         audio, audio_lengths, txt, ids = batch
 
@@ -73,7 +78,9 @@ def train_step(
 
         cur_audio = audio[0,:,:audio_lengths[0]][None]
         cur_text = txt[0]
- 
+
+        policy_net.to('cpu')
+        policy_net.eval()
         rollout_output = rollout_fn(
             policy = policy_net,
             audio = cur_audio,
@@ -82,6 +89,18 @@ def train_step(
             chunk_text_function = chunk_text_function
         )
         rewards, masks, seeds = rollout_output['rewards'], rollout_output['masks'], rollout_output['seeds']
+
+        rewards = rewards.to(device)
+        masks = masks.to(device)
+        seeds = seeds.to(device)
+        policy_net.to(device)
+        value_net.to(device)
+        policy_net.train()
+        value_net.train()
+
+        predicted_rewards = value_net(masks)
+        print(predicted_rewards.shape)
+        
     
 
 
