@@ -45,14 +45,17 @@ class Policy(base):
     def get_seed(batch_size, input_dim):
         return torch.normal(mean=0, std=1.0, size=(batch_size, input_dim))
 
-    def augment(self, data, return_seed=False):
+    def augment(self, data, return_seed=False, return_mask=False):
         batch_size = data.size(0)
         seed = self.get_seed(batch_size=batch_size, input_dim=self.input_dim)
         augmentation_probs = self.forward(seed=seed)
         augmentation_mask = torch.bernoulli(augmentation_probs)[:,:,None]
   
         augmented_data = data * augmentation_mask
-        output = (augmented_data, seed) if return_seed else augmented_data
+        output = {'augmented_data': augmented_data}
+        if return_seed: output['seed'] = seed
+        if return_mask: output['mask'] = augmentation_mask
+     
         return output
         
     def forward(self, seed):

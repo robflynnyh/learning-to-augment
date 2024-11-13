@@ -74,13 +74,14 @@ def train_step(
         cur_audio = audio[0,:,:audio_lengths[0]][None]
         cur_text = txt[0]
  
-        rollout_fn(
+        rollout_output = rollout_fn(
             policy = policy_net,
             audio = cur_audio,
             text = cur_text,
             chunk_audio_function = chunk_audio_function,
             chunk_text_function = chunk_text_function
         )
+        rewards, masks, seeds = rollout_output['rewards'], rollout_output['masks'], rollout_output['seeds']
     
 
 
@@ -156,7 +157,7 @@ def main(config):
         seen_ids = [], #TODO
         random_seed = random_seed,
     )
-    rollout_fn = partial(cpu_rollout, load_asr_model_fn = partial_load_asr_model_fn, tokenizer = tokenizer, verbose = True)
+    rollout_fn = partial(cpu_rollout, load_asr_model_fn = partial_load_asr_model_fn, tokenizer = tokenizer, verbose = False)
     train_loop(
         config=config,
         dataloader=dataloader,
