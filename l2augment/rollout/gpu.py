@@ -8,10 +8,10 @@ from lcasr.eval.wer import word_error_rate_detail
 import random
 
 DEFAULT_OPTIMIZER_CLASS = MADGRAD
-MAX_UTT_LIMIT = 1 #LIMIT TO 10 FOR NOW
+MAX_UTT_LIMIT = 20 #LIMIT TO 10 FOR NOW
 
 
-def cpu_rollout(
+def gpu_rollout(
         policy:Module,
         load_asr_model_fn:Callable,
         audio:Tensor,
@@ -19,6 +19,7 @@ def cpu_rollout(
         chunk_audio_function:Callable,
         chunk_text_function:Callable,
         tokenizer,
+        audio_lengths = None,
         optim_args:Dict[str, Any] = {"lr":3e-5},
         **kwargs
     ):
@@ -37,6 +38,8 @@ def cpu_rollout(
     
 
     asr_model = load_asr_model_fn()
+    asr_model = asr_model.to('cuda', dtype=dtype)
+
     optimizer = kwargs.get("optimizer_class", DEFAULT_OPTIMIZER_CLASS)(asr_model.parameters(), **optim_args)
     decoder = GreedyCTCDecoder(tokenizer = tokenizer, blank_id = asr_model.decoder.num_classes-1)
 
@@ -46,7 +49,7 @@ def cpu_rollout(
 
     initial_wers = {}
     for current_index in indexes:
-        audio_sample = audio_chunks[current_index] 
+        audio_sample = audio_chunks[current_index].to('cuda') 
         text_sample = text_chunks[current_index]
         with torch.no_grad():
             out = asr_model(audio_signal = audio_sample)
@@ -60,7 +63,7 @@ def cpu_rollout(
     masks = []
 
     for i, current_index in enumerate(indexes):
-        audio_sample = audio_chunks[current_index] 
+        audio_sample = audio_chunks[current_index].to('cuda') 
         text_sample = text_chunks[current_index]
         with torch.no_grad(): policy_output = policy.augment(audio_sample, return_seed=True, return_mask=True)
         
@@ -72,8 +75,9 @@ def cpu_rollout(
             audio_sample,
             augmented_audio_sample         
         ])
-
+        
         out = asr_model(audio_signal = audio_signal)
+       
         pseudo_targets = decoder(out['final_posteriors'][0].detach())
         noisy_predictions = out['final_posteriors'][1][None]
 

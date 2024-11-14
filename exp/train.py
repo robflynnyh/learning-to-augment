@@ -5,7 +5,7 @@ from omegaconf.omegaconf import OmegaConf
 from lcasr.utils.audio_tools import load_tokenizer
 from lcasr.utils.general import load_model as load_asr_model, get_model_class
 # from l2augment.modelling import load_model as load_rl_models
-from l2augment.rollout import cpu_rollout
+from l2augment.rollout import parellel_rollout as gpu_rollout
 from l2augment.modelling.models import Policy, Value
 from lcasr.utils.audio_tools import load_json
 from lcasr.utils.dataloading import VariableBatchSimpleDataloader, chunk_spectogram, chunk_text_json, reset_seen_ids
@@ -26,19 +26,27 @@ POLICY_OUTPUT_DIM_DEFAULT = 80
 VALUE_OUTPUT_DIM_DEFAULT = 1
 
 
-def load_rl_models(config): #TODO!
+def load_rl_models(config): 
     policy_net = Policy(
         input_dim=config['policy']['input_dim'],
         output_dim=config['policy'].get('output_dim', POLICY_OUTPUT_DIM_DEFAULT)
     )
-    policy_optim = MADGRAD(policy_net.parameters(), lr=1e-5)
+    policy_optim = MADGRAD(policy_net.parameters(), lr=config['policy']['optim']['lr'])
+    old_policy_net = None
+    # old_policy_net = Policy(
+    #     input_dim=config['policy']['input_dim'],
+    #     output_dim=config['policy'].get('output_dim', POLICY_OUTPUT_DIM_DEFAULT)
+    # )
+    # old_policy_net.load_state_dict(policy_net.state_dict())
+
     value_net = Value(
         input_dim=config['value']['input_dim'],
-        output_dim=config['policy'].get('output_dim', VALUE_OUTPUT_DIM_DEFAULT)
+        output_dim=config['policy'].get('output_dim', VALUE_OUTPUT_DIM_DEFAULT),
+        hidden_size=config['value']['hidden_size']
     )
-    value_optim = MADGRAD(value_net.parameters(), lr=1e-5)
+    value_optim = MADGRAD(value_net.parameters(), lr=config['value']['optim']['lr'])
     optimizers = [policy_optim, value_optim]
-    return policy_net, value_net, optimizers
+    return policy_net, old_policy_net, value_net, optimizers
 
 def load_asr_model_fn(asr_model, state_dict):
     asr_model.load_state_dict(state_dict)
@@ -67,6 +75,7 @@ def train_step(
         batch,
         rollout_fn,
         policy_net,
+        old_policy_net,
         value_net,
         tokenizer,
         optmizers,
@@ -81,41 +90,74 @@ def train_step(
         chunk_audio_function = partial(chunk_spectogram, chunk_size = chunk_size, chunk_overlap = chunk_overlap)
         chunk_text_function = partial(chunk_text_json, chunk_size = chunk_size, chunk_overlap = chunk_overlap)
 
-        cur_audio = audio[0,:,:audio_lengths[0]][None]
-        cur_text = txt[0]
+        # cur_audio = audio[0,:,:audio_lengths[0]][None]
+        # cur_text = txt[0]
 
-        policy_net.to('cpu')
+        policy_net.to(device)
         policy_net.eval()
         rollout_output = rollout_fn(
             policy = policy_net,
-            audio = cur_audio,
-            text = cur_text,
+            audio = audio,
+            audio_lengths = audio_lengths,
+            text = txt,
             chunk_audio_function = chunk_audio_function,
             chunk_text_function = chunk_text_function
         )
         rewards, masks, seeds = rollout_output['rewards'], rollout_output['masks'], rollout_output['seeds']
 
+        print(masks[0])
         rewards = rewards.to(device)
         masks = masks.to(device)
         seeds = seeds.to(device)
         policy_net.to(device)
+        if old_policy_net is not None: old_policy_net.to(device)
         value_net.to(device)
         policy_net.train()
         value_net.train()
 
         predicted_rewards = value_net(masks).squeeze(-1)
-        advantage = rewards - predicted_rewards
-    
-        probs = policy_net(seed=seeds)
-        log_prob_at_i = (masks*probs + (1-masks)*(1-probs)).log()
-
-        prob_of_mask = torch.sum(log_prob_at_i, dim=-1)
-        loss_at_t = prob_of_mask*advantage
-
-        loss = loss_at_t.mean()
         
+        advantage = rewards.detach() - predicted_rewards.detach()
+        
+        
+        probs = policy_net.forward(seed=seeds)
+        print(probs[0])
+
+        if old_policy_net is not None:
+            with torch.no_grad(): old_probs = old_policy_net(seed=seeds)
+        
+        log_prob_at_i = (masks*probs + (1-masks)*(1-probs)).log()
+        
+        if old_policy_net is not None:
+            old_log_prob_at_i = (masks*old_probs + (1-masks)*(1-old_probs)).log()
+        
+        prob_at_i = log_prob_at_i.exp()
+        # print(prob_at_i[0])
+        entrop = (-(prob_at_i * prob_at_i.log())).sum(-1).mean()
+        print(f'entrop: {entrop}')
+        
+        prob_of_mask = torch.sum(log_prob_at_i, dim=-1)
+
+        if old_policy_net is not None:
+            old_prob_of_mask = torch.sum(old_log_prob_at_i, dim=-1)
+        #print(',',(prob_of_mask-old_prob_of_mask).exp())
+        #print((prob_of_mask.item(),old_prob_of_mask.item(), (prob_of_mask/old_prob_of_mask).item()))
+        if old_policy_net is not None:
+            raise NotImplementedError()
+            loss_at_t = ((prob_of_mask-old_prob_of_mask).exp())*advantage
+        else: 
+            loss_at_t = prob_of_mask*advantage
+
+        critic_loss = torch.nn.functional.mse_loss(input=predicted_rewards, target=rewards)
+
+        loss = loss_at_t.mean() * 0.5 + critic_loss * 0.5
+        print(f'loss: {loss}, {loss_at_t.mean()}, {critic_loss}')
+        
+        if old_policy_net is not None: old_policy_net.load_state_dict(policy_net.state_dict())
         for optim in optmizers: optim.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(policy_net.parameters(), 1.0) 
+        torch.nn.utils.clip_grad_norm_(value_net.parameters(), 1.0)
         for optim in optmizers: optim.step()
         
     
@@ -126,6 +168,7 @@ def train_loop(
         dataloader,
         rollout_fn,
         policy_net,
+        old_policy_net,
         value_net,
         optimizers,
         epoch:int=0,
@@ -160,7 +203,8 @@ def train_loop(
             config, 
             batch, 
             rollout_fn, 
-            policy_net, 
+            policy_net,
+            old_policy_net, 
             value_net, 
             dataloader.tokenizer,
             optimizers, 
@@ -188,7 +232,7 @@ def main(config):
         load_asr_model(asr_model_config, tokenizer.vocab_size(), asr_model_class),
         asr_model_state_dict,
     )
-    policy_net, value_net, optimizers = load_rl_models(config)
+    policy_net, old_policy_net, value_net, optimizers = load_rl_models(config)
     random_seed = get_random_seed(config=config)
     paired_data = load_paired_data(config=config)
 
@@ -204,12 +248,13 @@ def main(config):
         seen_ids = [], #TODO
         random_seed = random_seed,
     )
-    rollout_fn = partial(cpu_rollout, load_asr_model_fn = partial_load_asr_model_fn, tokenizer = tokenizer, verbose = False)
+    rollout_fn = partial(gpu_rollout, load_asr_model_fn = partial_load_asr_model_fn, tokenizer = tokenizer, verbose = False)
     train_loop(
         config=config,
         dataloader=dataloader,
         rollout_fn=rollout_fn,
         policy_net=policy_net,
+        old_policy_net=old_policy_net,
         value_net=value_net,
         optimizers=optimizers
     )

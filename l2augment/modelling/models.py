@@ -47,7 +47,8 @@ class Policy(base):
 
     def augment(self, data, return_seed=False, return_mask=False):
         batch_size = data.size(0)
-        seed = self.get_seed(batch_size=batch_size, input_dim=self.input_dim)
+        seed = self.get_seed(batch_size=batch_size, input_dim=self.input_dim).to(data.device)
+
         augmentation_probs = self.forward(seed=seed)
         augmentation_mask = torch.bernoulli(augmentation_probs)[:,:,None]
   
@@ -69,18 +70,19 @@ class Value(base):
             self,
             input_dim,
             output_dim,
+            hidden_size,
             **kwargs
         ) -> None:
         super().__init__()
 
         self.backbone_network = nn.RNN(
             input_size=input_dim,
-            hidden_size=input_dim*2,
+            hidden_size=hidden_size,
             num_layers=2,
             batch_first=True
         )
         self.out = nn.Linear(
-            input_dim*2,
+            hidden_size,
             output_dim
         )
 
