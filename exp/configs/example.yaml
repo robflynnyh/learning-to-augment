@@ -3,18 +3,18 @@ checkpointing:
 
 training:
   random_seed: 1234
-  batch_size: 8
+  batch_size: 6
 
 policy:
   input_dim: 256
   optim:
-    lr: 3e-3
+    lr: 2e-3
 
 value:
   input_dim: 80
   hidden_size: 256
   optim:
-    lr: 3e-3
+    lr: 2e-3
 
 data:
   path: /store/store5/data/spotify/renamed_audio_text_pairs_10_percent.json

@@ -16,6 +16,8 @@ import random
 from typing import List
 from os.path import join
 from madgrad import MADGRAD
+from einops import repeat
+import wandb
 
 AUDIO_CHUNK_SIZE_DEFAULT = 4096
 AUDIO_CHUNK_OVERLAP_DEFAULT = 0
@@ -94,8 +96,18 @@ def train_step(
         # cur_audio = audio[0,:,:audio_lengths[0]][None]
         # cur_text = txt[0]
 
+    
+
         policy_net.to(device)
         policy_net.eval()
+        # rollout_output = rollout_fn(
+        #     policy = policy_net,
+        #     audio = repeat(audio, 'b ... -> (2 b) ...'),
+        #     audio_lengths = repeat(audio_lengths, 'b ... -> (2 b) ...'),
+        #     text = txt+txt,
+        #     chunk_audio_function = chunk_audio_function,
+        #     chunk_text_function = chunk_text_function
+        # )
         rollout_output = rollout_fn(
             policy = policy_net,
             audio = audio,
@@ -117,7 +129,6 @@ def train_step(
         value_net.train()
 
         predicted_rewards = value_net(masks).squeeze(-1)
-        print(predicted_rewards.shape, masks.shape)
         
         advantage = rewards.detach() - predicted_rewards.detach()
         
@@ -153,7 +164,16 @@ def train_step(
         critic_loss = torch.nn.functional.mse_loss(input=predicted_rewards, target=rewards)
 
         loss = loss_at_t.mean() * 0.5 + critic_loss * 0.5
+        print(rewards.mean().item(), predicted_rewards.mean().item())
         print(f'loss: {loss}, {loss_at_t.mean()}, {critic_loss}')
+
+        wandb.log({
+            'loss':loss,
+            'loss_policy':loss_at_t.mean(),
+            'critic_loss':critic_loss.mean(),
+            'entropy':entrop,
+            'avg_reward': rewards.mean().item(),
+        })
         
         if old_policy_net is not None: old_policy_net.load_state_dict(policy_net.state_dict())
         for optim in optmizers: optim.zero_grad()
@@ -228,6 +248,7 @@ def main(config):
     asr_model_checkpoint = torch.load(config["checkpointing"]["asr_model"], map_location="cpu", weights_only=False)
     asr_model_config = asr_model_checkpoint['config']
     #asr_model_config['model']['return_attention_weights'] = True
+    wandb.init(project="l2augment")
     asr_model_state_dict = asr_model_checkpoint['model']
 
     partial_load_asr_model_fn = partial(
