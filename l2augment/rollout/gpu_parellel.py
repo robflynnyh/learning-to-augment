@@ -107,8 +107,8 @@ def gpu_rollout(
       text_sample = chunk['txt']
       with torch.no_grad():
         out = asr_model(audio_signal = chunk['audio'].to('cuda'), length=chunk['audio_lengths'].to('cuda'))
-      initial_predictions = [decoder(out['final_posteriors'][i].detach()) for i in range(out['final_posteriors'].size(0))]
-      chunk['initial_wers'] = [word_error_rate_detail(hypotheses=[pred], references=[ref])[0] for pred, ref in zip(initial_predictions, text_sample)]
+      initial_predictions = [decoder(out['final_posteriors'][i]) for i in range(out['final_posteriors'].size(0))]
+      chunk['initial_wers'] = torch.tensor([word_error_rate_detail(hypotheses=[pred], references=[ref])[0] for pred, ref in zip(initial_predictions, text_sample)])
       for i_wer in range(len(chunk['initial_wers'])):
          if chunk['initial_wers'][i_wer] == float('inf'): chunk['initial_wers'][i_wer] = 0.0
         
@@ -118,6 +118,10 @@ def gpu_rollout(
     optimizer = kwargs.get("optimizer_class", DEFAULT_OPTIMIZER_CLASS)(asr_model_weights.values(), **optim_args)
     
 
+    rewards = torch.zeros((batch_size, len(chunks)))
+    seeds = []
+    masks = []
+
     for i, chunk in enumerate(chunks):
       audio_sample = chunk['audio'].to('cuda')
       audio_sample_lengths = chunk['audio_lengths'].to('cuda')
@@ -125,8 +129,8 @@ def gpu_rollout(
     
       with torch.no_grad(): policy_output = policy.augment(audio_sample, return_seed=True, return_mask=True)
       augmented_audio_sample = policy_output['augmented_data']
-      chunk['seed'] = policy_output['seed'].cpu()
-      chunk['mask'] = policy_output['mask'].cpu()
+      seeds.append(policy_output['seed'].cpu())
+      masks.append(policy_output['mask'].cpu())
 
       with torch.no_grad():
           model_fwd_func = torch.func.vmap(model_vmap_fn(asr_model))
@@ -154,64 +158,29 @@ def gpu_rollout(
          asr_model_weights[k].grad = v
       optimizer.step()
     
+      with torch.no_grad():
+        model_fwd_func = torch.func.vmap(model_vmap_fn(asr_model))
+        updated_output = model_fwd_func(asr_model_weights, audio_sample.unsqueeze(1))
+        updated_output_posteriors = updated_output['final_posteriors'].squeeze(1)
 
-  
+      updated_predictions = [decoder(el) for el in updated_output_posteriors]
+      updated_wers = torch.tensor([word_error_rate_detail(hypotheses=[pred], references=[ref])[0] for pred, ref in zip(updated_predictions, text_sample)])
+      for i_wer in range(len(updated_wers)):
+         if updated_wers[i_wer] == float('inf'): updated_wers[i_wer] = 0.0
+      initial_wers = chunk['initial_wers']
 
-    # rewards = torch.zeros(len(indexes))
-    # seeds = []
-    # masks = []
+      absolute_wer_reductions = initial_wers - updated_wers
 
-    for i, current_index in enumerate(indexes):
-        audio_sample = audio_chunks[current_index].to('cuda') 
-        text_sample = text_chunks[current_index]
-        with torch.no_grad(): policy_output = policy.augment(audio_sample, return_seed=True, return_mask=True)
-        
-        augmented_audio_sample = policy_output['augmented_data']
-        seeds.append(policy_output['seed'])
-        masks.append(policy_output['mask'])
-
-        audio_signal = torch.cat([
-            audio_sample,
-            augmented_audio_sample         
-        ])
-
-
-
-        pseudo_targets = decoder(out['final_posteriors'][0].detach())
-        noisy_predictions = out['final_posteriors'][1][None]
-
-        #if verbose: print(text_sample, '   ###   ', pseudo_targets, '----------->', decoder(noisy_predictions[0].detach()))
-
-        pseudo_targets = torch.LongTensor(tokenizer.encode(pseudo_targets)).unsqueeze(0)
-        N, B = noisy_predictions.shape[1], noisy_predictions.shape[0]
-        total_tokens_in_loss = N * B
-        
-        if verbose: print(pseudo_targets.shape, noisy_predictions.transpose(0,1).shape)
-        loss = ctc_loss_fn(noisy_predictions.transpose(0, 1), pseudo_targets, torch.LongTensor([N] * noisy_predictions.shape[0]), torch.LongTensor([pseudo_targets.shape[1]] * pseudo_targets.shape[0])) / total_tokens_in_loss
-        
-        optimizer.zero_grad()
-        loss.backward()
-        if kwargs.get("clip", False): torch.nn.utils.clip_grad_norm_(asr_model.parameters(), kwargs["clip"]) 
-        optimizer.step()
-
-        with torch.no_grad(): updated_out = asr_model(audio_signal = audio_sample)
-        
-        updated_prediction = decoder(updated_out['final_posteriors'][0].detach())
-        updated_wer = word_error_rate_detail(hypotheses=[updated_prediction], references=[text_sample])[0]
-        if updated_wer == float('inf'): updated_wer = 0.0
-        absolute_wer_reduction = initial_wers[current_index] - updated_wer
-
-        gamma_power = torch.arange(i+1).flip(0)
-        reward_factor = 0.9**gamma_power
-        reward_at_t = reward_factor * absolute_wer_reduction
-        rewards[:reward_at_t.size(0)] += reward_at_t
-
-        if verbose: print(absolute_wer_reduction)
+      gamma_power = torch.arange(i+1).flip(0)[None].repeat(batch_size,1)
+      reward_factor = 0.9**gamma_power
+      reward_at_t = reward_factor*absolute_wer_reductions.unsqueeze(1)
+    
+      rewards[:, :reward_at_t.size(1)] += reward_at_t
 
     rewards = rewards
-    seeds = torch.cat(seeds, dim=0)
-    masks = torch.cat(masks, dim=0).squeeze(-1)
-    
+    seeds = torch.stack(seeds, dim=1)
+    masks = torch.stack(masks, dim=1).squeeze(-1)
+
     return {
         'rewards': rewards,
         'masks': masks,

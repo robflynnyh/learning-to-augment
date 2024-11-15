@@ -106,7 +106,7 @@ def train_step(
         )
         rewards, masks, seeds = rollout_output['rewards'], rollout_output['masks'], rollout_output['seeds']
 
-        print(masks[0])
+      
         rewards = rewards.to(device)
         masks = masks.to(device)
         seeds = seeds.to(device)
@@ -117,12 +117,13 @@ def train_step(
         value_net.train()
 
         predicted_rewards = value_net(masks).squeeze(-1)
+        print(predicted_rewards.shape, masks.shape)
         
         advantage = rewards.detach() - predicted_rewards.detach()
         
         
         probs = policy_net.forward(seed=seeds)
-        print(probs[0])
+       
 
         if old_policy_net is not None:
             with torch.no_grad(): old_probs = old_policy_net(seed=seeds)
