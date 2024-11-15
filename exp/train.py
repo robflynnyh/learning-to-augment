@@ -50,6 +50,7 @@ def load_rl_models(config):
 
 def load_asr_model_fn(asr_model, state_dict):
     asr_model.load_state_dict(state_dict)
+    asr_model.flash_attn = False
     return asr_model
 
 def get_random_seed(config):
@@ -225,6 +226,7 @@ def main(config):
     
     asr_model_checkpoint = torch.load(config["checkpointing"]["asr_model"], map_location="cpu", weights_only=False)
     asr_model_config = asr_model_checkpoint['config']
+    #asr_model_config['model']['return_attention_weights'] = True
     asr_model_state_dict = asr_model_checkpoint['model']
 
     partial_load_asr_model_fn = partial(
