@@ -25,8 +25,9 @@ NUM_WORKERS_DEFAULT = 8
 PIN_MEMORY_DEFAULT = False
 PREFETCH_DEFAULT = 2
 POLICY_OUTPUT_DIM_DEFAULT = 80
-VALUE_OUTPUT_DIM_DEFAULT = 1
+VALUE_OUTPUT_DIM_DEFAULT = 2
 
+WANDB = True
 
 def load_rl_models(config): 
     policy_net = Policy(
@@ -128,9 +129,11 @@ def train_step(
         policy_net.train()
         value_net.train()
 
-        predicted_rewards = value_net(masks).squeeze(-1)
+        predicted_rewards = value_net(masks)
+        baseline_reward_prediction = predicted_rewards[:, :-1, 0]
+        reward_prediction = predicted_rewards[:, 1:, 1]
         
-        advantage = rewards.detach() - predicted_rewards.detach()
+        advantage = reward_prediction.detach() - baseline_reward_prediction.detach()
         
         
         probs = policy_net.forward(seed=seeds)
@@ -159,21 +162,25 @@ def train_step(
             raise NotImplementedError()
             loss_at_t = ((prob_of_mask-old_prob_of_mask).exp())*advantage
         else: 
-            loss_at_t = prob_of_mask*advantage
+            loss_at_t = -prob_of_mask*advantage
 
-        critic_loss = torch.nn.functional.mse_loss(input=predicted_rewards, target=rewards)
+        critic_loss = torch.nn.functional.mse_loss(
+            input=torch.cat([reward_prediction, baseline_reward_prediction], dim=0), 
+            target=rewards.repeat(2,1)
+        )
 
         loss = loss_at_t.mean() * 0.5 + critic_loss * 0.5
         print(rewards.mean().item(), predicted_rewards.mean().item())
         print(f'loss: {loss}, {loss_at_t.mean()}, {critic_loss}')
 
-        wandb.log({
-            'loss':loss,
-            'loss_policy':loss_at_t.mean(),
-            'critic_loss':critic_loss.mean(),
-            'entropy':entrop,
-            'avg_reward': rewards.mean().item(),
-        })
+        if WANDB:
+            wandb.log({
+                'loss':loss,
+                'loss_policy':loss_at_t.mean(),
+                'critic_loss':critic_loss.mean(),
+                'entropy':entrop,
+                'avg_reward': rewards.mean().item(),
+            })
         
         if old_policy_net is not None: old_policy_net.load_state_dict(policy_net.state_dict())
         for optim in optmizers: optim.zero_grad()
@@ -248,7 +255,7 @@ def main(config):
     asr_model_checkpoint = torch.load(config["checkpointing"]["asr_model"], map_location="cpu", weights_only=False)
     asr_model_config = asr_model_checkpoint['config']
     #asr_model_config['model']['return_attention_weights'] = True
-    wandb.init(project="l2augment")
+    if WANDB: wandb.init(project="l2augment")
     asr_model_state_dict = asr_model_checkpoint['model']
 
     partial_load_asr_model_fn = partial(

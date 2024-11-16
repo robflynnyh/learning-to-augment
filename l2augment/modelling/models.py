@@ -74,7 +74,8 @@ class Value(base):
             **kwargs
         ) -> None:
         super().__init__()
-
+        
+        self.bos_token = nn.Embedding(1, input_dim)
         self.backbone_network = nn.RNN(
             input_size=input_dim,
             hidden_size=hidden_size,
@@ -88,7 +89,12 @@ class Value(base):
 
 
     def forward(self, x:Tensor, state: Tensor | None = None): # x = action from policy
-        x, hn = self.backbone_network(x, state)
+        batch_size = x.size(0)
+        bos_token = self.bos_token.weight[None].repeat(batch_size, 1, 1)
+        x, hn = self.backbone_network(
+            torch.cat([bos_token, x], dim=1), 
+            state
+        )
         x = self.out(x)
         return x
 

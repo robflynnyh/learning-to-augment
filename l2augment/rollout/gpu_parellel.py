@@ -10,7 +10,7 @@ from functools import partial
 from einops import repeat, rearrange
 
 DEFAULT_OPTIMIZER_CLASS = MADGRAD
-MAX_UTT_LIMIT = 20 #LIMIT TO 10 FOR NOW
+MAX_UTT_LIMIT = 15 #LIMIT TO 10 FOR NOW
 CHUNK_OVERLAP = 0
 
 def model_vmap_fn(model):
@@ -93,7 +93,8 @@ def gpu_rollout(
     ################################
     # for z,el in enumerate(chunks):
     #    print(z,[el['txt'][0]])
- 
+
+    random.shuffle(chunks)
     chunks = chunks[:MAX_UTT_LIMIT]
     
     asr_model = load_asr_model_fn()
@@ -108,7 +109,7 @@ def gpu_rollout(
       with torch.no_grad():
         out = asr_model(audio_signal = chunk['audio'].to('cuda'), length=chunk['audio_lengths'].to('cuda'))
       initial_predictions = [decoder(out['final_posteriors'][i]) for i in range(out['final_posteriors'].size(0))]
-      chunk['initial_wers'] = torch.tensor([word_error_rate_detail(hypotheses=[pred], references=[ref])[0] for pred, ref in zip(initial_predictions, text_sample)])
+      chunk['initial_wers'] = torch.tensor([word_error_rate_detail(hypotheses=[pred], references=[ref], use_cer=True)[0] for pred, ref in zip(initial_predictions, text_sample)])
       for i_wer in range(len(chunk['initial_wers'])):
          if chunk['initial_wers'][i_wer] == float('inf'): chunk['initial_wers'][i_wer] = 0.0
         
@@ -164,7 +165,7 @@ def gpu_rollout(
         updated_output_posteriors = updated_output['final_posteriors'].squeeze(1)
 
       updated_predictions = [decoder(el) for el in updated_output_posteriors]
-      updated_wers = torch.tensor([word_error_rate_detail(hypotheses=[pred], references=[ref])[0] for pred, ref in zip(updated_predictions, text_sample)])
+      updated_wers = torch.tensor([word_error_rate_detail(hypotheses=[pred], references=[ref],use_cer=True)[0] for pred, ref in zip(updated_predictions, text_sample)])
       for i_wer in range(len(updated_wers)):
          if updated_wers[i_wer] == float('inf'): updated_wers[i_wer] = 0.0
       initial_wers = chunk['initial_wers']
