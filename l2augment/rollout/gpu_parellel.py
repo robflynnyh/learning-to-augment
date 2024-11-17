@@ -110,7 +110,7 @@ def gpu_rollout(
     for chunk in chunks:
       text_sample = chunk['txt']
       with torch.no_grad():
-        out = asr_model(audio_signal = chunk['audio'].to('cuda'), length=chunk['audio_lengths'].to('cuda'))
+        out = asr_model(audio_signal = chunk['audio'].to('cuda'))#, length=chunk['audio_lengths'].to('cuda'))
       initial_predictions = [decoder(out['final_posteriors'][i]) for i in range(out['final_posteriors'].size(0))]
       
       for i, (pred, ref) in enumerate(zip(initial_predictions, text_sample)):

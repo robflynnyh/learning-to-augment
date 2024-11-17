@@ -3,7 +3,7 @@ checkpointing:
 
 training:
   random_seed: 1234
-  batch_size: 6
+  batch_size: 4
 
 policy:
   input_dim: 256

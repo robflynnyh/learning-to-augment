@@ -16,7 +16,7 @@ import random
 from typing import List
 from os.path import join
 from madgrad import MADGRAD
-from einops import repeat
+from einops import repeat, rearrange
 import wandb
 
 AUDIO_CHUNK_SIZE_DEFAULT = 4096
@@ -112,13 +112,14 @@ def train_step(
       
         rollout_output = rollout_fn(
             policy = policy_net,
-            audio = audio,
-            audio_lengths = audio_lengths,
-            text = txt,
+            audio = audio.repeat(2, 1, 1),
+            audio_lengths = audio_lengths.repeat(2),
+            text = txt + txt,
             chunk_audio_function = chunk_audio_function,
             chunk_text_function = chunk_text_function
         )
         rewards, masks, seeds = rollout_output['rewards'], rollout_output['masks'], rollout_output['seeds']
+        torch.clamp_(rewards, -1.0,1.0)
         orig_rewards = rewards
         #rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-7)
 
@@ -131,57 +132,43 @@ def train_step(
         policy_net.train()
         value_net.train()
     
-        predicted_rewards, value_state = value_net(masks)
-        baseline_reward_prediction = predicted_rewards[:, :-1, 0]
-        reward_prediction = predicted_rewards[:, 1:, 1]
+        # predicted_rewards, value_state = value_net(masks)
+        # baseline_reward_prediction = predicted_rewards[:, :-1, 0]
+        # reward_prediction = predicted_rewards[:, 1:, 1]
+        # advantage = reward_prediction.detach() - baseline_reward_prediction.detach()
         
-        advantage = reward_prediction.detach() - baseline_reward_prediction.detach()
         
-        
-        probs,lr_probs,_ = policy_net.forward(seed=seeds)
+        probs, lr_probs, _ = policy_net.forward(seed=seeds)
 
-
-        if old_policy_net is not None:
-            with torch.no_grad(): old_probs = old_policy_net(seed=seeds)
         
         log_prob_at_i = (masks*probs + (1-masks)*(1-probs)).log()
         
-        if old_policy_net is not None:
-            old_log_prob_at_i = (masks*old_probs + (1-masks)*(1-old_probs)).log()
+   
         
         prob_at_i = log_prob_at_i.exp()
         # print(prob_at_i[0])
         entrop = (-(prob_at_i * prob_at_i.log())).sum(-1).mean()
         print(f'entrop: {entrop}')
         
-        prob_of_mask = torch.sum(log_prob_at_i, dim=-1)
-
-        if old_policy_net is not None:
-            old_prob_of_mask = torch.sum(old_log_prob_at_i, dim=-1)
-        #print(',',(prob_of_mask-old_prob_of_mask).exp())
-        #print((prob_of_mask.item(),old_prob_of_mask.item(), (prob_of_mask/old_prob_of_mask).item()))
-        if old_policy_net is not None:
-            raise NotImplementedError()
-            loss_at_t = ((prob_of_mask-old_prob_of_mask).exp())*advantage
-        else: 
-            loss_at_t = -prob_of_mask*advantage
-
-        rewards = rewards[:,None].repeat(1, reward_prediction.size(1))
-     
-        critic_loss = torch.nn.functional.mse_loss(
-            input=torch.cat([reward_prediction, baseline_reward_prediction], dim=0), 
-            target=rewards.repeat(2,1)
-        )
-
-        loss = loss_at_t.mean() * 0.5 + critic_loss * 0.5
-        print(rewards.mean().item(), predicted_rewards.mean().item())
-        print(f'loss: {loss}, {loss_at_t.mean()}, {critic_loss}')
+        prob_of_mask = torch.sum(log_prob_at_i, dim=(-1, -2))
+        prob_of_mask = rearrange(prob_of_mask, '(a b) -> a b', a=2)
+        rewards = rearrange(rewards, '(a b) -> b a', a=2)
+        total_probs = torch.logsumexp(prob_of_mask, dim=0, keepdim=True)
+        prob_of_mask = (prob_of_mask - total_probs).transpose(-1, -2)
+        pos_idx = rewards.max(-1).indices
+        neg_idx = rewards.min(-1).indices
+        pos_probs = torch.gather(prob_of_mask, dim=1, index=pos_idx.unsqueeze(-1))
+        neg_probs = torch.gather(prob_of_mask, dim=1, index=neg_idx.unsqueeze(-1))
+        ratio = neg_probs - pos_probs
+    
+        loss = ratio.mean() 
+        print(rewards.mean().item())
+        print(f'loss: {loss.exp().item()}')
 
         if WANDB:
             wandb.log({
-                'loss':loss,
-                'loss_policy':loss_at_t.mean(),
-                'critic_loss':critic_loss.mean(),
+                'loss':loss.exp().item(),
+                'loss_policy':loss.item(),
                 'entropy':entrop,
                 'avg_reward': orig_rewards.mean().item(),
             })
@@ -232,18 +219,18 @@ def train_loop(
                 pbar = tqdm(total = len(dataloader), desc = f'Training - Epoch {epoch}')
             continue
         
-        for r in range(10):
-            train_step(
-                config, 
-                batch, 
-                rollout_fn, 
-                policy_net,
-                old_policy_net, 
-                value_net, 
-                dataloader.tokenizer,
-                optimizers, 
-                seen_ids=seen_ids
-            )
+        train_step(
+            config, 
+            batch, 
+            rollout_fn, 
+            policy_net,
+            old_policy_net, 
+            value_net, 
+            dataloader.tokenizer,
+            optimizers, 
+            seen_ids=seen_ids
+        )
+        
     
 
     # for epoch in range(epochs):
