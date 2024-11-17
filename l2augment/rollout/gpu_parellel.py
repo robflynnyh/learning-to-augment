@@ -10,7 +10,7 @@ from functools import partial
 from einops import repeat, rearrange
 
 DEFAULT_OPTIMIZER_CLASS = MADGRAD
-MAX_UTT_LIMIT = 15 #LIMIT TO 10 FOR NOW
+MAX_UTT_LIMIT = 20   #LIMIT TO 10 FOR NOW
 CHUNK_OVERLAP = 0
 
 def model_vmap_fn(model):
@@ -40,7 +40,7 @@ def gpu_rollout(
         chunk_text_function:Callable,
         tokenizer,
         audio_lengths,
-        optim_args:Dict[str, Any] = {"lr":3e-5},
+        optim_args:Dict[str, Any] = {"lr":1e-5},
         **kwargs
     ):
 
@@ -104,16 +104,22 @@ def gpu_rollout(
     ctc_loss_fn = torch.nn.CTCLoss(blank=asr_model.decoder.num_classes-1, reduction='sum')
     verbose = kwargs.get("verbose", False)
 
+    initial_predictions_lists = [[] for el in range(batch_size)]
+    text_sample_lists = [[] for el in range(batch_size)]
+
     for chunk in chunks:
       text_sample = chunk['txt']
       with torch.no_grad():
         out = asr_model(audio_signal = chunk['audio'].to('cuda'), length=chunk['audio_lengths'].to('cuda'))
       initial_predictions = [decoder(out['final_posteriors'][i]) for i in range(out['final_posteriors'].size(0))]
-      chunk['initial_wers'] = torch.tensor([word_error_rate_detail(hypotheses=[pred], references=[ref], use_cer=True)[0] for pred, ref in zip(initial_predictions, text_sample)])
-      for i_wer in range(len(chunk['initial_wers'])):
-         if chunk['initial_wers'][i_wer] == float('inf'): chunk['initial_wers'][i_wer] = 0.0
+      
+      for i, (pred, ref) in enumerate(zip(initial_predictions, text_sample)):
+         initial_predictions_lists[i].append(pred)
+         text_sample_lists[i].append(ref)
         
-   
+    initial_wers = torch.tensor([word_error_rate_detail(hypotheses=pred, references=ref, use_cer=False)[0] for pred, ref in zip(initial_predictions_lists, text_sample_lists)])
+
+
     asr_model.eval()
     asr_model_weights = {k:repeat(v, f'... -> {batch_size} ...').clone() for k,v in asr_model.state_dict().items()}
     optimizer = kwargs.get("optimizer_class", DEFAULT_OPTIMIZER_CLASS)(asr_model_weights.values(), **optim_args)
@@ -122,16 +128,19 @@ def gpu_rollout(
     rewards = torch.zeros((batch_size, len(chunks)))
     seeds = []
     masks = []
+    policy_states = None
 
     for i, chunk in enumerate(chunks):
       audio_sample = chunk['audio'].to('cuda')
       audio_sample_lengths = chunk['audio_lengths'].to('cuda')
       text_sample = chunk['txt']
     
-      with torch.no_grad(): policy_output = policy.augment(audio_sample, return_seed=True, return_mask=True)
+      with torch.no_grad(): policy_output = policy.augment(audio_sample, state=policy_states, return_seed=True, return_mask=True)
       augmented_audio_sample = policy_output['augmented_data']
+      policy_states = policy_output['state']
       seeds.append(policy_output['seed'].cpu())
       masks.append(policy_output['mask'].cpu())
+
 
       with torch.no_grad():
           model_fwd_func = torch.func.vmap(model_vmap_fn(asr_model))
@@ -159,26 +168,27 @@ def gpu_rollout(
          asr_model_weights[k].grad = v
       optimizer.step()
     
+
+    final_predictions_lists = [[] for el in range(batch_size)]
+    for i, chunk in enumerate(chunks):
+      audio_sample = chunk['audio'].to('cuda')
+      audio_sample_lengths = chunk['audio_lengths'].to('cuda')
+      text_sample = chunk['txt']
+      
       with torch.no_grad():
         model_fwd_func = torch.func.vmap(model_vmap_fn(asr_model))
         updated_output = model_fwd_func(asr_model_weights, audio_sample.unsqueeze(1))
         updated_output_posteriors = updated_output['final_posteriors'].squeeze(1)
-
       updated_predictions = [decoder(el) for el in updated_output_posteriors]
-      updated_wers = torch.tensor([word_error_rate_detail(hypotheses=[pred], references=[ref],use_cer=True)[0] for pred, ref in zip(updated_predictions, text_sample)])
-      for i_wer in range(len(updated_wers)):
-         if updated_wers[i_wer] == float('inf'): updated_wers[i_wer] = 0.0
-      initial_wers = chunk['initial_wers']
+      for i, pred in enumerate(updated_predictions):
+         final_predictions_lists[i].append(pred)
 
-      absolute_wer_reductions = initial_wers - updated_wers
+    final_wers = torch.tensor([word_error_rate_detail(hypotheses=pred, references=ref, use_cer=False)[0] for pred, ref in zip(final_predictions_lists, text_sample_lists)])
+    wer_decrease = (initial_wers - final_wers)*100
+    wer_decrease = torch.nan_to_num(wer_decrease, nan=0.0)
+    print(wer_decrease)
 
-      gamma_power = torch.arange(i+1).flip(0)[None].repeat(batch_size,1)
-      reward_factor = 0.9**gamma_power
-      reward_at_t = reward_factor*absolute_wer_reductions.unsqueeze(1)
-    
-      rewards[:, :reward_at_t.size(1)] += reward_at_t
-
-    rewards = rewards
+    rewards = wer_decrease
     seeds = torch.stack(seeds, dim=1)
     masks = torch.stack(masks, dim=1).squeeze(-1)
 

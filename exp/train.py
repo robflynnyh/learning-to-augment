@@ -109,6 +109,7 @@ def train_step(
         #     chunk_audio_function = chunk_audio_function,
         #     chunk_text_function = chunk_text_function
         # )
+      
         rollout_output = rollout_fn(
             policy = policy_net,
             audio = audio,
@@ -118,8 +119,9 @@ def train_step(
             chunk_text_function = chunk_text_function
         )
         rewards, masks, seeds = rollout_output['rewards'], rollout_output['masks'], rollout_output['seeds']
+        orig_rewards = rewards
+        #rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-7)
 
-      
         rewards = rewards.to(device)
         masks = masks.to(device)
         seeds = seeds.to(device)
@@ -128,16 +130,16 @@ def train_step(
         value_net.to(device)
         policy_net.train()
         value_net.train()
-
-        predicted_rewards = value_net(masks)
+    
+        predicted_rewards, value_state = value_net(masks)
         baseline_reward_prediction = predicted_rewards[:, :-1, 0]
         reward_prediction = predicted_rewards[:, 1:, 1]
         
         advantage = reward_prediction.detach() - baseline_reward_prediction.detach()
         
         
-        probs = policy_net.forward(seed=seeds)
-       
+        probs,lr_probs,_ = policy_net.forward(seed=seeds)
+
 
         if old_policy_net is not None:
             with torch.no_grad(): old_probs = old_policy_net(seed=seeds)
@@ -164,6 +166,8 @@ def train_step(
         else: 
             loss_at_t = -prob_of_mask*advantage
 
+        rewards = rewards[:,None].repeat(1, reward_prediction.size(1))
+     
         critic_loss = torch.nn.functional.mse_loss(
             input=torch.cat([reward_prediction, baseline_reward_prediction], dim=0), 
             target=rewards.repeat(2,1)
@@ -179,7 +183,7 @@ def train_step(
                 'loss_policy':loss_at_t.mean(),
                 'critic_loss':critic_loss.mean(),
                 'entropy':entrop,
-                'avg_reward': rewards.mean().item(),
+                'avg_reward': orig_rewards.mean().item(),
             })
         
         if old_policy_net is not None: old_policy_net.load_state_dict(policy_net.state_dict())
@@ -227,18 +231,19 @@ def train_loop(
                 dataloader_iter = iter(dataloader)
                 pbar = tqdm(total = len(dataloader), desc = f'Training - Epoch {epoch}')
             continue
-
-        train_step(
-            config, 
-            batch, 
-            rollout_fn, 
-            policy_net,
-            old_policy_net, 
-            value_net, 
-            dataloader.tokenizer,
-            optimizers, 
-            seen_ids=seen_ids
-        )
+        
+        for r in range(10):
+            train_step(
+                config, 
+                batch, 
+                rollout_fn, 
+                policy_net,
+                old_policy_net, 
+                value_net, 
+                dataloader.tokenizer,
+                optimizers, 
+                seen_ids=seen_ids
+            )
     
 
     # for epoch in range(epochs):
