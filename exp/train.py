@@ -101,14 +101,7 @@ def train_step(
 
         policy_net.to(device)
         policy_net.eval()
-        # rollout_output = rollout_fn(
-        #     policy = policy_net,
-        #     audio = repeat(audio, 'b ... -> (2 b) ...'),
-        #     audio_lengths = repeat(audio_lengths, 'b ... -> (2 b) ...'),
-        #     text = txt+txt,
-        #     chunk_audio_function = chunk_audio_function,
-        #     chunk_text_function = chunk_text_function
-        # )
+
       
         rollout_output = rollout_fn(
             policy = policy_net,
@@ -118,69 +111,80 @@ def train_step(
             chunk_audio_function = chunk_audio_function,
             chunk_text_function = chunk_text_function
         )
-        rewards, masks, seeds = rollout_output['rewards'], rollout_output['masks'], rollout_output['seeds']
-        torch.clamp_(rewards, -1.0,1.0)
-        orig_rewards = rewards
-        #rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-7)
-
-        rewards = rewards.to(device)
-        masks = masks.to(device)
-        seeds = seeds.to(device)
-        policy_net.to(device)
-        if old_policy_net is not None: old_policy_net.to(device)
-        value_net.to(device)
-        policy_net.train()
-        value_net.train()
+        loops = 0
+        while loops < 5:
+            rewards, masks, seeds = rollout_output['rewards'], rollout_output['masks'], rollout_output['seeds']
+            remaining_chunks = rollout_output['remaining_chunks']
     
-        # predicted_rewards, value_state = value_net(masks)
-        # baseline_reward_prediction = predicted_rewards[:, :-1, 0]
-        # reward_prediction = predicted_rewards[:, 1:, 1]
-        # advantage = reward_prediction.detach() - baseline_reward_prediction.detach()
-        
-        
-        probs, lr_probs, _ = policy_net.forward(seed=seeds)
+            orig_rewards = rewards
+            #rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-7)
 
+            rewards = rewards.to(device)
+            masks = masks.to(device)
+            seeds = seeds.to(device)
+            policy_net.to(device)
+            if old_policy_net is not None: old_policy_net.to(device)
+            value_net.to(device)
+            policy_net.train()
+            value_net.train()
         
-        log_prob_at_i = (masks*probs + (1-masks)*(1-probs)).log()
-        
-   
-        
-        prob_at_i = log_prob_at_i.exp()
-        # print(prob_at_i[0])
-        entrop = (-(prob_at_i * prob_at_i.log())).sum(-1).mean()
-        print(f'entrop: {entrop}')
-        
-        prob_of_mask = torch.sum(log_prob_at_i, dim=(-1, -2))
-        prob_of_mask = rearrange(prob_of_mask, '(a b) -> a b', a=2)
-        rewards = rearrange(rewards, '(a b) -> b a', a=2)
-        total_probs = torch.logsumexp(prob_of_mask, dim=0, keepdim=True)
-        prob_of_mask = (prob_of_mask - total_probs).transpose(-1, -2)
-        pos_idx = rewards.max(-1).indices
-        neg_idx = rewards.min(-1).indices
-        pos_probs = torch.gather(prob_of_mask, dim=1, index=pos_idx.unsqueeze(-1))
-        neg_probs = torch.gather(prob_of_mask, dim=1, index=neg_idx.unsqueeze(-1))
-        ratio = neg_probs - pos_probs
-    
-        loss = ratio.mean() 
-        print(rewards.mean().item())
-        print(f'loss: {loss.exp().item()}')
+            # predicted_rewards, value_state = value_net(masks)
+            # baseline_reward_prediction = predicted_rewards[:, :-1, 0]
+            # reward_prediction = predicted_rewards[:, 1:, 1]
+            # advantage = reward_prediction.detach() - baseline_reward_prediction.detach()
+            
+            
+            probs, lr_probs, _ = policy_net.forward(seed=seeds)
 
-        if WANDB:
-            wandb.log({
-                'loss':loss.exp().item(),
-                'loss_policy':loss.item(),
-                'entropy':entrop,
-                'avg_reward': orig_rewards.mean().item(),
-            })
-        
-        if old_policy_net is not None: old_policy_net.load_state_dict(policy_net.state_dict())
-        for optim in optmizers: optim.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(policy_net.parameters(), 1.0) 
-        torch.nn.utils.clip_grad_norm_(value_net.parameters(), 1.0)
-        for optim in optmizers: optim.step()
-        
+            
+            log_prob_at_i = (masks*probs + (1-masks)*(1-probs)).log()
+            
     
+            
+            prob_at_i = log_prob_at_i.exp()
+            # print(prob_at_i[0])
+            entrop = (-(prob_at_i * prob_at_i.log())).sum(-1).mean()
+            print(f'entrop: {entrop}')
+            
+            prob_of_mask = torch.sum(log_prob_at_i, dim=(-1, -2))
+            prob_of_mask = rearrange(prob_of_mask, '(a b) -> a b', a=2)
+            rewards = rearrange(rewards, '(a b) -> b a', a=2)
+            total_probs = torch.logsumexp(prob_of_mask, dim=0, keepdim=True)
+            prob_of_mask = (prob_of_mask - total_probs).transpose(-1, -2)
+            pos_idx = rewards.max(-1).indices
+            neg_idx = rewards.min(-1).indices
+            pos_probs = torch.gather(prob_of_mask, dim=1, index=pos_idx.unsqueeze(-1))
+            neg_probs = torch.gather(prob_of_mask, dim=1, index=neg_idx.unsqueeze(-1))
+
+          
+            loss = (-(pos_probs - neg_probs).sigmoid().log().sum(-1)).mean()
+     
+            print(rewards.mean().item())
+            print(f'loss: {loss.exp().item()}')
+
+            if WANDB:
+                wandb.log({
+                    'loss':loss.exp().item(),
+                    'loss_policy':loss.item(),
+                    'entropy':entrop,
+                    'avg_reward': orig_rewards.mean().item(),
+                })
+            
+            if old_policy_net is not None: old_policy_net.load_state_dict(policy_net.state_dict())
+            for optim in optmizers: optim.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(policy_net.parameters(), 1.0) 
+            torch.nn.utils.clip_grad_norm_(value_net.parameters(), 1.0)
+            for optim in optmizers: optim.step()
+
+            if len(remaining_chunks) > 10:
+                rollout_output = rollout_fn(
+                    policy = policy_net,
+                    chunks = remaining_chunks
+                )
+                loops += 1
+            else:
+                loops = 5
 
 
 def train_loop(

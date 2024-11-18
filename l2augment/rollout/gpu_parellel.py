@@ -10,7 +10,7 @@ from functools import partial
 from einops import repeat, rearrange
 
 DEFAULT_OPTIMIZER_CLASS = MADGRAD
-MAX_UTT_LIMIT = 20   #LIMIT TO 10 FOR NOW
+MAX_UTT_LIMIT = 15   #LIMIT TO 10 FOR NOW
 CHUNK_OVERLAP = 0
 
 def model_vmap_fn(model):
@@ -34,67 +34,70 @@ def apply_ctc_loss_fn(ctc_loss_fn, pseudo_targets, a_lengths, target_lengths, to
 def gpu_rollout(
         policy:Module,
         load_asr_model_fn:Callable,
-        audio:Tensor,
-        text:List[Dict[str,str]],
-        chunk_audio_function:Callable,
-        chunk_text_function:Callable,
         tokenizer,
-        audio_lengths,
+        audio:Tensor=None,
+        audio_lengths:Tensor=None,
+        text:List[Dict[str,str]]=None,
+        chunk_audio_function:Callable=None,
+        chunk_text_function:Callable=None,
         optim_args:Dict[str, Any] = {"lr":1e-5},
+        chunks=None,
         **kwargs
     ):
 
     dtype = torch.float32 #temporary
-    audio = audio.to(dtype=dtype) #temporary
 
-    audio_chunks = chunk_audio_function(spec = audio)
-    text_chunks = [chunk_text_function(text = el, spectogram_length=audio.shape[-1]) for el in text]
-    #TODO text_chunks = [chunk_text_function(text=el, spectogram_length=audio.shape[-1])
-    utterances = len(audio_chunks)
-    batch_size = audio_chunks[0].size(0)
+    if chunks is None:
+      audio = audio.to(dtype=dtype) #temporary
+      audio_chunks = chunk_audio_function(spec = audio)
+      text_chunks = [chunk_text_function(text = el, spectogram_length=audio.shape[-1]) for el in text]
+      #TODO text_chunks = [chunk_text_function(text=el, spectogram_length=audio.shape[-1])
+      utterances = len(audio_chunks)
+      batch_size = audio_chunks[0].size(0)
 
-    chunks, culm_lengths_audio, nans_in_a_row = [], torch.zeros_like(audio_lengths), 0
+      chunks, culm_lengths_audio, nans_in_a_row = [], torch.zeros_like(audio_lengths), 0
 
-    ################################
-    i = 0
-    tracker = torch.arange(len(audio_chunks))[None].repeat(batch_size, 1)
-    #print(tracker)
-    for ix, el in enumerate(audio_chunks):
+      ################################
+      i = 0
+      tracker = torch.arange(len(audio_chunks))[None].repeat(batch_size, 1)
+      #print(tracker)
+      for ix, el in enumerate(audio_chunks):
 
-        reset_mask = ~(culm_lengths_audio > audio_lengths)
-        # print(reset_mask.shape, tracker.shape, ix, tracker[reset_mask].shape, tracker[reset_mask][:, ix, None].shape)
-        tracker[~reset_mask] -= tracker[~reset_mask][:, ix, None]
-        culm_lengths_audio[~reset_mask] *= 0
-        #print(reset_mask)
+          reset_mask = ~(culm_lengths_audio > audio_lengths)
+          # print(reset_mask.shape, tracker.shape, ix, tracker[reset_mask].shape, tracker[reset_mask][:, ix, None].shape)
+          tracker[~reset_mask] -= tracker[~reset_mask][:, ix, None]
+          culm_lengths_audio[~reset_mask] *= 0
+          #print(reset_mask)
 
-        cur_chunks = [audio_chunks[t_id[ix]][t_idx] for t_idx, t_id in enumerate(tracker)]
-        cur_chunk_lens = [el.size(-1) for el in cur_chunks]
-        if min(cur_chunk_lens) != max(cur_chunk_lens):
-           for c_i in range(len(cur_chunks)):
-              if cur_chunks[c_i].size(-1) < max(cur_chunk_lens):
-                 cur_chunks[c_i] = torch.cat((cur_chunks[c_i], torch.zeros((cur_chunks[c_i].size(0), max(cur_chunk_lens)-cur_chunks[c_i].size(-1)))), dim=-1)
-      
-        #print([el.shape for el in cur_chunks])
-        cur_chunks = torch.stack(cur_chunks, dim=0)
+          cur_chunks = [audio_chunks[t_id[ix]][t_idx] for t_idx, t_id in enumerate(tracker)]
+          cur_chunk_lens = [el.size(-1) for el in cur_chunks]
+          if min(cur_chunk_lens) != max(cur_chunk_lens):
+            for c_i in range(len(cur_chunks)):
+                if cur_chunks[c_i].size(-1) < max(cur_chunk_lens):
+                  cur_chunks[c_i] = torch.cat((cur_chunks[c_i], torch.zeros((cur_chunks[c_i].size(0), max(cur_chunk_lens)-cur_chunks[c_i].size(-1)))), dim=-1)
+        
+          #print([el.shape for el in cur_chunks])
+          cur_chunks = torch.stack(cur_chunks, dim=0)
 
-        cur_culm_lengths = culm_lengths_audio
-        cur_lengths = cur_chunks.shape[-1] - (cur_culm_lengths + cur_chunks.shape[-1] - audio_lengths - CHUNK_OVERLAP).clamp(0)
-      
-        txt_chunks = [el[tracker[i][ix]] for i, el in enumerate(text_chunks)]
+          cur_culm_lengths = culm_lengths_audio
+          cur_lengths = cur_chunks.shape[-1] - (cur_culm_lengths + cur_chunks.shape[-1] - audio_lengths - CHUNK_OVERLAP).clamp(0)
+        
+          txt_chunks = [el[tracker[i][ix]] for i, el in enumerate(text_chunks)]
 
-        chunks.append({
-            'audio':cur_chunks,
-            'txt':txt_chunks,
-            'audio_lengths':cur_lengths,
-            'cur_culm_lengths':cur_culm_lengths,
-        })
-        culm_lengths_audio += cur_chunks.shape[-1] - (CHUNK_OVERLAP if ix != 0 else 0)
-        i+=1
-    ################################
-    # for z,el in enumerate(chunks):
-    #    print(z,[el['txt'][0]])
+          chunks.append({
+              'audio':cur_chunks,
+              'txt':txt_chunks,
+              'audio_lengths':cur_lengths,
+              'cur_culm_lengths':cur_culm_lengths,
+          })
+          culm_lengths_audio += cur_chunks.shape[-1] - (CHUNK_OVERLAP if ix != 0 else 0)
+          i+=1
+      ################################
+      # for z,el in enumerate(chunks):
+      #    print(z,[el['txt'][0]])
 
     random.shuffle(chunks)
+    remaining_chunks = chunks[MAX_UTT_LIMIT:]
     chunks = chunks[:MAX_UTT_LIMIT]
     
     asr_model = load_asr_model_fn()
@@ -103,6 +106,8 @@ def gpu_rollout(
 
     ctc_loss_fn = torch.nn.CTCLoss(blank=asr_model.decoder.num_classes-1, reduction='sum')
     verbose = kwargs.get("verbose", False)
+
+    batch_size = chunks[0]['audio'].size(0)
 
     initial_predictions_lists = [[] for el in range(batch_size)]
     text_sample_lists = [[] for el in range(batch_size)]
@@ -195,7 +200,8 @@ def gpu_rollout(
     return {
         'rewards': rewards,
         'masks': masks,
-        'seeds': seeds
+        'seeds': seeds,
+        'remaining_chunks': remaining_chunks
     }
 
  
