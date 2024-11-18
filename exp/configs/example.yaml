@@ -8,7 +8,7 @@ training:
 policy:
   input_dim: 256
   optim:
-    lr: 1e-3
+    lr: 3e-5
 
 value:
   input_dim: 80

@@ -18,6 +18,7 @@ from os.path import join
 from madgrad import MADGRAD
 from einops import repeat, rearrange
 import wandb
+from torch_ema import ExponentialMovingAverage
 
 AUDIO_CHUNK_SIZE_DEFAULT = 4096
 AUDIO_CHUNK_OVERLAP_DEFAULT = 0
@@ -34,22 +35,20 @@ def load_rl_models(config):
         input_dim=config['policy']['input_dim'],
         output_dim=config['policy'].get('output_dim', POLICY_OUTPUT_DIM_DEFAULT)
     )
+    policy_net = policy_net.to('cuda')
     policy_optim = MADGRAD(policy_net.parameters(), lr=config['policy']['optim']['lr'])
     old_policy_net = None
-    # old_policy_net = Policy(
-    #     input_dim=config['policy']['input_dim'],
-    #     output_dim=config['policy'].get('output_dim', POLICY_OUTPUT_DIM_DEFAULT)
-    # )
-    # old_policy_net.load_state_dict(policy_net.state_dict())
+    ema = ExponentialMovingAverage(policy_net.parameters(), decay=0.995)
 
-    value_net = Value(
-        input_dim=config['value']['input_dim'],
-        output_dim=config['policy'].get('output_dim', VALUE_OUTPUT_DIM_DEFAULT),
-        hidden_size=config['value']['hidden_size']
-    )
-    value_optim = MADGRAD(value_net.parameters(), lr=config['value']['optim']['lr'])
-    optimizers = [policy_optim, value_optim]
-    return policy_net, old_policy_net, value_net, optimizers
+    value_net = None
+    # Value(
+    #     input_dim=config['value']['input_dim'],
+    #     output_dim=config['policy'].get('output_dim', VALUE_OUTPUT_DIM_DEFAULT),
+    #     hidden_size=config['value']['hidden_size']
+    # )
+    value_optim = None#MADGRAD(value_net.parameters(), lr=config['value']['optim']['lr'])
+    optimizers = [policy_optim]
+    return policy_net, ema, value_net, optimizers
 
 def load_asr_model_fn(asr_model, state_dict):
     asr_model.load_state_dict(state_dict)
@@ -79,7 +78,7 @@ def train_step(
         batch,
         rollout_fn,
         policy_net,
-        old_policy_net,
+        ema,
         value_net,
         tokenizer,
         optmizers,
@@ -102,15 +101,15 @@ def train_step(
         policy_net.to(device)
         policy_net.eval()
 
-      
-        rollout_output = rollout_fn(
-            policy = policy_net,
-            audio = audio.repeat(2, 1, 1),
-            audio_lengths = audio_lengths.repeat(2),
-            text = txt + txt,
-            chunk_audio_function = chunk_audio_function,
-            chunk_text_function = chunk_text_function
-        )
+        with ema.average_parameters():      
+            rollout_output = rollout_fn(
+                policy = policy_net,
+                audio = audio.repeat(2, 1, 1),
+                audio_lengths = audio_lengths.repeat(2),
+                text = txt + txt,
+                chunk_audio_function = chunk_audio_function,
+                chunk_text_function = chunk_text_function
+            )
         loops = 0
         while loops < 5:
             rewards, masks, seeds = rollout_output['rewards'], rollout_output['masks'], rollout_output['seeds']
@@ -123,23 +122,12 @@ def train_step(
             masks = masks.to(device)
             seeds = seeds.to(device)
             policy_net.to(device)
-            if old_policy_net is not None: old_policy_net.to(device)
-            value_net.to(device)
             policy_net.train()
-            value_net.train()
-        
-            # predicted_rewards, value_state = value_net(masks)
-            # baseline_reward_prediction = predicted_rewards[:, :-1, 0]
-            # reward_prediction = predicted_rewards[:, 1:, 1]
-            # advantage = reward_prediction.detach() - baseline_reward_prediction.detach()
-            
+           
             
             probs, lr_probs, _ = policy_net.forward(seed=seeds)
 
-            
-            log_prob_at_i = (masks*probs + (1-masks)*(1-probs)).log()
-            
-    
+            log_prob_at_i = (masks*probs + (1-masks)*(1-probs)).log()    
             
             prob_at_i = log_prob_at_i.exp()
             # print(prob_at_i[0])
@@ -170,18 +158,19 @@ def train_step(
                     'avg_reward': orig_rewards.mean().item(),
                 })
             
-            if old_policy_net is not None: old_policy_net.load_state_dict(policy_net.state_dict())
             for optim in optmizers: optim.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(policy_net.parameters(), 1.0) 
-            torch.nn.utils.clip_grad_norm_(value_net.parameters(), 1.0)
+            #torch.nn.utils.clip_grad_norm_(value_net.parameters(), 1.0)
             for optim in optmizers: optim.step()
+            ema.update()
 
             if len(remaining_chunks) > 10:
-                rollout_output = rollout_fn(
-                    policy = policy_net,
-                    chunks = remaining_chunks
-                )
+                with ema.average_parameters():
+                    rollout_output = rollout_fn(
+                        policy = policy_net,
+                        chunks = remaining_chunks
+                    )
                 loops += 1
             else:
                 loops = 5
