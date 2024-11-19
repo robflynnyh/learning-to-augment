@@ -11,7 +11,10 @@ from l2augment.modelling.models import Policy
 from lcasr.utils.audio_tools import load_json
 
 import os
+from os.path import join
 import json
+import pickle
+import random
 
 AUDIO_CHUNK_SIZE_DEFAULT = 4096
 AUDIO_CHUNK_OVERLAP_DEFAULT = 0
@@ -77,7 +80,12 @@ def get_text_and_audio(split):
         })
     return return_data
 
+def save_dictionary(dictionary, filename):
+    with open(filename, 'wb') as file:
+        pickle.dump(dictionary, file)
+
 def main(config):
+    save_path = config['generation']['save_dir']
     tokenizer = load_tokenizer()
     asr_model_class = get_model_class(config = config)
     
@@ -95,22 +103,23 @@ def main(config):
     rollout_fn = partial(cpu_rollout, load_asr_model_fn = partial_load_asr_model_fn, tokenizer = tokenizer, verbose = False)
 
     data = get_text_and_audio("train")
+    cur_data = data[config['index']]
+    text = cur_data['text']
+    cur_audio_path = cur_data['audio']
+    audio_spec, gold_text = cur_data['process_fn'](cur_data)
 
+    r_id = f"{config['index']}_{str(random.randint(0,99999999))}.pkl"
 
-    # all_transcripts = load_json("/store/store4/data/earnings-22/full_transcripts.json")
-    # file="/store/store4/data/earnings-22/train/4453085.spec.pt"
-    # id = "4453085"
-    # audio=torch.load(file, weights_only=True)
-    # trainscript = all_transcripts[id]
-    # print(audio.shape)
-    
-    # chunk_size = config["training"].get("audio_chunk_size", AUDIO_CHUNK_SIZE_DEFAULT)
+    rollout_output = rollout_fn(
+        policy = policy_net,
+        audio = audio_spec,
+        text = gold_text,
+    )
 
-    # rollout_output = rollout_fn(
-    #     policy = policy_net,
-    #     audio = audio,
-    #     text = trainscript,
-    # )
+    save_dictionary(
+        rollout_output, 
+        filename=join(save_path, r_id)
+    )
     
 
 
@@ -118,8 +127,10 @@ def main(config):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", "-config", type=str, required=True, help="Path to YAML config file")
+    parser.add_argument('--index', '-index', type=int, default=0)
     args = parser.parse_args()
     config = OmegaConf.load(args.config)
+    config['index'] = args.index
     main(config)
 
 

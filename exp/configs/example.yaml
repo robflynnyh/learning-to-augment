@@ -1,9 +1,10 @@
 checkpointing:
-  asr_model: "/store/store5/data/acp21rjf_checkpoints/spotifyASR/lcasr-6L-256D-8H-RB-1p5M/step_105360.pt"
+  asr_model: "/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_4096_rp_1/step_105360.pt"
 
 training:
   random_seed: 1234
   batch_size: 4
+
 
 policy:
   input_dim: 256
@@ -16,6 +17,5 @@ value:
   optim:
     lr: 1e-3
 
-data:
-  path: /store/store5/data/spotify/renamed_audio_text_pairs_10_percent.json
-  base: /store/store5/data/spotify/spotify_10percent/
+generation:
+  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollouts/"

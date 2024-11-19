@@ -120,7 +120,7 @@ class Value(base):
         )
 
 
-    def forward(self, x:Tensor, state: Tensor | None = None): # x = action from policy
+    def forward(self, x:Tensor, state: Tensor = None): # x = action from policy
         batch_size = x.size(0)
         bos_token = self.bos_token.weight[None].repeat(batch_size, 1, 1)
         x, hn = self.backbone_network(
