@@ -28,7 +28,7 @@ PREFETCH_DEFAULT = 2
 POLICY_OUTPUT_DIM_DEFAULT = 80
 VALUE_OUTPUT_DIM_DEFAULT = 2
 
-WANDB = True
+WANDB = False
 
 def load_rl_models(config): 
     policy_net = Policy(
@@ -138,14 +138,13 @@ def train_step(
             prob_of_mask = rearrange(prob_of_mask, '(a b) -> a b', a=2)
             rewards = rearrange(rewards, '(a b) -> b a', a=2)
             total_probs = torch.logsumexp(prob_of_mask, dim=0, keepdim=True)
-            prob_of_mask = (prob_of_mask - total_probs).transpose(-1, -2)
+            prob_of_mask = prob_of_mask.transpose(-1, -2)#(prob_of_mask - total_probs).transpose(-1, -2)
             pos_idx = rewards.max(-1).indices
             neg_idx = rewards.min(-1).indices
             pos_probs = torch.gather(prob_of_mask, dim=1, index=pos_idx.unsqueeze(-1))
             neg_probs = torch.gather(prob_of_mask, dim=1, index=neg_idx.unsqueeze(-1))
 
-          
-            loss = (-(pos_probs - neg_probs).sigmoid().log().sum(-1)).mean()
+            loss = (pos_probs.sum(-1).mean() - neg_probs.sum(-1).mean()).sigmoid()
      
             print(rewards.mean().item())
             print(f'loss: {loss.exp().item()}')
