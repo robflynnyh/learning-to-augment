@@ -31,6 +31,25 @@ def apply_ctc_loss_fn(ctc_loss_fn, pseudo_targets, a_lengths, target_lengths, to
   return ctc_loss_fn(noisy_predictions.transpose(0, 1), pseudo_targets, a_lengths, target_lengths) / total_tokens_in_loss
 
 
+def broadcast_multiply(tensor1, tensor2):
+    """
+    Multiply a tensor of size B with a tensor of size (B, ...) 
+    where the remaining dimensions can vary.
+    
+    Args:
+    - tensor1 (torch.Tensor): Tensor of size B
+    - tensor2 (torch.Tensor): Tensor of size (B, ...)
+    
+    Returns:
+    torch.Tensor: Result of broadcasting multiplication
+    """
+    # Reshape tensor1 to have additional singleton dimensions for broadcasting
+    # This ensures tensor1 can be multiplied with tensor2
+    broadcast_tensor1 = tensor1.view(tensor1.size(0), *([1] * (tensor2.ndim - 1)))
+    
+    # Multiply with broadcasting
+    return broadcast_tensor1 * tensor2
+
 def gpu_rollout(
         policy:Module,
         load_asr_model_fn:Callable,
@@ -133,6 +152,7 @@ def gpu_rollout(
     rewards = torch.zeros((batch_size, len(chunks)))
     seeds = []
     masks = []
+    lr_indexes = []
     policy_states = None
 
     for i, chunk in enumerate(chunks):
@@ -145,6 +165,8 @@ def gpu_rollout(
       policy_states = policy_output['state']
       seeds.append(policy_output['seed'].cpu())
       masks.append(policy_output['mask'].cpu())
+      lr_indexes.append(policy_output['selected_lr_indexes'].cpu())
+      lrs = policy_output['selected_lrs']
 
 
       with torch.no_grad():
@@ -170,7 +192,7 @@ def gpu_rollout(
    
       optimizer.zero_grad()
       for k,v in grad.items():
-         asr_model_weights[k].grad = v
+         asr_model_weights[k].grad = broadcast_multiply(lrs, v) 
       optimizer.step()
     
 
@@ -196,6 +218,8 @@ def gpu_rollout(
     rewards = wer_decrease
     seeds = torch.stack(seeds, dim=1)
     masks = torch.stack(masks, dim=1).squeeze(-1)
+    lr_indexes = torch.stack(lr_indexes, dim=1)
+    print(lr_indexes.shape)
 
     return {
         'rewards': rewards,
