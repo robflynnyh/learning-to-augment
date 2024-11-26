@@ -116,10 +116,11 @@ def main(config):
         text = gold_text,
     )
 
-    save_dictionary(
-        rollout_output, 
-        filename=join(save_path, r_id)
-    )
+    if save_path: # debug
+        save_dictionary(
+            rollout_output, 
+            filename=join(save_path, r_id)
+        )
     
 
 
