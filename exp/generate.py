@@ -103,9 +103,8 @@ def main(config):
     rollout_fn = partial(cpu_rollout, load_asr_model_fn = partial_load_asr_model_fn, tokenizer = tokenizer, verbose = False)
 
     data = get_text_and_audio("train")
+  
     cur_data = data[config['index']]
-    text = cur_data['text']
-    cur_audio_path = cur_data['audio']
     audio_spec, gold_text = cur_data['process_fn'](cur_data)
 
     r_id = f"{config['index']}_{str(random.randint(0,99999999))}.pkl"

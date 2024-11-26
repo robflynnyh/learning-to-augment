@@ -3,276 +3,201 @@ import torch
 from functools import partial
 from omegaconf.omegaconf import OmegaConf
 from lcasr.utils.audio_tools import load_tokenizer
+from lcasr.utils.audio_tools import processing_chain
 from lcasr.utils.general import load_model as load_asr_model, get_model_class
 # from l2augment.modelling import load_model as load_rl_models
-from l2augment.rollout import cpu_rollout
-from l2augment.modelling.models import Policy, Value
+from l2augment.rollout import  cpu_rollout
+from l2augment.modelling.models import Policy
 from lcasr.utils.audio_tools import load_json
-from lcasr.utils.dataloading import VariableBatchSimpleDataloader, chunk_spectogram, chunk_text_json, reset_seen_ids
-import time
-import logging
 from tqdm import tqdm
-import random
-from typing import List
+import logging
+import os
 from os.path import join
+from torch.utils.data import Dataset, DataLoader
+import json
+import pickle
+import random
+from typing import List, Dict, Any
 from madgrad import MADGRAD
-from einops import repeat, rearrange
+
 import wandb
-from torch_ema import ExponentialMovingAverage
+
+logger = logging.getLogger('train')
+logger.setLevel(logging.INFO)
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 AUDIO_CHUNK_SIZE_DEFAULT = 4096
 AUDIO_CHUNK_OVERLAP_DEFAULT = 0
-NUM_WORKERS_DEFAULT = 8
-PIN_MEMORY_DEFAULT = False
-PREFETCH_DEFAULT = 2
 POLICY_OUTPUT_DIM_DEFAULT = 80
-VALUE_OUTPUT_DIM_DEFAULT = 2
-
-WANDB = False
 
 def load_rl_models(config): 
     policy_net = Policy(
         input_dim=config['policy']['input_dim'],
         output_dim=config['policy'].get('output_dim', POLICY_OUTPUT_DIM_DEFAULT)
     )
-    policy_net = policy_net.to('cuda')
-    policy_optim = MADGRAD(policy_net.parameters(), lr=config['policy']['optim']['lr'])
-    old_policy_net = None
-    ema = ExponentialMovingAverage(policy_net.parameters(), decay=0.995)
+    policy_net = policy_net
+    return policy_net
 
-    value_net = None
-    # Value(
-    #     input_dim=config['value']['input_dim'],
-    #     output_dim=config['policy'].get('output_dim', VALUE_OUTPUT_DIM_DEFAULT),
-    #     hidden_size=config['value']['hidden_size']
-    # )
-    value_optim = None#MADGRAD(value_net.parameters(), lr=config['value']['optim']['lr'])
-    optimizers = [policy_optim]
-    return policy_net, ema, value_net, optimizers
+def save_dictionary(dictionary, filename):
+    with open(filename, 'wb') as file:
+        pickle.dump(dictionary, file)
 
-def load_asr_model_fn(asr_model, state_dict):
-    asr_model.load_state_dict(state_dict)
-    asr_model.flash_attn = False
-    return asr_model
-
-def get_random_seed(config):
-    random_seed = config['training'].get('random_seed', 1234)
-    if random_seed == 'random':  # generate using time
-        random_seed = int(time.time()) % 10000 
-        logging.info(f'random seed: {random_seed}')
-    return random_seed
+def load_dictionary(path):
+    with open(path, 'rb') as file:
+        return pickle.load(file)
     
-def add_base_path_to_paired_data(paired_data, base_path):
-    for key in paired_data:
-        paired_data[key]['audio'] = join(base_path, "audio", paired_data[key]['audio'])
-        paired_data[key]['txt'] = join(base_path, "text", paired_data[key]['txt'])
-    return paired_data
 
-def load_paired_data(config):
-    paired_data = load_json(config['data']['path'])
-    paired_data = add_base_path_to_paired_data(paired_data=paired_data, base_path=config['data']['base'])
-    return paired_data
+class CustomDataset(Dataset):
+    def __init__(self, path, rewards_mean:float, rewards_std:float):
+        # Convert inputs to torch tensors
+        self.base_path = path
+        self.files = os.listdir(path)
+        self.nbd = True
+        self.rewards_mean = rewards_mean
+        self.rewards_std = rewards_std
 
-def train_step(
-        config,
-        batch,
-        rollout_fn,
-        policy_net,
-        ema,
-        value_net,
-        tokenizer,
-        optmizers,
-        seen_ids:List[str] = [],
-        device='cuda',
-    ):
-        audio, audio_lengths, txt, ids = batch
-
-        chunk_size = config["training"].get("audio_chunk_size", AUDIO_CHUNK_SIZE_DEFAULT)
-        chunk_overlap = AUDIO_CHUNK_OVERLAP_DEFAULT
-
-        chunk_audio_function = partial(chunk_spectogram, chunk_size = chunk_size, chunk_overlap = chunk_overlap)
-        chunk_text_function = partial(chunk_text_json, chunk_size = chunk_size, chunk_overlap = chunk_overlap)
-
-        # cur_audio = audio[0,:,:audio_lengths[0]][None]
-        # cur_text = txt[0]
-
-
-
-        policy_net.to('cpu')
-        policy_net.eval()
-
-        with ema.average_parameters():      
-            rollout_output = rollout_fn(
-                policy = policy_net,
-                audio = audio[0][None],
-                audio_lengths = audio_lengths.repeat(2),
-                text = " ".join([el['word'] for el in txt[0]]),
-                chunk_audio_function = chunk_audio_function,
-                chunk_text_function = chunk_text_function
-            )
-        loops = 0
-        while loops < 5:
-            rewards, masks, seeds = rollout_output['rewards'], rollout_output['masks'], rollout_output['seeds']
-            remaining_chunks = rollout_output['remaining_chunks']
+    def __len__(self):
+        # Return the total number of samples
+        return len(self.files)
     
-            orig_rewards = rewards
-            #rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-7)
-
-            rewards = rewards.to(device)
-            masks = masks.to(device)
-            seeds = seeds.to(device)
-            policy_net.to(device)
-            policy_net.train()
-           
-            
-            probs, lr_probs, _ = policy_net.forward(seed=seeds)
-
-            log_prob_at_i = (masks*probs + (1-masks)*(1-probs)).log()    
-            
-            prob_at_i = log_prob_at_i.exp()
-            # print(prob_at_i[0])
-            entrop = (-(prob_at_i * prob_at_i.log())).sum(-1).mean()
-            print(f'entrop: {entrop}')
-            
-            prob_of_mask = torch.sum(log_prob_at_i, dim=(-1, -2))
-            prob_of_mask = rearrange(prob_of_mask, '(a b) -> a b', a=2)
-            rewards = rearrange(rewards, '(a b) -> b a', a=2)
-            total_probs = torch.logsumexp(prob_of_mask, dim=0, keepdim=True)
-            prob_of_mask = prob_of_mask.transpose(-1, -2)#(prob_of_mask - total_probs).transpose(-1, -2)
-            pos_idx = rewards.max(-1).indices
-            neg_idx = rewards.min(-1).indices
-            pos_probs = torch.gather(prob_of_mask, dim=1, index=pos_idx.unsqueeze(-1))
-            neg_probs = torch.gather(prob_of_mask, dim=1, index=neg_idx.unsqueeze(-1))
-
-            loss = (pos_probs.sum(-1).mean() - neg_probs.sum(-1).mean()).sigmoid()
-     
-            print(rewards.mean().item())
-            print(f'loss: {loss.exp().item()}')
-
-            if WANDB:
-                wandb.log({
-                    'loss':loss.exp().item(),
-                    'loss_policy':loss.item(),
-                    'entropy':entrop,
-                    'avg_reward': orig_rewards.mean().item(),
-                })
-            
-            for optim in optmizers: optim.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(policy_net.parameters(), 1.0) 
-            #torch.nn.utils.clip_grad_norm_(value_net.parameters(), 1.0)
-            for optim in optmizers: optim.step()
-            ema.update()
-
-            if len(remaining_chunks) > 10:
-                with ema.average_parameters():
-                    rollout_output = rollout_fn(
-                        policy = policy_net,
-                        chunks = remaining_chunks
-                    )
-                loops += 1
-            else:
-                loops = 5
-
-
-def train_loop(
-        config,
-        dataloader,
-        rollout_fn,
-        policy_net,
-        old_policy_net,
-        value_net,
-        optimizers,
-        epoch:int=0,
-        seen_ids:List[str] = []   
-    ):
-    max_epochs = config.get("training", {}).get("max_epochs", 1)
-    i, finished = -1, False
-    dataloader_iter = iter(dataloader)
-    total_recordings = dataloader.total_recordings() * max_epochs
-    pbar = tqdm(total = len(dataloader), desc = f'Training - Epoch {epoch}')
-
-    while not finished:
-        try:
-            batch, i = next(dataloader_iter), i + 1
-            pbar.update(1) if i > 0 else None
-        except StopIteration:
-            epoch += 1
-            seen_ids = reset_seen_ids(seen_ids = seen_ids, epoch = epoch - 1)
-            if epoch >= max_epochs:
-                finished = True
-            else:
-                dataloader.update(
-                    batch_size = dataloader.batch_size, 
-                    seen_ids = seen_ids,
-                    random_seed = random.randint(0, 10000),
-                )
-                dataloader_iter = iter(dataloader)
-                pbar = tqdm(total = len(dataloader), desc = f'Training - Epoch {epoch}')
-            continue
+    def __getitem__(self, idx):
+        data = load_dictionary(join(self.base_path, self.files[idx]))
+        seeds = data['seeds']
+        lrs = data['lrs']
+        masks = data['masks']
+        if self.nbd:
+            seeds = seeds.transpose(0,1)
+            masks = masks.transpose(0,1)
+        reward = data['original_wer'] - data['updated_wer']
+        reward = (reward - self.rewards_mean) / (self.rewards_std + 1e-8)
         
-        train_step(
-            config, 
-            batch, 
-            rollout_fn, 
-            policy_net,
-            old_policy_net, 
-            value_net, 
-            dataloader.tokenizer,
-            optimizers, 
-            seen_ids=seen_ids
-        )
-        
+        return {
+            'reward': reward,
+            'seeds': seeds,
+            'masks':masks,
+            'lrs': lrs
+        }
     
+def custom_collate_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+    lengths = [item['lrs'].size(0) for item in batch]
+    max_length = max(lengths)
+    lrs = []
+    seeds = []
+    masks = []
+    rewards = []
+    for i, item in enumerate(batch):
+        item_length = lengths[i]
+        lr, seed, mask = item['lrs'], item['seeds'], item['masks']
+        to_pad = max_length - item_length
+        if to_pad > 0:
+            lr = torch.cat((lr, torch.zeros(to_pad)), dim=0)
+            seed = torch.cat((seed, torch.zeros(1, to_pad, seed.size(-1))), dim=1)
+            mask = torch.cat((mask, torch.zeros(1, to_pad, mask.size(-1))), dim=1)
+        lrs.append(lr)
+        seeds.append(seed)
+        masks.append(mask)
+        rewards.append(item['reward'])
+    lrs = torch.stack(lrs, dim=0).to(dtype=torch.long)
+    masks = torch.cat(masks, dim=0)
+    seeds = torch.cat(seeds, dim=0)
+    rewards = torch.tensor(rewards)
+    lengths = torch.LongTensor(lengths)
 
-    # for epoch in range(epochs):
-    #     for batch in dataloader:
-    #         utts, refs = batch["utts"], batch["refs"]
-    #         rollout_fn(policy = policy_net)
+    return {
+        'lrs':lrs,
+        'masks':masks,
+        'seeds':seeds,
+        'rewards':rewards,
+        'lengths':lengths
+    }
+
+def get_rewards_dist_data(path_to_rollout_directory:str):
+    files = os.listdir(path_to_rollout_directory)
+    rewards = []
+    for file in tqdm(files, desc="fetching reward data"):
+        file_path = join(path_to_rollout_directory, file)
+        cur_dict = load_dictionary(file_path)
+        original_wer, updated_wer = cur_dict['original_wer'], cur_dict['updated_wer']
+        reward = original_wer - updated_wer
+        rewards.append(reward)
+    rewards = torch.tensor(rewards)
+    logger.info(f'Average reward: {rewards.mean()}')
+    rewards.clamp_(-0.1, 0.1)
+    return rewards.mean().item(), rewards.std().item()
 
 
+def train(
+        policy:torch.nn.Module,
+        optim:torch.optim.Optimizer,
+        config:Dict[str, Any],
+        dataloader:DataLoader
+    ):  
+        device = policy.device = config['training']['device']
+        for epoch in range(config['training']['epochs']):
+            pbar = tqdm(dataloader)
+            for batch in pbar:
+                seeds = batch['seeds'].to(device)
+                masks = batch['masks'].to(device)
+                rewards = batch['rewards'].to(device)
+                lengths = batch['lengths'].to(device)
+                lr_indexes = batch['lrs'].to(device)
+
+                mask_probs, lr_probs, _ = policy.forward(seeds)
+                selected_lr_probs = torch.gather(lr_probs, dim=-1, index=lr_indexes.unsqueeze(-1)).squeeze(-1)
+                pad_mask = ~(torch.arange(0, lengths.max())[None].repeat(lengths.size(0),1).to(device) < lengths[:, None])
+                selected_lr_probs = selected_lr_probs.masked_fill(pad_mask, value=1.0).log()
+                total_lr_probs = torch.sum(selected_lr_probs, dim=-1)
+                
+                mask_prob_at_i = (masks*mask_probs + (1-masks)*(1-mask_probs))
+                log_mask_prob_at_i = torch.masked_fill(mask_prob_at_i, pad_mask[:,:,None], 1.0).log()
+                total_prob_of_mask = torch.sum(log_mask_prob_at_i, dim=(-1, -2))
+
+                total_probs = total_prob_of_mask + total_lr_probs
+                loss = (-total_probs) * rewards
+                loss = loss.sum() / config['training']['batch_size']
+            
+                loss_to_log = loss.item()
+                wandb.log({'loss':loss_to_log})
+                pbar.set_description(desc=f'loss: {loss_to_log}')
+                optim.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(policy.parameters(), 2.0) 
+                optim.step()
+
+        return policy
+
+        
+def save_policy(model, config):
+    save_path = config['training']['model_save_path']
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'config': config
+    }, save_path)
+    
+    logging.info(f"Model saved successfully to {save_path}")
 
 def main(config):
-    tokenizer = load_tokenizer()
-    asr_model_class = get_model_class(config = config)
-    
-    asr_model_checkpoint = torch.load(config["checkpointing"]["asr_model"], map_location="cpu", weights_only=False)
-    asr_model_config = asr_model_checkpoint['config']
-    #asr_model_config['model']['return_attention_weights'] = True
-    if WANDB: wandb.init(project="l2augment")
-    asr_model_state_dict = asr_model_checkpoint['model']
+    rollout_directory = config['generation']['save_dir']
+    r_mean, r_std = get_rewards_dist_data(rollout_directory)
+    dataset = CustomDataset(config['generation']['save_dir'], r_mean, r_std)
+    dataloader = DataLoader(
+        dataset, 
+        batch_size=config['training']['batch_size'], 
+        shuffle=True, 
+        collate_fn=custom_collate_fn
+    )
+    policy = load_rl_models(config=config)
+    policy = policy.to(config['training']['device'])
 
-    partial_load_asr_model_fn = partial(
-        load_asr_model_fn,
-        load_asr_model(asr_model_config, tokenizer.vocab_size(), asr_model_class),
-        asr_model_state_dict,
-    )
-    policy_net, old_policy_net, value_net, optimizers = load_rl_models(config)
-    random_seed = get_random_seed(config=config)
-    paired_data = load_paired_data(config=config)
+    policy_optim = MADGRAD(policy.parameters(), lr=config['training']['lr'])
 
-    dataloader = VariableBatchSimpleDataloader(
-        pairs = paired_data, 
-        tokenizer = tokenizer, 
-        batch_size = config['training']['batch_size'],
-        chunk_size = config['training'].get('audio_chunk_size', AUDIO_CHUNK_SIZE_DEFAULT),
-        chunk_overlap = 0,
-        num_workers = config['training'].get('num_workers', NUM_WORKERS_DEFAULT),
-        pin_memory = config['training'].get('pin_memory', PIN_MEMORY_DEFAULT),
-        prefetch = config['training'].get('prefetch_factor', PREFETCH_DEFAULT),
-        seen_ids = [], #TODO
-        random_seed = random_seed,
-    )
-    rollout_fn = partial(cpu_rollout, load_asr_model_fn = partial_load_asr_model_fn, tokenizer = tokenizer, verbose = False)
-    train_loop(
-        config=config,
-        dataloader=dataloader,
-        rollout_fn=rollout_fn,
-        policy_net=policy_net,
-        old_policy_net=old_policy_net,
-        value_net=value_net,
-        optimizers=optimizers
-    )
+    wandb.init(project="l2augment")
+
+    policy = train(policy, policy_optim, config, dataloader)
 
 
 if __name__ == "__main__":
