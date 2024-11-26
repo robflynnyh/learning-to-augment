@@ -39,6 +39,24 @@ def prepare_chunks(spec, seq_len, overlap):
         training_data[i] = audio_chunk
     return training_data, list(training_data.keys())
 
+def broadcast_multiply(tensor1, tensor2):
+    """
+    Multiply a tensor of size B with a tensor of size (B, ...) 
+    where the remaining dimensions can vary.
+    
+    Args:
+    - tensor1 (torch.Tensor): Tensor of size B
+    - tensor2 (torch.Tensor): Tensor of size (B, ...)
+    
+    Returns:
+    torch.Tensor: Result of broadcasting multiplication
+    """
+    # Reshape tensor1 to have additional singleton dimensions for broadcasting
+    # This ensures tensor1 can be multiplied with tensor2
+    broadcast_tensor1 = tensor1.view(tensor1.size(0), *([1] * (tensor2.ndim - 1)))
+    # Multiply with broadcasting
+    return broadcast_tensor1 * tensor2
+
 def cpu_rollout(
         policy:Module,
         load_asr_model_fn:Callable,
@@ -56,7 +74,7 @@ def cpu_rollout(
     overlap = round(seq_len*overlap)
     audio = audio.to(dtype=dtype) #temporary
     audio_n = audio.shape[-1]
-
+    
     text = normalizer(text)
     
     asr_model = load_asr_model_fn()
@@ -111,6 +129,7 @@ def cpu_rollout(
     policy_states = None
     seeds = []
     masks = []
+    lr_indexes = []
     for key in tqdm(training_keys):
         audio_chunk = training_data[key].clone()
         with torch.no_grad(): policy_output = policy.augment(audio_chunk, state=policy_states, return_seed=True, return_mask=True)
@@ -118,6 +137,8 @@ def cpu_rollout(
         policy_states = policy_output['state']
         seeds.append(policy_output['seed'])
         masks.append(policy_output['mask'])
+        lr_indexes.append(policy_output['selected_lr_indexes'])
+        lr = policy_output['selected_lrs']
         
         with torch.no_grad():
             out_teacher = asr_model(audio_signal = audio_chunk)
@@ -131,7 +152,12 @@ def cpu_rollout(
         loss = ctc_loss_fn(out_noised.transpose(0, 1), pseudo_targets, torch.LongTensor([N] * out_noised.shape[0]), torch.LongTensor([pseudo_targets.shape[1]] * pseudo_targets.shape[0])) / total_tokens_in_loss
         optimizer.zero_grad()
         loss.backward()
+
         if kwargs.get("clip", False): torch.nn.utils.clip_grad_norm_(asr_model.parameters(), kwargs["clip"]) 
+
+        for param in asr_model.parameters():
+            param.grad = param.grad * lr
+
         optimizer.step()
 
     all_logits, logit_count = torch.zeros((1, audio_n//4 + seq_len, tokenizer.vocab_size() + 1)), torch.zeros((1, audio_n//4 + seq_len, tokenizer.vocab_size() + 1))
@@ -167,12 +193,16 @@ def cpu_rollout(
     out_text = normalizer(out_text)
     new_wer = word_error_rate_detail(hypotheses=[out_text], references=[text])[0]
 
+    seeds = torch.stack(seeds, 0)
+    masks = torch.stack(masks, 0).squeeze(-1)
+    lrs = torch.stack(lr_indexes, 0).squeeze(-1)
 
     return {
         'original_wer': orig_wer,
         'updated_wer': new_wer,
         'masks': masks,
         'seeds': seeds,
+        'lrs':lrs,
     }
 
  

@@ -5,7 +5,7 @@ from omegaconf.omegaconf import OmegaConf
 from lcasr.utils.audio_tools import load_tokenizer
 from lcasr.utils.general import load_model as load_asr_model, get_model_class
 # from l2augment.modelling import load_model as load_rl_models
-from l2augment.rollout import parellel_rollout as gpu_rollout
+from l2augment.rollout import cpu_rollout
 from l2augment.modelling.models import Policy, Value
 from lcasr.utils.audio_tools import load_json
 from lcasr.utils.dataloading import VariableBatchSimpleDataloader, chunk_spectogram, chunk_text_json, reset_seen_ids
@@ -96,17 +96,17 @@ def train_step(
         # cur_audio = audio[0,:,:audio_lengths[0]][None]
         # cur_text = txt[0]
 
-    
 
-        policy_net.to(device)
+
+        policy_net.to('cpu')
         policy_net.eval()
 
         with ema.average_parameters():      
             rollout_output = rollout_fn(
                 policy = policy_net,
-                audio = audio.repeat(2, 1, 1),
+                audio = audio[0][None],
                 audio_lengths = audio_lengths.repeat(2),
-                text = txt + txt,
+                text = " ".join([el['word'] for el in txt[0]]),
                 chunk_audio_function = chunk_audio_function,
                 chunk_text_function = chunk_text_function
             )
@@ -263,7 +263,7 @@ def main(config):
         seen_ids = [], #TODO
         random_seed = random_seed,
     )
-    rollout_fn = partial(gpu_rollout, load_asr_model_fn = partial_load_asr_model_fn, tokenizer = tokenizer, verbose = False)
+    rollout_fn = partial(cpu_rollout, load_asr_model_fn = partial_load_asr_model_fn, tokenizer = tokenizer, verbose = False)
     train_loop(
         config=config,
         dataloader=dataloader,

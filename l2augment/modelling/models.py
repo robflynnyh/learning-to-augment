@@ -68,7 +68,7 @@ class Policy(base):
         seed = data
         if seed.size(-1) < 4096:
             pad = torch.zeros((seed.size(0), seed.size(1), 4096-seed.size(-1)))
-            seed = torch.cat([seed, pad.to(seed.device)])
+            seed = torch.cat([seed, pad.to(seed.device)], dim=-1)
         elif seed.size(-1) > 4096:
             raise Exception("Exceeded max utterance length!")        
         seed = torch.nn.functional.avg_pool1d(seed, kernel_size=256, stride=256)

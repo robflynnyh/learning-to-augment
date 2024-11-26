@@ -168,7 +168,6 @@ def gpu_rollout(
       lr_indexes.append(policy_output['selected_lr_indexes'].cpu())
       lrs = policy_output['selected_lrs']
 
-
       with torch.no_grad():
           model_fwd_func = torch.func.vmap(model_vmap_fn(asr_model))
           teacher_output = model_fwd_func(asr_model_weights, audio_sample.unsqueeze(1))
