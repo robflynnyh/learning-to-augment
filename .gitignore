@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+slurm*.out
+**/wandb/
+exp/wandb/
+
 # Distribution / packaging
 .Python
 build/

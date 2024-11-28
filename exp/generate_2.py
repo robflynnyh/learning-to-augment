@@ -6,10 +6,10 @@ from lcasr.utils.audio_tools import load_tokenizer
 from lcasr.utils.audio_tools import processing_chain
 from lcasr.utils.general import load_model as load_asr_model, get_model_class
 # from l2augment.modelling import load_model as load_rl_models
-from l2augment.rollout import  cpu_rollout
+from l2augment.rollout.cpu_test import  cpu_rollout
 from l2augment.modelling.models import Policy
 from lcasr.utils.audio_tools import load_json
-
+import re
 import os
 from os.path import join
 import json
@@ -20,11 +20,9 @@ AUDIO_CHUNK_SIZE_DEFAULT = 4096
 AUDIO_CHUNK_OVERLAP_DEFAULT = 0
 POLICY_OUTPUT_DIM_DEFAULT = 80
 
-EXT = '.mp3'
-AUDIO_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/audio'
-TRAIN_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/train-transcripts-aligned.json'
-DEV_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/valid-transcripts-aligned.json'
-TEST_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/test-transcripts-aligned.json'
+TEST_PATH = '/mnt/parscratch/users/acp21rjf/earnings22/test_original'
+DEV_PATH = '/mnt/parscratch/users/acp21rjf/earnings22/dev_original'
+ALL_TEXT_PATH = '/mnt/parscratch/users/acp21rjf/earnings22/full_transcripts.json'
 
 def load_rl_models(config): 
     policy_net = Policy(
@@ -39,44 +37,53 @@ def load_asr_model_fn(asr_model, state_dict):
     asr_model.flash_attn = False
     return asr_model
 
-def fetch_data(txt_path:str):
+def fetch_data(audio_path:str = TEST_PATH, txt_path:str = ALL_TEXT_PATH):
     with open(txt_path, 'r') as f:
-        txt_json = json.load(f)
+        all_text_json = json.load(f)
 
-    episodes = list(txt_json.keys())
-    audio_files = [{'path':os.path.join(AUDIO_PATH, el.split('-')[-1] + EXT), 'id': el} for el in episodes]
-    text = [{'id': el, 'text': " ".join([el2['utterance'] for el2 in txt_json[el]])} for el in episodes]
-    speakers = [len(set([el2['speaker'] for el2 in txt_json[el]])) for el in episodes]
+    audio_files = [{
+        'meeting': el.replace('.mp3', ''),
+        'path': os.path.join(audio_path, el)
+        } for el in os.listdir(audio_path) if el.endswith('.mp3')]
 
-    return audio_files, text, speakers
+    text_files = [{
+        'meeting': el['meeting'],
+        'text': all_text_json[el['meeting']]
+        } for el in audio_files]
+ 
+    return audio_files, text_files
 
-def preprocess_transcript(text:str): return text.lower()
+def preprocess_transcript(text:str):
+    text = text.lower()
+    text = text.replace('<silence>', '')
+    text = text.replace('<inaudible>', '')
+    text = text.replace('<laugh>', '')
+    text = text.replace('<noise>', '')
+    text = text.replace('<affirmative>', '')
+    text = text.replace('<crosstalk>', '')    
+    text = text.replace('…', '')
+    text = text.replace(',', '')
+    text = text.replace('-', ' ')
+    text = text.replace('.', '')
+    text = text.replace('?', '')
+    text = re.sub(' +', ' ', text)
+    return text
+
 
 def process_text_and_audio_fn(rec_dict): return processing_chain(rec_dict['audio']), preprocess_transcript(rec_dict['text'])
 
 
 def get_text_and_audio(split):
-    if split == 'train':
-        data_path = TRAIN_PATH
-    elif split == 'dev':
-        data_path = DEV_PATH
-    elif split == 'test':
-        data_path = TEST_PATH
-    elif split == 'all':
-        return get_text_and_audio('train') + get_text_and_audio('dev') + get_text_and_audio('test')
-    else:
-        raise ValueError(f'Invalid split: {split}')
-     
-    audio_files, text, speakers = fetch_data(txt_path=data_path)
+    assert split in ['test', 'dev'], f'Split must be either test or dev (got {args.split})'
+    data_path = TEST_PATH if split == 'test' else DEV_PATH
+    audio_files, text_files = fetch_data(audio_path=data_path, txt_path=ALL_TEXT_PATH)
     return_data = []
     for rec in range(len(audio_files)):
-        assert audio_files[rec]['id'] == text[rec]['id'], f'Episode names do not match: {audio_files[rec]["id"]}, {text[rec]["id"]}'
         return_data.append({
-            'id': audio_files[rec]['id'],
-            'text': text[rec]['text'], 
+            'id': audio_files[rec]['meeting'],
+            'text': text_files[rec]['text'], 
             'audio': audio_files[rec]['path'], 
-            "process_fn": process_text_and_audio_fn,
-            'speakers': speakers[rec]
+            "process_fn": process_text_and_audio_fn
         })
     return return_data
 

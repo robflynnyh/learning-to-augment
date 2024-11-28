@@ -13,6 +13,6 @@ policy:
   input_dim: 256
 
 generation:
-  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollouts/"
+  #save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollouts/"
   max_steps: 200
 

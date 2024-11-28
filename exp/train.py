@@ -19,7 +19,7 @@ import pickle
 import random
 from typing import List, Dict, Any
 from madgrad import MADGRAD
-
+import subprocess
 import wandb
 
 logger = logging.getLogger('train')
@@ -73,7 +73,7 @@ class CustomDataset(Dataset):
             seeds = seeds.transpose(0,1)
             masks = masks.transpose(0,1)
         reward = data['original_wer'] - data['updated_wer']
-        reward = (reward - self.rewards_mean) / (self.rewards_std + 1e-8)
+        #reward = (reward - self.rewards_mean) / (self.rewards_std + 1e-8)
         
         return {
             'reward': reward,
@@ -119,14 +119,27 @@ def get_rewards_dist_data(path_to_rollout_directory:str):
     files = os.listdir(path_to_rollout_directory)
     rewards = []
     for file in tqdm(files, desc="fetching reward data"):
-        file_path = join(path_to_rollout_directory, file)
-        cur_dict = load_dictionary(file_path)
-        original_wer, updated_wer = cur_dict['original_wer'], cur_dict['updated_wer']
-        reward = original_wer - updated_wer
-        rewards.append(reward)
+        try:
+            file_path = join(path_to_rollout_directory, file)
+            cur_dict = load_dictionary(file_path)
+            original_wer, updated_wer = cur_dict['original_wer'], cur_dict['updated_wer']
+            reward = original_wer - updated_wer
+            rewards.append(reward)
+        except:pass
     rewards = torch.tensor(rewards)
-    logger.info(f'Average reward: {rewards.mean()}')
+
+    top_100_mean = torch.tensor(sorted(rewards.tolist(), reverse=True)[:100]).mean()
     rewards.clamp_(-0.1, 0.1)
+    logger.info(f'Average reward: {rewards.mean()}, Max reward: {rewards.max()}, Median: {torch.median(rewards)}, Top 100 Mean: {top_100_mean}')
+    
+
+    wandb.log(data={
+        'mean_reward': rewards.mean(),
+        'max_reward': rewards.max(),
+        'median_reward': torch.median(rewards),
+        'top_100_mean':top_100_mean
+    }, commit=False )
+    
     return rewards.mean().item(), rewards.std().item()
 
 
@@ -153,7 +166,10 @@ def train(
                 total_lr_probs = torch.sum(selected_lr_probs, dim=-1)
                 
                 mask_prob_at_i = (masks*mask_probs + (1-masks)*(1-mask_probs))
-                log_mask_prob_at_i = torch.masked_fill(mask_prob_at_i, pad_mask[:,:,None], 1.0).log()
+                mask_prob_at_i = torch.masked_fill(mask_prob_at_i, pad_mask[:,:,None], 1.0)
+                log_mask_prob_at_i = mask_prob_at_i.log()
+              
+                entropy = -(mask_prob_at_i*log_mask_prob_at_i).mean()
                 total_prob_of_mask = torch.sum(log_mask_prob_at_i, dim=(-1, -2))
 
                 total_probs = total_prob_of_mask + total_lr_probs
@@ -161,11 +177,11 @@ def train(
                 loss = loss.sum() / config['training']['batch_size']
             
                 loss_to_log = loss.item()
-                wandb.log({'loss':loss_to_log})
+                wandb.log({'loss':loss_to_log, 'mask_entropy':entropy.item()})
                 pbar.set_description(desc=f'loss: {loss_to_log}')
                 optim.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(policy.parameters(), 2.0) 
+                torch.nn.utils.clip_grad_norm_(policy.parameters(), 1.0) 
                 optim.step()
 
         return policy
@@ -173,31 +189,53 @@ def train(
         
 def save_policy(model, config):
     save_path = config['training']['model_save_path']
-    torch.save({
-        'model_state_dict': model.state_dict(),
-        'config': config
-    }, save_path)
-    
-    logging.info(f"Model saved successfully to {save_path}")
+    isnan = False
+    for name, param in model.state_dict().items():
+        if torch.isnan(param).any():
+            isnan = True
+    if isnan == False:
+        torch.save({
+            'model_state_dict': model.state_dict(),
+            'config': config
+        }, save_path)
+        
+        logger.info(f"Model saved successfully to {save_path}")
+    else:
+        logger.info(f"Model not saved due to NaN in weights!")
 
 def main(config):
-    rollout_directory = config['generation']['save_dir']
-    r_mean, r_std = get_rewards_dist_data(rollout_directory)
-    dataset = CustomDataset(config['generation']['save_dir'], r_mean, r_std)
-    dataloader = DataLoader(
-        dataset, 
-        batch_size=config['training']['batch_size'], 
-        shuffle=True, 
-        collate_fn=custom_collate_fn
-    )
-    policy = load_rl_models(config=config)
-    policy = policy.to(config['training']['device'])
-
-    policy_optim = MADGRAD(policy.parameters(), lr=config['training']['lr'])
-
     wandb.init(project="l2augment")
+    rollout_directory = config['generation']['save_dir']
 
-    policy = train(policy, policy_optim, config, dataloader)
+    while True:
+        r_mean, r_std = get_rewards_dist_data(rollout_directory)
+        dataset = CustomDataset(config['generation']['save_dir'], r_mean, r_std)
+        dataloader = DataLoader(
+            dataset, 
+            batch_size=config['training']['batch_size'], 
+            shuffle=True, 
+            collate_fn=custom_collate_fn,
+            num_workers=4,
+            prefetch_factor=2
+        )
+        policy = load_rl_models(config=config)
+        policy = policy.to(config['training']['device'])
+
+        policy_optim = MADGRAD(policy.parameters(), lr=config['training']['lr'])
+
+        policy = train(policy, policy_optim, config, dataloader)
+        save_policy(policy, config)
+        del policy
+        command = "squeue | grep rjf | grep job.sh | wc -l"
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+        result = int(result.stdout.strip())
+        if result < 45:
+            command = "sbatch job.sh"
+            subprocess.run(command, shell=True, capture_output=True, text=True)
+            print(f'---- RESUBMITTED JOB STACK ----')
+
+
+        
 
 
 if __name__ == "__main__":

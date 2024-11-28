@@ -2,7 +2,7 @@
 #SBATCH --time=07:30:00
 #SBATCH --mem=32GB
 #SBATCH --cpus-per-task=16
-#SBATCH --array=50-593
+#SBATCH --array=0-593
 
 echo "Task id is $SLURM_ARRAY_TASK_ID"
 
