@@ -18,18 +18,11 @@ import random
 
 AUDIO_CHUNK_SIZE_DEFAULT = 4096
 AUDIO_CHUNK_OVERLAP_DEFAULT = 0
-POLICY_OUTPUT_DIM_DEFAULT = 80
-
-EXT = '.mp3'
-AUDIO_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/audio'
-TRAIN_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/train-transcripts-aligned.json'
-DEV_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/valid-transcripts-aligned.json'
-TEST_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/test-transcripts-aligned.json'
 
 def load_rl_models(config): 
     policy_net = Policy(
         input_dim=config['policy']['input_dim'],
-        output_dim=config['policy'].get('output_dim', POLICY_OUTPUT_DIM_DEFAULT)
+        masks_path=config['policy']['masks_path']
     )
     policy_net = policy_net
     return policy_net
@@ -38,6 +31,12 @@ def load_asr_model_fn(asr_model, state_dict):
     asr_model.load_state_dict(state_dict)
     asr_model.flash_attn = False
     return asr_model
+
+EXT = '.mp3'
+AUDIO_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/audio'
+TRAIN_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/train-transcripts-aligned.json'
+DEV_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/valid-transcripts-aligned.json'
+TEST_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/test-transcripts-aligned.json'
 
 def fetch_data(txt_path:str):
     with open(txt_path, 'r') as f:

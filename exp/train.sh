@@ -4,7 +4,7 @@
 #SBATCH --partition=gpu-h100
 #SBATCH --gres=gpu:1   
 #SBATCH --qos=gpu
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=16
 
 module load Anaconda3/2022.10
 source activate a100

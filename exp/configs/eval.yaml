@@ -5,15 +5,15 @@ training:
   device: 'cuda'
   random_seed: 1234
   batch_size: 32
-  lr: 1e-5
-  epochs: 1
+  lr: 1e-8
+  epochs: 25
   model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/model.pt
 
 policy:
-  input_dim: 256
+  input_dim: 336
   masks_path: /users/acp21rjf/learning-to-augment/l2augment/modelling/mask.pt
 
 generation:
-  save_dir: null #  "/mnt/parscratch/users/acp21rjf/l2augment_rollouts/"
-  max_steps: 200
+  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollouts/"
+  max_steps: 50
 

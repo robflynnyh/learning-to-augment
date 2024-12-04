@@ -3,7 +3,7 @@ import torch
 
 def mask_gen(
         num_masks=[2,4,6,8,10,12],
-        mask_widths=[3,5,10,20,30,40],
+        mask_widths=[3,5,10,20,30],
         repeats = 256,
 ):
     masks = []
