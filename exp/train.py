@@ -7,7 +7,7 @@ from lcasr.utils.audio_tools import processing_chain
 from lcasr.utils.general import load_model as load_asr_model, get_model_class
 # from l2augment.modelling import load_model as load_rl_models
 from l2augment.rollout import  cpu_rollout
-from l2augment.modelling.models import Policy
+from l2augment.modelling.models import Policy, Value
 from lcasr.utils.audio_tools import load_json
 from tqdm import tqdm
 import logging
@@ -21,6 +21,9 @@ from typing import List, Dict, Any
 from madgrad import MADGRAD
 import subprocess
 import wandb
+from l2augment.utils.data import prepare_chunks
+from l2augment.utils.data import dataset_functions
+from typing import Tuple
 
 logger = logging.getLogger('train')
 logger.setLevel(logging.INFO)
@@ -31,16 +34,15 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 AUDIO_CHUNK_SIZE_DEFAULT = 4096
-AUDIO_CHUNK_OVERLAP_DEFAULT = 0
+AUDIO_CHUNK_OVERLAP_DEFAULT = int(0.875*AUDIO_CHUNK_SIZE_DEFAULT)
 
 
 def load_rl_models(config): 
-    policy_net = Policy(
-        input_dim=config['policy']['input_dim'],
-        masks_path=config['policy']['masks_path']
-    )
+    policy_net = Policy()
+    value_net = Value()
     policy_net = policy_net
-    return policy_net
+    return policy_net, value_net
+
 def save_dictionary(dictionary, filename):
     with open(filename, 'wb') as file:
         pickle.dump(dictionary, file)
@@ -51,67 +53,62 @@ def load_dictionary(path):
     
 
 class CustomDataset(Dataset):
-    def __init__(self, files, rewards_mean:float, rewards_std:float):
+    def __init__(self, files, load_data_function):
         # Convert inputs to torch tensors
         # self.base_path = path
         self.files = files #os.listdir(path)
         self.nbd = True
-        self.rewards_mean = rewards_mean
-        self.rewards_std = rewards_std
+        self.load_data_function = load_data_function
 
     def __len__(self):
         # Return the total number of samples
         return len(self.files)
     
     def __getitem__(self, idx):
+        file_id = int(self.files[idx].split('/')[-1].split('_')[0])
+        cur_audio_data = self.load_data_function[file_id]
+        audio_spec, _ = cur_audio_data['process_fn'](cur_audio_data, frame_offset=0, num_frames=16000*60*20) # for now
+      
+        training_data, training_keys = prepare_chunks(audio_spec, AUDIO_CHUNK_SIZE_DEFAULT, AUDIO_CHUNK_OVERLAP_DEFAULT)
+            
         data = load_dictionary(self.files[idx])
-        seeds = data['seeds']
-        #lrs = data['lrs']
+     
         masks = data['masks']
-        if self.nbd:
-            seeds = seeds.transpose(0,1)
-            #masks = masks.transpose(0,1)
-        reward = data['original_wer'] - data['updated_wer']
-        #reward = (reward - self.rewards_mean) / (self.rewards_std + 1e-8)
-        
+        num_steps = masks.size(0)
+        training_data = list(training_data.values())[:num_steps]
+        #print([el.shape for el in training_data])
+        training_data = torch.cat(training_data, dim=0)
+        #print(training_data.size(), masks.size())     
+        reward = data['rewards']
+
         return {
             'reward': reward,
-            'seeds': seeds,
             'masks':masks,
+            'data': training_data
             #'lrs': lrs
         }
     
 def custom_collate_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
     lengths = [item['masks'].size(0) for item in batch]
-    max_length = max(lengths)
-    lrs = []
-    seeds = []
+    assert min(lengths) == max(lengths), 'padding not implemented'
+    
     masks = []
     rewards = []
+    datas = []
     for i, item in enumerate(batch):
-        item_length = lengths[i]
-        lr, seed, mask = None, item['seeds'], item['masks']
-        to_pad = max_length - item_length
-        if to_pad > 0:
-            #lr = torch.cat((lr, torch.zeros(to_pad)), dim=0)
-            seed = torch.cat((seed, torch.zeros(1, to_pad, seed.size(-1))), dim=1)
-            mask = torch.cat((mask, torch.zeros(to_pad)), dim=1)
-        #lrs.append(lr)
-        seeds.append(seed)
+        mask, data, reward = item['masks'], item['data'], item['reward']
+        datas.append(data)
         masks.append(mask)
         rewards.append(item['reward'])
     #lrs = torch.stack(lrs, dim=0).to(dtype=torch.long)
     masks = torch.stack(masks, dim=0)
-    seeds = torch.cat(seeds, dim=0)
-    rewards = torch.tensor(rewards)
-    lengths = torch.LongTensor(lengths)
-
+    datas = torch.stack(datas, dim=0)
+    rewards = torch.stack(rewards)
+    
     return {
-        #'lrs':lrs,
         'masks':masks,
-        'seeds':seeds,
         'rewards':rewards,
-        'lengths':lengths
+        'data':datas,
     }
 
 path_reward_dict = {}
@@ -126,8 +123,7 @@ def get_rewards_dist_data(path_to_rollout_directory:str):
         else:
             try:
                 cur_dict = load_dictionary(file_path)
-                original_wer, updated_wer = cur_dict['original_wer'], cur_dict['updated_wer']
-                reward = original_wer - updated_wer
+                reward = cur_dict['rewards'].mean().item()
                 rewards.append(reward)
                 path_reward_dict[file_path] = reward
             except:pass
@@ -153,88 +149,50 @@ def get_rewards_dist_data(path_to_rollout_directory:str):
     
     return rewards_mean, rewards_std
 
-def train(
-        policy:torch.nn.Module,
-        optim:torch.optim.Optimizer,
+def train_value(
+        value:Value,
+        optim:MADGRAD,
         config:Dict[str, Any],
         dataloader:DataLoader,
         val_dataloader:DataLoader
     ):  
-        device = policy.device = config['training']['device']
-        loss_fn = torch.nn.GaussianNLLLoss(reduction='none')
+        
+        device = config['training']['device']
+        loss_fn = torch.nn.MSELoss(reduction='mean')
         prev_val_loss = torch.inf
-        policy = policy.eval()
+        value = value.train()
+        
         for epoch in range(config['training']['epochs']):
             total_val_loss = 0
             total_items_in_val_loss = 0
-            with torch.no_grad():
-                for batch in tqdm(val_dataloader):
-                    seeds = batch['seeds'].to(device)
-                    masks = batch['masks'].to(device)
-                    rewards = batch['rewards'].to(device)
-                    lengths = batch['lengths'].to(device)
-
-                    prev_masks = policy.masks[masks]
-                    prev_masks_pad = torch.zeros(prev_masks.shape[0], 1, prev_masks.shape[-1], device=prev_masks.device)
-                    prev_masks = torch.cat((prev_masks_pad, prev_masks),dim=1)[:,:-1,:]
-                 
-                    mask_means, mask_stds, x, hn = policy.forward_mask(seeds, prev_mask=prev_masks)
-                    print(mask_means.mean((0,1)))
-                    print(mask_stds.mean((0,1)))
-        
-                    selected_mask_means = torch.gather(mask_means, dim=-1, index=masks.unsqueeze(-1)).squeeze(-1)
-                    selected_mask_stds = torch.gather(mask_stds, dim=-1, index=masks.unsqueeze(-1)).squeeze(-1)
-                   
-                    dist = torch.distributions.Normal(loc=selected_mask_means, scale=selected_mask_stds)
-                   
-                    loss = -dist.log_prob(rewards.unsqueeze(-1))
-                    #loss = loss_fn(selected_mask_means, rewards.unsqueeze(-1).expand_as(selected_mask_means))
-                    pad_mask = ~(torch.arange(0, lengths.max())[None].repeat(lengths.size(0),1).to(device) < lengths[:, None])
-                    total_val_loss += torch.masked_fill(loss, pad_mask, 0.0).sum().item()
-                    total_items_in_val_loss += (~pad_mask).sum()
-            val_loss = total_val_loss / total_items_in_val_loss
-            wandb.log({'val_loss': val_loss},commit=False)
-
-            if (prev_val_loss - val_loss) < 0.0: break
-            prev_val_loss = val_loss
-
-            policy = policy.train()
+      
             pbar = tqdm(dataloader)
             for batch in pbar:
-                seeds = batch['seeds'].to(device)
                 masks = batch['masks'].to(device)
                 rewards = batch['rewards'].to(device)
-                lengths = batch['lengths'].to(device)
-                #lr_indexes = batch['lrs'].to(device)
-         
-                prev_masks = policy.masks[masks]
-                prev_masks_pad = torch.zeros(prev_masks.shape[0], 1, prev_masks.shape[-1], device=prev_masks.device)
-                prev_masks = torch.cat((prev_masks_pad, prev_masks),dim=1)[:,:-1,:]
-                mask_means, mask_stds, x, hn = policy.forward_mask(seeds, prev_mask=prev_masks)
-                selected_mask_means = torch.gather(mask_means, dim=-1, index=masks.unsqueeze(-1)).squeeze(-1)
-                selected_mask_stds = torch.gather(mask_stds, dim=-1, index=masks.unsqueeze(-1)).squeeze(-1)
-                # print(selected_mask_means)
-                # print(rewards)   
-                mean_mean = selected_mask_means.mean().item()
-                mean_std = selected_mask_stds.mean().item()
-                mean_reward = rewards.mean().item()
-             
-                dist = torch.distributions.Normal(loc=selected_mask_means, scale=selected_mask_stds)
+                data = batch['data'].to(device)
+
                 
-                loss = -dist.log_prob(rewards.unsqueeze(-1))
-                #loss = loss_fn(selected_mask_means, rewards.unsqueeze(-1).expand_as(selected_mask_means))
-                pad_mask = ~(torch.arange(0, lengths.max())[None].repeat(lengths.size(0),1).to(device) < lengths[:, None])
-                loss = ((torch.masked_fill(loss, pad_mask, 0.0).sum() / (~pad_mask).sum()) * pad_mask.size(0)) / config['training']['batch_size']
-            
-                loss_to_log = loss.item()
-                wandb.log({'loss':loss_to_log, 'mean_mean_at_t':mean_mean, 'mean_std_at_t':mean_std, 'mean_reward_at_t':mean_reward, 'epoch': epoch})
-                pbar.set_description(desc=f'loss: {loss_to_log}')
+                #mask_probs = policy.forward_parallel(data, masks)
+                p_reward_g_state, p_reward_g_state_n_mask = value.forward_parallel(data, masks)
+                #masks = masks.transpose(-1,-2) # (B, S, C, T) -> (B, S, T, C)
+                #log_probs = (masks*mask_probs + (~masks)*(1-mask_probs)).log()
+                #log_probs_at_i = log_probs.sum(dim=(-1,-2)
+                print(p_reward_g_state.size(), rewards.size(),'--')
+
+                loss_a = loss_fn(p_reward_g_state, rewards)
+                loss_b = loss_fn(p_reward_g_state_n_mask, rewards)
+                loss = loss_a + loss_b
+                # loss_to_log = loss.item()
+                wandb.log({'value_loss':loss.item(),'value_loss_a':loss_a.item(), 'value_loss_b':loss_b.item(), 'epoch': epoch})
+                
+                # pbar.set_description(desc=f'loss: {loss_to_log}')
                 optim.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(policy.parameters(), 1.0) 
+                torch.nn.utils.clip_grad_norm_(value.parameters(), 1.0) 
                 optim.step()
 
-        return policy
+        return value
 
         
 def save_policy(model, config):
@@ -257,8 +215,11 @@ def main(config):
     wandb.init(project="l2augment")
     rollout_directory = config['generation']['save_dir']
 
+    dataset = "this_american_life"
+    data_loading_fn = dataset_functions[dataset]("train")
+
     while True:
-        r_mean, r_std = None, None#get_rewards_dist_data(rollout_directory)
+        r_mean, r_std = None,None#get_rewards_dist_data(rollout_directory)
       
         all_files = os.listdir(config['generation']['save_dir'])
         all_files = [join(config['generation']['save_dir'], file) for file in all_files]
@@ -269,15 +230,15 @@ def main(config):
 
         print(val_files)
 
-        train_dataset = CustomDataset(train_files, r_mean, r_std)
-        val_dataset = CustomDataset(val_files, r_mean, r_std)
+        train_dataset = CustomDataset(train_files, load_data_function=data_loading_fn)
+        val_dataset = CustomDataset(val_files, load_data_function=data_loading_fn)
         train_dataloader = DataLoader(
             train_dataset, 
             batch_size=config['training']['batch_size'], 
             shuffle=True, 
             collate_fn=custom_collate_fn,
-            num_workers=12,
-            prefetch_factor=8
+            num_workers=8,
+            prefetch_factor=4
         )
         val_dataloader = DataLoader(
             val_dataset, 
@@ -287,8 +248,9 @@ def main(config):
             num_workers=4,
             prefetch_factor=2
         )
-        policy = load_rl_models(config=config)
+        policy, value = load_rl_models(config=config)
         policy = policy.to(config['training']['device'])
+        value = value.to(config['training']['device'])
 
         total_params = sum(p.numel() for p in policy.parameters() if p.requires_grad)
         total_params_in_million = total_params / 1_000_000
@@ -296,15 +258,17 @@ def main(config):
         print(f"Total trainable parameters: {total_params_in_million:.2f} million")
 
         policy_optim = MADGRAD(policy.parameters(), lr=config['training']['lr'])
+        value_optim = MADGRAD(value.parameters(), lr=config['training']['lr'])
+        #optims = (policy_optim, value_optim)
 
-        policy = train(policy, policy_optim, config, train_dataloader, val_dataloader)
+        policy = train_value(value, value_optim, config, train_dataloader, val_dataloader)
         save_policy(policy, config)
         del policy
         command = "squeue | grep rjf | grep job.sh | wc -l"
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         result = int(result.stdout.strip())
        
-        # if result < 45:
+        # if result < 40:
         #     command = "sbatch job.sh"
         #     subprocess.run(command, shell=True, capture_output=True, text=True)
         #     print(f'---- RESUBMITTED JOB STACK ----')

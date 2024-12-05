@@ -2,6 +2,7 @@ import re
 import os
 import json
 from lcasr.utils.audio_tools import processing_chain
+import pickle
 
 def prepare_chunks(spec, seq_len, overlap):
     spec_n = spec.shape[-1]
@@ -43,7 +44,8 @@ def this_american_life_data():
 
     def preprocess_transcript(text:str): return text.lower()
 
-    def process_text_and_audio_fn(rec_dict): return processing_chain(rec_dict['audio']), preprocess_transcript(rec_dict['text'])
+    def process_text_and_audio_fn(rec_dict, frame_offset=0, num_frames=-1): 
+        return processing_chain(rec_dict['audio'], frame_offset=frame_offset, num_frames=num_frames), preprocess_transcript(rec_dict['text'])
 
 
     def get_text_and_audio(split):
@@ -108,7 +110,8 @@ def earnings22_data():
         text = re.sub(' +', ' ', text)
         return text
 
-    def process_text_and_audio_fn(rec_dict): return processing_chain(rec_dict['audio']), preprocess_transcript(rec_dict['text'])
+    def process_text_and_audio_fn(rec_dict, frame_offset=0, num_frames=-1): 
+        return processing_chain(rec_dict['audio'], frame_offset=frame_offset, num_frames=num_frames), preprocess_transcript(rec_dict['text'])
 
     def get_text_and_audio(split):
         assert split in ['test', 'dev'], f'Split must be either test or dev (got {split})'
@@ -129,3 +132,13 @@ dataset_functions = {
     "earnings22": earnings22_data(),
     "this_american_life": this_american_life_data()
 }
+
+
+def save_dictionary(dictionary, filename):
+    with open(filename, 'wb') as file:
+        pickle.dump(dictionary, file)
+
+
+def load_dictionary(path):
+    with open(path, 'rb') as file:
+        return pickle.load(file)
