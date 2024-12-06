@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --time=96:00:00
-#SBATCH --mem=40GB
+#SBATCH --mem=100GB
 #SBATCH --partition=gpu-h100
 #SBATCH --gres=gpu:1   
 #SBATCH --qos=gpu

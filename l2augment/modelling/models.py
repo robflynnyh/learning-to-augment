@@ -75,10 +75,13 @@ class Policy(base):
             self,
             input_dim=80,
             hidden_dim=256,
-            output_dim=80
+            output_dim=80,
+            mask_path='/users/acp21rjf/learning-to-augment/l2augment/modelling/masks.pt'
         ) -> None:
         super().__init__()
         self.input_dim = input_dim
+
+        self.register_buffer('masks', torch.load(mask_path)) # num_masks, 80
 
         self.encode = nn.Sequential(
             GatedConv1d(
@@ -110,7 +113,8 @@ class Policy(base):
         nn.init.normal_(self.init_state, mean=0, std=1e-2)
 
         self.mask_prediction = nn.Sequential(
-            nn.Linear(hidden_dim*2, output_dim*2)
+            nn.LayerNorm(hidden_dim*2),
+            nn.Linear(hidden_dim*2, self.masks.size(0)*2)
         )
 
         self.data_mask_combine = nn.Sequential(
@@ -130,10 +134,12 @@ class Policy(base):
     @torch.no_grad()
     def augment(self, data, state=None, cache=None):
         return_data = self.forward_sequential(data, state=state, cache=cache)
-        masks = return_data['masks']
-        masks = torch.repeat_interleave(masks, 8, dim=-1)
+        mask_ids = return_data['masks']
+        masks = self.masks[mask_ids]
+      
+        masks = torch.repeat_interleave(masks, 8, dim=1)
         data = data.repeat(2, 1, 1)
-        masks = rearrange(masks, 'b (maskset c) t -> (b maskset) c t', maskset=2)   
+        masks = rearrange(masks, 'b t maskset c -> (b maskset) c t', maskset=2)   
         data = data * masks
         return_data['augmented_data'] = data
    
@@ -150,10 +156,14 @@ class Policy(base):
             state = state.expand(-1, -1, data.size(2))
 
         data_with_state = torch.cat((state, data), dim=1).transpose(1, 2)
-        mask_probs = self.mask_prediction(data_with_state).sigmoid().transpose(1, 2)
+        mask_probs = self.mask_prediction(data_with_state)
+        mask_probs = rearrange(mask_probs, 'b n (maskset d) -> b n maskset d', maskset=2).softmax(-1)
         return_data['mask_probabilities'] = mask_probs
-        masks = torch.bernoulli(mask_probs)
-        return_data['masks'] = masks
+        #masks = torch.bernoulli(mask_probs)
+        mask_id = torch.distributions.Categorical(mask_probs).sample()
+        masks = self.masks[mask_id]
+        return_data['masks'] = mask_id
+        masks = rearrange(masks, 'b t maskset d -> b (maskset d) t')
         
         data = torch.cat((data, masks), dim=1).transpose(1, 2)
         data = self.data_mask_combine(data)
@@ -182,10 +192,11 @@ class Policy(base):
         states = torch.cat((initial_state, states), dim=-1)[:,:,:-1]
         states = rearrange(states, 'b d s -> (b s) d 1').expand(-1, -1, data.size(-1))
         data_with_state = torch.cat((states, data), dim=1).transpose(1, 2)
-        mask_probs = self.mask_prediction(data_with_state).sigmoid().transpose(1, 2)
+        
+        mask_probs = self.mask_prediction(data_with_state)
+       
+        mask_probs = rearrange(mask_probs, 'b n (maskset d) -> b n maskset d', maskset=2).softmax(-1)
     
-        assert mask_probs.shape == masks.shape, 'mask probs and masks should have the same shape'
-        mask_probs = rearrange(mask_probs, '(b s) c t -> b s t c', s=s)
         return mask_probs
 
 
@@ -280,11 +291,6 @@ class Value(base):
         data_with_cur_state = torch.cat((states, data_with_state), dim=-1)
         data_with_cur_state = self.data_with_state_ds(data_with_cur_state)
         reward_given_state_and_mask = self.reward_prediction(data_with_cur_state)
-
-        # data_with_state_and_mask = torch.cat((data_with_state, masks.transpose(1, 2)), dim=-1)
-        # data_with_state_and_mask = self.data_mask_state_combine(data_with_state_and_mask)
-
-        # reward_given_state_and_mask = self.reward_prediction(data_with_state_and_mask)
 
         reward_given_state = rearrange(reward_given_state, '(b s) t d -> b s t d', s=s)
         reward_given_state_and_mask = rearrange(reward_given_state_and_mask, '(b s) t d -> b s t d', s=s)

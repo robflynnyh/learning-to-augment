@@ -27,7 +27,7 @@ def cpu_rollout(
         teacher_logits:Tensor,
         seq_len:int=4096,
         overlap=0.875,
-        optim_args:Dict[str, Any] = {"lr":1e-3},
+        optim_args:Dict[str, Any] = {"lr":2e-3},
         max_steps = None,
         **kwargs
     ):
@@ -76,25 +76,33 @@ def cpu_rollout(
         audio_chunk = training_data[key].clone()
         with torch.no_grad(): policy_output = policy.augment(audio_chunk, state=policy_states, cache=policy_cache)
     
-        audio_teacher, audio_student = policy_output['augmented_data'].chunk(2, dim=0)
+        audio_a, audio_b = policy_output['augmented_data'].chunk(2, dim=0)
 
         policy_states = policy_output['next_state']
         policy_cache = policy_output['next_cache']
 
-        masks.append(policy_output['masks'].to(dtype=torch.bool))
+        masks.append(policy_output['masks'])
 
         with torch.no_grad():
             out_original = asr_model(audio_signal = audio_chunk)
-            out_teacher = asr_model(audio_signal = audio_teacher)
-        out_noised = asr_model(audio_signal = audio_student)['final_posteriors']
+        
+        out_a = asr_model(audio_signal = audio_a)['final_posteriors']
+        out_b = asr_model(audio_signal = audio_b)['final_posteriors']
 
         out_original_posteriors = out_original['final_posteriors'].squeeze(0)
-        teacher_output_posteriors = out_teacher['final_posteriors'].squeeze(0)
-        pseudo_targets = decoder(teacher_output_posteriors) 
-        pseudo_targets = torch.LongTensor(tokenizer.encode(pseudo_targets))[None]
-        N, B = out_noised.shape[1], out_noised.shape[0]
+
+        pseudo_targets_a = decoder(out_a.squeeze(0)) 
+        pseudo_targets_a = torch.LongTensor(tokenizer.encode(pseudo_targets_a))[None]
+
+        pseudo_targets_b = decoder(out_b.squeeze(0)) 
+        pseudo_targets_b = torch.LongTensor(tokenizer.encode(pseudo_targets_b))[None]
+
+
+        N, B = out_a.shape[1], out_a.shape[0]
         total_tokens_in_loss = N * B
-        loss = ctc_loss_fn(out_noised.transpose(0, 1), pseudo_targets, torch.LongTensor([N] * out_noised.shape[0]), torch.LongTensor([pseudo_targets.shape[1]] * pseudo_targets.shape[0])) / total_tokens_in_loss
+        loss_a = ctc_loss_fn(out_a.transpose(0, 1), pseudo_targets_b, torch.LongTensor([N] * out_a.shape[0]), torch.LongTensor([pseudo_targets_b.shape[1]] * pseudo_targets_b.shape[0])) / total_tokens_in_loss
+        loss_b = ctc_loss_fn(out_b.transpose(0, 1), pseudo_targets_a, torch.LongTensor([N] * out_b.shape[0]), torch.LongTensor([pseudo_targets_a.shape[1]] * pseudo_targets_a.shape[0])) / total_tokens_in_loss
+        loss = (loss_a + loss_b) / 2
         optimizer.zero_grad()
         loss.backward()
 
@@ -113,7 +121,8 @@ def cpu_rollout(
         prev_kl_div = torch.nn.functional.kl_div(out_original_posteriors, teacher_logits_at_t, reduction='none', log_target=True)
         updated_kl_div = torch.nn.functional.kl_div(updated_logits, teacher_logits_at_t, reduction='none', log_target=True)
         kl_diff = (prev_kl_div - updated_kl_div)
-    
+        
+
         rewards.append(kl_diff)
         
         #print(kl_diff.mean())
@@ -123,8 +132,8 @@ def cpu_rollout(
         logit_position += ds_len - overlap_ds
 
     masks = torch.cat(masks, 0).squeeze(-1)
-    rewards = torch.stack(rewards)
-    print(masks.shape, rewards.shape)
+    rewards = torch.stack(rewards).sum(-1)
+    
     #lrs = torch.stack(lr_indexes, 0).squeeze(-1)
 
     return {

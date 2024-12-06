@@ -35,6 +35,12 @@ def save_dictionary(dictionary, filename):
     with open(filename, 'wb') as file:
         pickle.dump(dictionary, file)
 
+def save_tensors_in_dictionary(dictionary, filename):
+    for key in dictionary:
+        assert isinstance(dictionary[key], torch.Tensor), f"Value for key {key} is not a tensor"
+        dictionary[key] = dictionary[key].cpu().detach()
+        torch.save(dictionary[key], f"{filename}_{key}.pt")
+
 
 def load_dictionary(path):
     with open(path, 'rb') as file:
@@ -104,7 +110,7 @@ def main(config):
 
     audio_spec, _ = cur_data['process_fn'](cur_data)
 
-    r_id = f"{config['index']}_{str(random.randint(0,99999999))}.pkl"
+    r_id = f"{config['index']}_{str(random.randint(0,99999999))}"
 
     rollout_output = rollout_fn(
         policy = policy_net,
@@ -114,7 +120,7 @@ def main(config):
     print(rollout_output['rewards'].mean())
 
     if save_path: # debug
-        save_dictionary(
+        save_tensors_in_dictionary(
             rollout_output, 
             filename=join(save_path, r_id)
         )
