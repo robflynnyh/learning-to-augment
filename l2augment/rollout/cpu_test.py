@@ -64,12 +64,13 @@ def cpu_rollout(
   
     with torch.no_grad():
         out_original = asr_model(audio_signal = audio)
-        out_a = asr_model(audio_signal = audio_a)['final_posteriors']
     
+    out_a = asr_model(audio_signal = audio_a)['final_posteriors']
     out_b = asr_model(audio_signal = audio_b)['final_posteriors']
 
     out_original_posteriors = out_original['final_posteriors'].squeeze(0)
     out_original_predictions = decoder(out_original_posteriors)
+    
 
     pseudo_targets = decoder(out_a.squeeze(0)) 
     pseudo_targets = torch.LongTensor(tokenizer.encode(pseudo_targets))[None]
@@ -78,10 +79,7 @@ def cpu_rollout(
 
     N, B = out_a.shape[1], out_a.shape[0]
     total_tokens_in_loss = N * B
-    #loss_a = torch.nn.functional.kl_div(out_a, out_b, reduction='sum', log_target=True) / total_tokens_in_loss
-
-    loss_b = ctc_loss_fn(out_b.transpose(0, 1), pseudo_targets, torch.LongTensor([N] * out_b.shape[0]), torch.LongTensor([pseudo_targets.shape[1]] * pseudo_targets.shape[0])) / total_tokens_in_loss
-    loss = loss_b#(loss_a + loss_b)/2
+    loss = ctc_loss_fn(out_b.transpose(0, 1), pseudo_targets, torch.LongTensor([N] * out_b.shape[0]), torch.LongTensor([pseudo_targets.shape[1]] * pseudo_targets.shape[0])) / total_tokens_in_loss
 
     optimizer.zero_grad()
     loss.backward()
@@ -101,8 +99,8 @@ def cpu_rollout(
 
     prev_cer = word_error_rate_detail(hypotheses=[normalize(out_original_predictions)], references=[normalize(teacher_targets)], use_cer=True)[0] * 100
     updated_cer = word_error_rate_detail(hypotheses=[normalize(updated_predictions)], references=[normalize(teacher_targets)], use_cer=True)[0] * 100
-    # prev_ctc_loss = ctc_loss_fn(out_original_posteriors, teacher_logits, torch.LongTensor([N] * 1), torch.LongTensor([teacher_logits.shape[0]] * 1)) / total_tokens_in_loss
-    # updated_ctc_loss = ctc_loss_fn(updated_logits, teacher_logits, torch.LongTensor([N] * 1), torch.LongTensor([teacher_logits.shape[0]] * 1)) / total_tokens_in_loss
+    prev_ctc_loss = ctc_loss_fn(out_original_posteriors, teacher_logits, torch.LongTensor([N] * 1), torch.LongTensor([teacher_logits.shape[0]] * 1)) / total_tokens_in_loss
+    updated_ctc_loss = ctc_loss_fn(updated_logits, teacher_logits, torch.LongTensor([N] * 1), torch.LongTensor([teacher_logits.shape[0]] * 1)) / total_tokens_in_loss
 
     diff = prev_cer - updated_cer
     print(diff)

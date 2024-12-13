@@ -4,21 +4,22 @@ checkpointing:
 training:
   device: 'cuda'
   random_seed: 1234
-  batch_size: 24
-  lr: 2e-3
-  epochs: 25
-  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/model.pt
+  batch_size: 12
+  lr: 3e-4
+  epochs: 100
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/model__.pt
 
 policy:
-  lr: 2e-3
+  lr: 1e-4
 value:
   save_path: "/mnt/parscratch/users/acp21rjf/l2augment_value/model.pt"
 
 generation:
-  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollouts/"
-  max_steps: 50
+  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout/"
 
 
 teacher_logits_generation:
   save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_teacher_logits/"
   asr_checkpoint:  "/mnt/parscratch/users/acp21rjf/spotify/checkpoints_seq_scheduler_rb_3epoch/n_seq_sched_4096_rp_1/step_316080.pt"
+
+#this_american_life_566_audio_307200.pt

@@ -10,6 +10,7 @@ from l2augment.rollout import  cpu_rollout
 from l2augment.modelling.models import Policy
 from lcasr.utils.audio_tools import load_json
 from l2augment.utils.data import dataset_functions
+from lcasr.utils.augmentation import SpecAugment
 
 import os
 from os.path import join
@@ -87,7 +88,8 @@ def main(config):
 
         path = files[index].replace('audio', 'rewards_and_masks')
         path = join(save_path, path)
-        if os.path.exists(path):
+
+        if os.path.exists(path) and config['save']:
             print(f"File {path} already exists, skipping")
             return
 
@@ -104,34 +106,57 @@ def main(config):
         teacher_logits = torch.load(cur_logit_file, map_location='cpu', weights_only=True)
         audio_file = torch.load(cur_audio_file, map_location='cpu', weights_only=True)
 
-        asr_model_checkpoint = torch.load(config["checkpointing"]["asr_model"], map_location="cpu", weights_only=False)
-        asr_model_config = asr_model_checkpoint['config']
-        asr_model_state_dict = asr_model_checkpoint['model']
+        partial_load_asr_model_fns = []
+        for cpt in config["checkpointing"]["asr_models"]:
+            asr_model_checkpoint = torch.load(cpt, map_location="cpu", weights_only=False)
+            asr_model_config = asr_model_checkpoint['config']
+            asr_model_state_dict = asr_model_checkpoint['model']
+            partial_load_asr_model_fns.append(partial(
+                load_asr_model_fn,
+                load_asr_model(asr_model_config, tokenizer.vocab_size(), asr_model_class),
+                asr_model_state_dict,
+            ))
 
-        partial_load_asr_model_fn = partial(
-            load_asr_model_fn,
-            load_asr_model(asr_model_config, tokenizer.vocab_size(), asr_model_class),
-            asr_model_state_dict,
-        )
-        policy_net = load_rl_models(config)
-        load_policy(policy_net, config)
+      
+  
+        # policy_net = load_rl_models(config)
+        # load_policy(policy_net, config
+        augmentation = SpecAugment(n_time_masks=0, n_freq_masks=6, freq_mask_param=34, zero_masking=True, time_mask_param=0)
+        
 
-        rollout_fn = partial(cpu_rollout, 
-                            load_asr_model_fn = partial_load_asr_model_fn, 
-                            tokenizer = tokenizer,
-                            teacher_logits = teacher_logits
-        )
-    
+      
 
         rewards = []
         mask_list = []
         for i in range(config['repeats']):
-            reward, masks = rollout_fn(
-                policy = policy_net,
-                audio = audio_file,
-            )
-            rewards.append(reward)
+            #with torch.no_grad(): policy_output = policy_net.augment(audio_file)
+            audio_a = audio_file
+            masks = augmentation(torch.ones_like(audio_file))
+            audio_b = audio_file * masks + (1 - masks) * audio_file.mean().unsqueeze(0).unsqueeze(0)
+            # masks = augmentation(torch.ones_like(audio_file))
+            # audio_a = audio_file * masks + (1 - masks) * audio_file.mean().unsqueeze(0).unsqueeze(0)
+  
+
+            c_rewards = []
+            for asr_model_load_fn in partial_load_asr_model_fns:
+                reward, _ = cpu_rollout(
+                    policy = None,
+                    audio = audio_file,
+                    audio_a = audio_a,
+                    audio_b = audio_b,
+                    load_asr_model_fn = asr_model_load_fn,
+                    tokenizer = tokenizer,
+                    teacher_logits = teacher_logits,
+                    optim_args = {"lr":1e-2}
+                )
+                # rewards.append(reward)
+                # mask_list.append(masks.to(dtype=torch.bool))
+                c_rewards.append(reward)
+            print('->', torch.stack(c_rewards).mean())
+            rewards.append(torch.stack(c_rewards).mean())
             mask_list.append(masks.to(dtype=torch.bool))
+            
+            print('---')
             #print(reward)
         
         if config['save']:

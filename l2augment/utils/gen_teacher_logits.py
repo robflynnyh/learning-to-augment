@@ -7,7 +7,7 @@ def gen_logits(
         audio:torch.Tensor,
         vocab_size:int,
         seq_len:int=4096,
-        overlap=0.875,
+        overlap=0.25,
     ):
     dtype = torch.float32 
 
@@ -25,10 +25,14 @@ def gen_logits(
     model_outputs = {}
     asr_model.eval()
 
-    all_logits, logit_count = torch.zeros((1, audio_n//4 + seq_len, vocab_size)), torch.zeros((1, audio_n//4 + seq_len, vocab_size))
+    #all_logits, logit_count = torch.zeros((1, audio_n//4 + seq_len, vocab_size)), torch.zeros((1, audio_n//4 + seq_len, vocab_size))
 
     for i, key in tqdm(enumerate(training_keys)):
         audio_chunk = training_data[key].clone()
+        
+        if audio_chunk.shape[-1] != seq_len:
+            continue
+
         with torch.no_grad():
             out = asr_model(audio_signal = audio_chunk)
         logits = out['final_posteriors'][0]
@@ -36,25 +40,25 @@ def gen_logits(
         ds_len = logits.shape[-2]
         ratio = audio_chunk.shape[-1] / ds_len
         overlap_ds = int(overlap / ratio)
-        model_outputs[key] = {'logits': logits, 'ds_len': ds_len, 'overlap_ds': overlap_ds, 'index': i}
+        model_outputs[key] = {'logits': logits, 'ds_len': ds_len, 'overlap_ds': overlap_ds, 'index': i, 'audio_chunk': audio_chunk}
 
-    logit_position = 0
-    for i in sorted(list(model_outputs.keys())):
-        logits, ds_len, overlap_ds = model_outputs[i]['logits'], model_outputs[i]['ds_len'], model_outputs[i]['overlap_ds']
-        logit_position -= overlap_ds if i != 0 else 0
-        logit_count[:, logit_position:logit_position+ds_len, :] += 1
-        all_logits[:, logit_position:logit_position+ds_len, :] += logits
-        logit_position += ds_len    
+    # logit_position = 0
+    # for i in sorted(list(model_outputs.keys())):
+    #     logits, ds_len, overlap_ds = model_outputs[i]['logits'], model_outputs[i]['ds_len'], model_outputs[i]['overlap_ds']
+    #     logit_position -= overlap_ds if i != 0 else 0
+    #     logit_count[:, logit_position:logit_position+ds_len, :] += 1
+    #     all_logits[:, logit_position:logit_position+ds_len, :] += logits
+    #     logit_position += ds_len    
 
-    B,N,C = all_logits.shape
-    all_logits = all_logits[logit_count.sum(dim=-1) != 0]
-    all_logits = all_logits.reshape(B,-1,C)
-    logit_count = logit_count[logit_count.sum(dim=-1) != 0]
-    logit_count = logit_count.reshape(B,-1,C)
-    logits = all_logits / logit_count
-    logits = torch.log(logits) 
+    # B,N,C = all_logits.shape
+    # all_logits = all_logits[logit_count.sum(dim=-1) != 0]
+    # all_logits = all_logits.reshape(B,-1,C)
+    # logit_count = logit_count[logit_count.sum(dim=-1) != 0]
+    # logit_count = logit_count.reshape(B,-1,C)
+    # logits = all_logits / logit_count
+    # logits = torch.log(logits) 
 
-    return logits 
+    return model_outputs 
 
     
 

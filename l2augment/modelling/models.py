@@ -6,6 +6,8 @@ from lcasr.components.batchrenorm import BatchRenorm1d
 from torch.distributions import Normal
 import random
 from typing import Tuple, Callable, Dict
+from einops.layers.torch import Rearrange
+
 
 class base(Module):
     def __init__(self) -> None:
@@ -70,134 +72,255 @@ class SequenceToState(base):
         return self.out_layer(torch.bmm(attn, value))
 
 
+class ResidualBlock(nn.Module):
+    def __init__(
+            self,
+            module:nn.Module,
+            ) -> None:
+        super().__init__()
+        self.module = module
+
+    def forward(self, x, *args, **kwargs):
+        return x + self.module(x, *args, **kwargs)
+
+
+
 class Policy(base):
     def __init__(
             self,
             input_dim=80,
-            hidden_dim=256,
-            output_dim=80,
-            mask_path='/users/acp21rjf/learning-to-augment/l2augment/modelling/masks.pt'
+            output_dim=160,
         ) -> None:
         super().__init__()
         self.input_dim = input_dim
 
-        self.register_buffer('masks', torch.load(mask_path)) # num_masks, 80
-
+        self.masks_encode = nn.Conv1d(in_channels=output_dim, out_channels=output_dim, kernel_size=1, stride=1, padding=0)
         self.encode = nn.Sequential(
-            GatedConv1d(
-                input_dim=input_dim,
-                output_dim=input_dim*2,
-                kernel_size=(1,7),
-                stride=(1,2),
-                padding=(0,3)
+            torch.nn.Conv1d(in_channels=input_dim+output_dim, out_channels=input_dim*2, kernel_size=7, stride=2, groups=input_dim),
+            torch.nn.Conv1d(in_channels=input_dim*2, out_channels=input_dim*2, kernel_size=1),
+            torch.nn.Conv1d(in_channels=input_dim*2, out_channels=input_dim*2, kernel_size=7, stride=2, groups=input_dim*2),
+            torch.nn.Conv1d(in_channels=input_dim*2, out_channels=input_dim*2, kernel_size=1),
+            torch.nn.Conv1d(in_channels=input_dim*2, out_channels=input_dim*2, kernel_size=7, stride=2, groups=input_dim*2),
+            torch.nn.Conv1d(in_channels=input_dim*2, out_channels=input_dim*2, kernel_size=1),
+            ResidualBlock(
+                nn.Sequential(
+                    GatedConv1d(input_dim=input_dim*2, output_dim=input_dim*2, expansion_factor=1, kernel_size=(31,31), stride=(1,1), padding=("same", "same")),
+                    BatchRenorm1d(input_dim*2),
+                )
             ),
-            BatchRenorm1d(input_dim*2),
-            GatedConv1d(
-                input_dim=input_dim*2,
-                output_dim=hidden_dim,
-                kernel_size=(1,7),
-                stride=(1,2),
-                padding=(0,3)
-            ), 
-            BatchRenorm1d(hidden_dim),
-            GatedConv1d(
-                input_dim=hidden_dim,
-                output_dim=hidden_dim,
-                kernel_size=(1,7),
-                stride=(1,2),
-                padding=(0,3)
-            ), 
-            BatchRenorm1d(hidden_dim),
-        )
-        self.init_state = nn.Parameter(torch.randn(1, hidden_dim, 1))
-        nn.init.normal_(self.init_state, mean=0, std=1e-2)
-
-        self.mask_prediction = nn.Sequential(
-            nn.LayerNorm(hidden_dim*2),
-            nn.Linear(hidden_dim*2, self.masks.size(0)*2)
+            torch.nn.Conv1d(in_channels=input_dim*2, out_channels=input_dim*2, kernel_size=7, stride=2, groups=input_dim*2),
+            torch.nn.Conv1d(in_channels=input_dim*2, out_channels=input_dim*2, kernel_size=1),
+            ResidualBlock(
+                nn.Sequential(
+                    GatedConv1d(input_dim=input_dim*2, output_dim=input_dim*2, expansion_factor=1, kernel_size=(31,31), stride=(1,1), padding=("same", "same")),
+                    BatchRenorm1d(input_dim*2),
+                )
+            ),
+            torch.nn.Conv1d(in_channels=input_dim*2, out_channels=input_dim*2, kernel_size=7, stride=2, groups=input_dim*2),
+            torch.nn.Conv1d(in_channels=input_dim*2, out_channels=input_dim*2, kernel_size=1),
+            ResidualBlock(
+                nn.Sequential(
+                    GatedConv1d(input_dim=input_dim*2, output_dim=input_dim*2, expansion_factor=1, kernel_size=(31,31), stride=(1,1), padding=("same", "same")),
+                    BatchRenorm1d(input_dim*2),
+                )
+            ),
+            Rearrange('b c t -> b t c'),
+            nn.LayerNorm(input_dim*2),
+            nn.Linear(input_dim*2,1),
         )
 
-        self.data_mask_combine = nn.Sequential(
-            SwiGlu(hidden_dim+output_dim*2, hidden_dim, expansion_factor=1),
-            nn.LayerNorm(hidden_dim)
-        )
-        self.sequence_to_state = SequenceToState(hidden_dim)
 
-        self.gru = nn.GRU(
-            input_size=hidden_dim,
-            hidden_size=hidden_dim,
-            num_layers=2,
-            batch_first=True,
-            dropout=0.0
-        )
+        # self.encode = nn.Sequential(
+        #     *[ResidualBlock(
+        #         nn.Sequential(
+        #             GatedConv1d(input_dim=input_dim, output_dim=input_dim, expansion_factor=2, kernel_size=(31,31), stride=(1,1), padding=("same", "same")),
+        #             BatchRenorm1d(input_dim),
+        #             # Rearrange('b c t -> b t c'),
+        #             # nn.LayerNorm(80),
+        #             # Rearrange('b t c -> b c t'),
+        #         )
+        #     ) for _ in range(5)], 
+        #     nn.Conv1d(in_channels=input_dim, out_channels=output_dim*2, kernel_size=1, stride=1, padding=0),
+        # )
+
+        # self.predict = nn.Sequential(
+        #     *[ResidualBlock(
+        #         nn.Sequential(
+        #             GatedConv1d(input_dim=output_dim, output_dim=output_dim, expansion_factor=1, kernel_size=(31,31), stride=(1,1), padding=("same", "same")),
+        #             BatchRenorm1d(output_dim),
+        #         )
+        #     )
+        #      for _ in range(2)],   
+        #     nn.Conv1d(in_channels=output_dim, out_channels=output_dim, kernel_size=1, stride=1, padding=0),
+        # )
 
     @torch.no_grad()
-    def augment(self, data, state=None, cache=None):
-        return_data = self.forward_sequential(data, state=state, cache=cache)
-        mask_ids = return_data['masks']
-        masks = self.masks[mask_ids]
-      
-        masks = torch.repeat_interleave(masks, 8, dim=1)
-        data = data.repeat(2, 1, 1)
-        masks = rearrange(masks, 'b t maskset c -> (b maskset) c t', maskset=2)   
-        data = data * masks
-        return_data['augmented_data'] = data
-   
-        return return_data
+    def augment(self, data):
+        random_masks = torch.randn((2,data.shape[1], data.shape[2]), device=data.device).sigmoid().bernoulli().to(torch.bool)
+        mask = random_masks
+
+        data = repeat(data, 'b c t -> (maskset b) c t', maskset=2)
+        augmented_data = data * mask 
+        return {
+        'augmented_data': augmented_data,
+        'masks': mask
+        }
+
+        # random_masks = torch.randn((100, 2,data.shape[1], data.shape[2]), device=data.device).sigmoid().bernoulli().to(torch.bool)
         
-    def forward_sequential(self, data, state=None, cache=None):
-        return_data = {}
-        b,c,t = data.shape
-        assert b == 1, 'only implemented for b=1'
-        data = self.encode(data)
-        if state is None:
-            state = self.init_state.expand(-1, -1, data.size(2))
-        else: 
-            state = state.expand(-1, -1, data.size(2))
-
-        data_with_state = torch.cat((state, data), dim=1).transpose(1, 2)
-        mask_probs = self.mask_prediction(data_with_state)
-        mask_probs = rearrange(mask_probs, 'b n (maskset d) -> b n maskset d', maskset=2).softmax(-1)
-        return_data['mask_probabilities'] = mask_probs
-        #masks = torch.bernoulli(mask_probs)
-        mask_id = torch.distributions.Categorical(mask_probs).sample()
-        masks = self.masks[mask_id]
-        return_data['masks'] = mask_id
-        masks = rearrange(masks, 'b t maskset d -> b (maskset d) t')
-        
-        data = torch.cat((data, masks), dim=1).transpose(1, 2)
-        data = self.data_mask_combine(data)
-        segment_embedding = self.sequence_to_state(data)
-        new_state, new_cache = self.gru(segment_embedding, cache)
-
-        return_data['next_state'] = new_state.transpose(1, 2)
-        return_data['next_cache'] = new_cache
-
-        return return_data
+        # mask_probs = self(data, random_masks, counts=10)
+        # mask_preds = mask_probs.mean((1,2))
+        # mask = mask_preds.argmax()
+        # mask = random_masks[mask]
     
-    def forward_parallel(self, data, masks):
-        """requires that masks are already generated and saved from the forward_sequential method during rollout"""
-        b, s, c, t = data.shape
-        data = rearrange(data, 'b s c t -> (b s) c t')
-        data = self.encode(data)
-        masks = rearrange(masks, 'b s c t -> (b s) c t')
-        data_with_mask = torch.cat((data, masks), dim=1).transpose(1, 2)
-        data_with_mask = self.data_mask_combine(data_with_mask)
-        segment_embedding = self.sequence_to_state(data_with_mask)
-        segment_embedding = rearrange(segment_embedding, '(b s) 1 d -> b s d', s=s)
-        
-        states, _ = self.gru(segment_embedding)
-        states = states.transpose(1, 2)
-        initial_state = self.init_state.expand(states.size(0), -1, -1)
-        states = torch.cat((initial_state, states), dim=-1)[:,:,:-1]
-        states = rearrange(states, 'b d s -> (b s) d 1').expand(-1, -1, data.size(-1))
-        data_with_state = torch.cat((states, data), dim=1).transpose(1, 2)
-        
-        mask_probs = self.mask_prediction(data_with_state)
+        # data = repeat(data, 'b c t -> (maskset b) c t', maskset=2)
+        # augmented_data = data * mask 
+        # return {
+        #     'augmented_data': augmented_data,
+        #     'masks': mask,
+        #     'mask_probs': mask_probs
+        # }
        
-        mask_probs = rearrange(mask_probs, 'b n (maskset d) -> b n maskset d', maskset=2).softmax(-1)
+        
+    def forward(self, data, masks, counts=None):
+        x = data
+        if counts is not None:
+            x = x.repeat_interleave(counts, dim=0)
+        masks = rearrange(masks, 'b maskset c t -> b (maskset c) t', maskset=2).to(torch.float32)
+        masks = self.masks_encode(masks)
+        
+        x = torch.cat((x, masks), dim=1)
+        x = torch.randn_like(x, device=x.device)
+        x = self.encode(x) # b (2 c) t
+        # print(x.shape,'--')
+        # x = rearrange(x, 'b (bool maskset c) t -> bool b maskset c t', maskset=2, bool=2)
+        # if counts is not None:
+        #     x = x.repeat_interleave(counts, dim=1)
+        # x = (masks*x[0] + (~masks)*x[1])
+        # x = rearrange(x, 'b maskset c t -> b (maskset c) t', maskset=2)
+        # x = self.predict(x)
+        return x
+
+# class Policy(base):
+#     def __init__(
+#             self,
+#             input_dim=80,
+#             hidden_dim=256,
+#             output_dim=80
+#         ) -> None:
+#         super().__init__()
+#         self.input_dim = input_dim
+
+#         self.encode = nn.Sequential(
+#             GatedConv1d(
+#                 input_dim=input_dim,
+#                 output_dim=input_dim*2,
+#                 kernel_size=(1,7),
+#                 stride=(1,2),
+#                 padding=(0,3)
+#             ),
+#             BatchRenorm1d(input_dim*2),
+#             GatedConv1d(
+#                 input_dim=input_dim*2,
+#                 output_dim=hidden_dim,
+#                 kernel_size=(1,7),
+#                 stride=(1,2),
+#                 padding=(0,3)
+#             ), 
+#             BatchRenorm1d(hidden_dim),
+#             GatedConv1d(
+#                 input_dim=hidden_dim,
+#                 output_dim=hidden_dim,
+#                 kernel_size=(1,7),
+#                 stride=(1,2),
+#                 padding=(0,3)
+#             ), 
+#             BatchRenorm1d(hidden_dim),
+#         )
+#         self.init_state = nn.Parameter(torch.randn(1, hidden_dim, 1))
+#         nn.init.normal_(self.init_state, mean=0, std=1e-2)
+
+#         self.mask_prediction = nn.Sequential(
+#             nn.LayerNorm(hidden_dim*2),
+#             nn.Linear(hidden_dim*2, output_dim*2)
+#         )
+
+#         self.data_mask_combine = nn.Sequential(
+#             SwiGlu(hidden_dim+output_dim*2, hidden_dim, expansion_factor=1),
+#             nn.LayerNorm(hidden_dim)
+#         )
+#         self.sequence_to_state = SequenceToState(hidden_dim)
+
+#         self.gru = nn.GRU(
+#             input_size=hidden_dim,
+#             hidden_size=hidden_dim,
+#             num_layers=2,
+#             batch_first=True,
+#             dropout=0.0
+#         )
+
+#     @torch.no_grad()
+#     def augment(self, data, state=None, cache=None):
+#         return_data = self.forward_sequential(data, state=state, cache=cache)
+#         masks = return_data['masks']
+#         masks = torch.repeat_interleave(masks, 8, dim=-1)
+#         data = data.repeat(2, 1, 1)
+#         masks = rearrange(masks, 'b (maskset c) t -> (b maskset) c t', maskset=2)   
+#         data = data * masks
+#         return_data['augmented_data'] = data
+   
+#         return return_data
+        
+#     def forward_sequential(self, data, state=None, cache=None):
+#         return_data = {}
+#         b,c,t = data.shape
+#         assert b == 1, 'only implemented for b=1'
+#         data = self.encode(data)
+#         if state is None:
+#             state = self.init_state.expand(-1, -1, data.size(2))
+#         else: 
+#             state = state.expand(-1, -1, data.size(2))
+
+#         data_with_state = torch.cat((state, data), dim=1).transpose(1, 2)
+#         mask_probs = self.mask_prediction(data_with_state).sigmoid().transpose(1, 2)
+#         return_data['mask_probabilities'] = mask_probs
+#         masks = torch.bernoulli(mask_probs)
+#         return_data['masks'] = masks
+        
+#         data = torch.cat((data, masks), dim=1).transpose(1, 2)
+#         data = self.data_mask_combine(data)
+#         segment_embedding = self.sequence_to_state(data)
+#         new_state, new_cache = self.gru(segment_embedding, cache)
+
+#         return_data['next_state'] = new_state.transpose(1, 2)
+#         return_data['next_cache'] = new_cache
+
+#         return return_data
     
-        return mask_probs
+#     def forward_parallel(self, data, masks):
+#         """requires that masks are already generated and saved from the forward_sequential method during rollout"""
+#         b, s, c, t = data.shape
+#         data = rearrange(data, 'b s c t -> (b s) c t')
+#         data = self.encode(data)
+#         masks = rearrange(masks, 'b s c t -> (b s) c t')
+#         data_with_mask = torch.cat((data, masks), dim=1).transpose(1, 2)
+#         data_with_mask = self.data_mask_combine(data_with_mask)
+#         segment_embedding = self.sequence_to_state(data_with_mask)
+#         segment_embedding = rearrange(segment_embedding, '(b s) 1 d -> b s d', s=s)
+        
+#         states, _ = self.gru(segment_embedding)
+#         states = states.transpose(1, 2)
+#         initial_state = self.init_state.expand(states.size(0), -1, -1)
+#         states = torch.cat((initial_state, states), dim=-1)[:,:,:-1]
+#         states = rearrange(states, 'b d s -> (b s) d 1').expand(-1, -1, data.size(-1))
+#         data_with_state = torch.cat((states, data), dim=1).transpose(1, 2)
+        
+#         mask_probs = self.mask_prediction(data_with_state)
+       
+#         mask_probs = mask_probs.sigmoid().transpose(1, 2)
+#         assert mask_probs.shape == masks.shape, 'mask probs and masks should have the same shape'
+#         mask_probs = rearrange(mask_probs, '(b s) c t -> b s t c', s=s)
+#         return mask_probs
 
 
 class Value(base):

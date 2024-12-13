@@ -20,7 +20,7 @@ import pickle
 import random
 
 AUDIO_CHUNK_SIZE_DEFAULT = 4096
-AUDIO_CHUNK_OVERLAP_DEFAULT = 0.875
+AUDIO_CHUNK_OVERLAP_DEFAULT = 0.25
 
 
 
@@ -28,12 +28,7 @@ def main(config):
     save_path = config['teacher_logits_generation']['save_dir']
     checkpoint = config['teacher_logits_generation']['asr_checkpoint']
     dataset = "this_american_life"
-    
-    r_id = f"{dataset}_{config['index']}.pt"
-    save_path = join(save_path, r_id)
-    if os.path.exists(save_path):
-        print(f"File {save_path} already exists, exiting gracefully")
-        return
+
 
     tokenizer = load_tokenizer()
     asr_model_class = get_model_class(config = config)
@@ -55,7 +50,7 @@ def main(config):
     
     audio_spec, _ = cur_data['process_fn'](cur_data)
 
-    logits = gen_logits(
+    model_outputs = gen_logits(
         asr_model=asr_model,
         audio=audio_spec,
         seq_len=AUDIO_CHUNK_SIZE_DEFAULT,
@@ -63,9 +58,17 @@ def main(config):
         vocab_size=tokenizer.vocab_size() + 1,
     )
 
-    torch.save(logits, save_path)
-    
-    
+    for key in model_outputs.keys():
+        r_id_logits = f"{dataset}_{config['index']}_logits_{key}.pt"
+        save_path_logits = join(save_path, r_id_logits)
+        logits = model_outputs[key]['logits']
+        torch.save(logits, save_path_logits)
+        r_id_audio = f"{dataset}_{config['index']}_audio_{key}.pt"
+        save_path_audio = join(save_path, r_id_audio)
+        audio_chunk = model_outputs[key]['audio_chunk']
+        torch.save(audio_chunk, save_path_audio)
+        print(f"Saved logits to {save_path_logits} and audio to {save_path_audio}")
+
 
 
 

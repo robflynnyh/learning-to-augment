@@ -72,6 +72,9 @@ def gpu_eval(
         **kwargs
     ):
 
+    torch.manual_seed(0)
+    torch.use_deterministic_algorithms(True, warn_only=True)
+
     dtype = torch.float32 #temporary
 
     overlap = round(seq_len*overlap)
