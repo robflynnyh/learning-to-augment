@@ -119,8 +119,8 @@ def main(config):
 
       
   
-        # policy_net = load_rl_models(config)
-        # load_policy(policy_net, config
+        policy_net = load_rl_models(config)
+        load_policy(policy_net, config)
         augmentation = SpecAugment(n_time_masks=0, n_freq_masks=6, freq_mask_param=34, zero_masking=True, time_mask_param=0)
         
 
@@ -129,10 +129,12 @@ def main(config):
         rewards = []
         mask_list = []
         for i in range(config['repeats']):
-            #with torch.no_grad(): policy_output = policy_net.augment(audio_file)
             audio_a = audio_file
-            masks = augmentation(torch.ones_like(audio_file))
-            audio_b = audio_file * masks + (1 - masks) * audio_file.mean().unsqueeze(0).unsqueeze(0)
+            with torch.no_grad(): audio_b, masks = policy_net.augment(audio_file, augmentation, repeats=100)
+        
+            # audio_a = audio_file
+            # masks = augmentation(torch.ones_like(audio_file))
+            # audio_b = audio_file * masks + (1 - masks) * audio_file.mean().unsqueeze(0).unsqueeze(0)
             # masks = augmentation(torch.ones_like(audio_file))
             # audio_a = audio_file * masks + (1 - masks) * audio_file.mean().unsqueeze(0).unsqueeze(0)
   
@@ -158,7 +160,7 @@ def main(config):
             
             print('---')
             #print(reward)
-        
+        print('->>') 
         if config['save']:
             torch.save({
                 'reward': torch.stack(rewards),
@@ -189,7 +191,7 @@ if __name__ == "__main__":
     parser.add_argument("--config", "-config", type=str, required=True, help="Path to YAML config file")
     parser.add_argument('--index', '-index', type=int, default=0)
     parser.add_argument('--steps', '-steps', type=int, default=134)
-    parser.add_argument('--repeats', '-repeats', type=int, default=100)
+    parser.add_argument('--repeats', '-repeats', type=int, default=10)
     parser.add_argument('--dont_save', action='store_true')
     args = parser.parse_args()
     config = OmegaConf.load(args.config)

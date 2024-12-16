@@ -6,7 +6,7 @@ from lcasr.utils.audio_tools import load_tokenizer
 from lcasr.utils.audio_tools import processing_chain
 from lcasr.utils.general import load_model as load_asr_model, get_model_class
 # from l2augment.modelling import load_model as load_rl_models
-from l2augment.rollout.cpu_test import  cpu_rollout
+from l2augment.rollout.cpu_multistep     import  cpu_rollout
 from l2augment.modelling.models import Policy
 from lcasr.utils.audio_tools import load_json
 import re
@@ -21,10 +21,7 @@ AUDIO_CHUNK_SIZE_DEFAULT = 4096
 AUDIO_CHUNK_OVERLAP_DEFAULT = 0
 
 def load_rl_models(config): 
-    policy_net = Policy(
-        input_dim=config['policy']['input_dim'],
-        masks_path=config['policy']['masks_path']
-    )
+    policy_net = Policy()
     policy_net = policy_net
     return policy_net
 
@@ -83,7 +80,7 @@ def main(config):
     policy_net = load_rl_models(config)
     load_policy(policy_net, config)
 
-    original_wer = -1 # find_existing_run_wer(directory=config['generation']['save_dir'], id=config['index'])
+    original_wer = None # find_existing_run_wer(directory=config['generation']['save_dir'], id=config['index'])
    
     rollout_fn = partial(cpu_rollout, 
                          load_asr_model_fn = partial_load_asr_model_fn, 
@@ -95,11 +92,12 @@ def main(config):
     
 
     data = dataset_functions['earnings22']("test")
-  
+
     cur_data = data[config['index']]
+    print('---', cur_data['id'], '---')
     audio_spec, gold_text = cur_data['process_fn'](cur_data)
 
-    r_id = f"{config['index']}_{str(random.randint(0,99999999))}.pkl"
+   
 
     rollout_output = rollout_fn(
         policy = policy_net,

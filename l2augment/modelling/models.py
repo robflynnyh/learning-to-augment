@@ -89,7 +89,7 @@ class Policy(base):
     def __init__(
             self,
             input_dim=80,
-            output_dim=160,
+            output_dim=80,
         ) -> None:
         super().__init__()
         self.input_dim = input_dim
@@ -155,16 +155,15 @@ class Policy(base):
         # )
 
     @torch.no_grad()
-    def augment(self, data):
-        random_masks = torch.randn((2,data.shape[1], data.shape[2]), device=data.device).sigmoid().bernoulli().to(torch.bool)
-        mask = random_masks
+    def augment(self, data, augmentation_function, repeats=10):
+        data = data.repeat(repeats, 1, 1)
+        unmasked = torch.ones_like(data)
+        mask = augmentation_function(unmasked).unsqueeze(1)
+        mask_scores = self(data, mask).mean((1,2)).sigmoid()
+        selected_mask = mask[mask_scores.argmin()]
+        augmented_data = data[0, None] * selected_mask + (1 - selected_mask) * data[0, None].mean().unsqueeze(0).unsqueeze(0)
 
-        data = repeat(data, 'b c t -> (maskset b) c t', maskset=2)
-        augmented_data = data * mask 
-        return {
-        'augmented_data': augmented_data,
-        'masks': mask
-        }
+        return augmented_data, selected_mask
 
         # random_masks = torch.randn((100, 2,data.shape[1], data.shape[2]), device=data.device).sigmoid().bernoulli().to(torch.bool)
         
@@ -186,11 +185,12 @@ class Policy(base):
         x = data
         if counts is not None:
             x = x.repeat_interleave(counts, dim=0)
-        masks = rearrange(masks, 'b maskset c t -> b (maskset c) t', maskset=2).to(torch.float32)
+        
+        masks = rearrange(masks, 'b maskset c t -> b (maskset c) t', maskset=1).to(x.dtype)
         masks = self.masks_encode(masks)
         
         x = torch.cat((x, masks), dim=1)
-        x = torch.randn_like(x, device=x.device)
+   
         x = self.encode(x) # b (2 c) t
         # print(x.shape,'--')
         # x = rearrange(x, 'b (bool maskset c) t -> bool b maskset c t', maskset=2, bool=2)

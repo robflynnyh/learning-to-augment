@@ -89,7 +89,16 @@ def load_dictionary(path):
     
 reward_cache = {}
 class CustomDataset(Dataset):
-    def __init__(self, files, zero_mean=False, standardize_std=False, scale=False, clamp_min=-5, clamp_max=5):
+    def __init__(
+            self, 
+            files, 
+            zero_mean=True, 
+            standardize_std=False, 
+            scale=True, 
+            clamp_min=-5, 
+            clamp_max=5,
+            randomize_order=False # debug
+        ):
         self.data = files
         self.keys = sorted(list(self.data.keys()))
         self.zero_mean = zero_mean
@@ -97,8 +106,7 @@ class CustomDataset(Dataset):
         self.clamp_min = clamp_min
         self.clamp_max = clamp_max
         self.scale = scale
-
-       
+        self.randomize_order = randomize_order
 
     def __len__(self):
         # Return the total number of samples
@@ -130,15 +138,19 @@ class CustomDataset(Dataset):
             if self.zero_mean:
                 rewards = rewards - rewards_mean
             if self.standardize_std:
-                if rewards.shape[0] > 1: # don't standardize if there is only one sample
-                    rewards = rewards / (rewards_std + 1e-6) 
+                if rewards.shape[0] > 1 or rewards_std == 0:
+                    rewards = rewards / (rewards_std + 1e-6)
             if self.scale:
                 # min -1, max 1 but avoid 0 division
                 rewards = 2*(rewards - rewards.min())/(rewards.max() - rewards.min() + 1e-6) - 1
+                rewards = (rewards + 1) / 2
 
-            z = torch.zeros_like(rewards)
-            z[rewards == rewards.max()] = 1
-            rewards = z
+            if self.randomize_order:
+                rewards = rewards[torch.randperm(rewards.shape[0])] # debug
+
+            # z = torch.zeros_like(rewards)
+            # z[rewards > 0] = 1
+            # rewards = z
         
 
 
@@ -194,7 +206,8 @@ def forward_pass(batch, policy, device):
     print(prediction[:10])
     print(rewards[:10])
     print('--')
-    loss = torch.nn.functional.binary_cross_entropy(input=prediction, target=rewards, reduction='mean')
+    loss = torch.nn.functional.mse_loss(input=prediction, target=rewards, reduction='mean')
+    #loss = torch.nn.functional.binary_cross_entropy(input=prediction, target=rewards, reduction='mean')
 
     return loss
 
@@ -215,9 +228,12 @@ def train_policy(
         policy = policy.train()
 
         prev_val_loss = float('inf')
+        prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
+        
         for epoch in range(config['training']['epochs']):
             val_loss_sum = 0
             val_count = 0
+            
 
             pbar = tqdm(val_dataloader)
             for batch in pbar:
@@ -235,9 +251,12 @@ def train_policy(
             print(f'val_loss: {val_loss}')
 
             if val_loss > prev_val_loss:
+                policy.load_state_dict(prev_state_dict)
+                print(f'Validation loss increased. Reverting to previous state')
                 break
 
             prev_val_loss = val_loss
+            prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
 
 
             pbar = tqdm(dataloader)

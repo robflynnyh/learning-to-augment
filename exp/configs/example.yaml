@@ -7,7 +7,7 @@ training:
   batch_size: 12
   lr: 3e-4
   epochs: 100
-  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/model__.pt
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/model.pt
 
 policy:
   lr: 1e-4
