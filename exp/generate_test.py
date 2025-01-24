@@ -43,6 +43,37 @@ def save_tensors_in_dictionary(dictionary, filename):
         torch.save(dictionary[key], f"{filename}_{key}.pt")
 
 
+def cutout(spec, seq_len, num_rectangles=5, max_width=100, max_height=10):
+    '''
+    cutout_val: 'mean', 'mean_recording', 'zero'
+    assumes a batch size of 1 (rearange to (F, B*N) if batch size > 1)
+    '''
+    if num_rectangles == 0: return spec
+
+    spec_n = spec.shape[-1]
+    ratio = spec_n / seq_len
+    num_rectangles = int(num_rectangles * ratio) # if this spectrogram is shorter than the sequence lentgth used for tuning reduce the number of rectangles
+    
+    mask = torch.ones_like(spec)
+
+    widths = torch.randint(1, max_width, (num_rectangles,))
+    heights = torch.randint(1, max_height, (num_rectangles,))
+    start_positions_x = torch.randint(0, spec.shape[-1], (num_rectangles,))
+    end_positions_x = (start_positions_x + widths).clamp(max=spec.shape[-1])
+    start_positions_y = torch.randint(0, spec.shape[-2], (num_rectangles,))
+    end_positions_y = (start_positions_y + heights).clamp(max=spec.shape[-2])
+    
+
+    mask_values = []
+    for i in range(num_rectangles):
+        mask_values.append(spec[:, start_positions_y[i]:end_positions_y[i], start_positions_x[i]:end_positions_x[i]].mean())
+
+    for i in range(num_rectangles):
+        spec[:, start_positions_y[i]:end_positions_y[i], start_positions_x[i]:end_positions_x[i]] = mask_values[i]
+        mask[:, start_positions_y[i]:end_positions_y[i], start_positions_x[i]:end_positions_x[i]].zero_()
+    return spec, mask
+
+
 def load_dictionary(path):
     with open(path, 'rb') as file:
         return pickle.load(file)
@@ -85,9 +116,14 @@ def main(config):
         files = os.listdir(teacher_logits_dir)
         files = [el for el in files if 'audio' in el]
         files = sorted(files)
+        
+        if index < len(files) and index >= 0:
+            path = files[index].replace('audio', 'rewards_and_masks')
+            path = join(save_path, path)
+        else:
+            print(f"Index {index} out of range, got {index}, expected range 0-{len(files)-1} - exiting gracefully")
+            return
 
-        path = files[index].replace('audio', 'rewards_and_masks')
-        path = join(save_path, path)
 
         if os.path.exists(path) and config['save']:
             print(f"File {path} already exists, skipping")
@@ -98,6 +134,7 @@ def main(config):
             return
         
         cur_audio_file = files[index]
+        print(cur_audio_file)
         cur_logit_file = cur_audio_file.replace('audio', 'logits')
         cur_audio_file = join(teacher_logits_dir, cur_audio_file)
         cur_logit_file = join(teacher_logits_dir, cur_logit_file)
@@ -114,13 +151,13 @@ def main(config):
             partial_load_asr_model_fns.append(partial(
                 load_asr_model_fn,
                 load_asr_model(asr_model_config, tokenizer.vocab_size(), asr_model_class),
-                asr_model_state_dict,
+                asr_model_state_dict
             ))
 
       
   
-        policy_net = load_rl_models(config)
-        load_policy(policy_net, config)
+        # policy_net = load_rl_models(config)
+        # load_policy(policy_net, config)
         augmentation = SpecAugment(n_time_masks=0, n_freq_masks=6, freq_mask_param=34, zero_masking=True, time_mask_param=0)
         
 
@@ -129,38 +166,51 @@ def main(config):
         rewards = []
         mask_list = []
         for i in range(config['repeats']):
-            audio_a = audio_file
-            with torch.no_grad(): audio_b, masks = policy_net.augment(audio_file, augmentation, repeats=100)
-        
-            # audio_a = audio_file
-            # masks = augmentation(torch.ones_like(audio_file))
-            # audio_b = audio_file * masks + (1 - masks) * audio_file.mean().unsqueeze(0).unsqueeze(0)
-            # masks = augmentation(torch.ones_like(audio_file))
-            # audio_a = audio_file * masks + (1 - masks) * audio_file.mean().unsqueeze(0).unsqueeze(0)
-  
+            #audio_a = audio_file
+            # with torch.no_grad(): audio_b, masks = policy_net.augment(audio_file, augmentation, repeats=100)
+            
 
-            c_rewards = []
-            for asr_model_load_fn in partial_load_asr_model_fns:
-                reward, _ = cpu_rollout(
-                    policy = None,
-                    audio = audio_file,
-                    audio_a = audio_a,
-                    audio_b = audio_b,
-                    load_asr_model_fn = asr_model_load_fn,
-                    tokenizer = tokenizer,
-                    teacher_logits = teacher_logits,
-                    optim_args = {"lr":1e-2}
-                )
-                # rewards.append(reward)
-                # mask_list.append(masks.to(dtype=torch.bool))
-                c_rewards.append(reward)
-            print('->', torch.stack(c_rewards).mean())
-            rewards.append(torch.stack(c_rewards).mean())
-            mask_list.append(masks.to(dtype=torch.bool))
+            for augmentation_method in ('cutout', 'spec_augment'):
+                audio_a = audio_file.clone()
+                if augmentation_method == 'spec_augment':
+                    masks = augmentation(torch.ones_like(audio_file))
+                    audio_b = audio_file * masks + (1 - masks) * audio_file.mean().unsqueeze(0).unsqueeze(0)
+                    #print(masks.sum()/masks.numel(), 'soecmask')
+                elif augmentation_method == 'cutout':
+                    audio_b, masks = cutout(
+                        audio_file.clone(), 
+                        AUDIO_CHUNK_SIZE_DEFAULT, 
+                        num_rectangles=random.randint(2, 600), 
+                        max_width=300, 
+                        max_height=80
+                    )
+                    #print(masks.sum()/masks.numel(), 'cutoutmask')
+                
+            
+                c_rewards = []
+                for asr_model_load_fn in partial_load_asr_model_fns:
+                    prev_cer, updated_cer, _ = cpu_rollout(
+                        policy = None,
+                        audio = audio_file,
+                        audio_a = audio_a,
+                        audio_b = audio_b,
+                        load_asr_model_fn = asr_model_load_fn,
+                        tokenizer = tokenizer,
+                        teacher_logits = teacher_logits,
+                        optim_args = {"lr":1e-2}
+                    )
+                    # rewards.append(reward)
+                    # mask_list.append(masks.to(dtype=torch.bool))
+                    reward = torch.stack([prev_cer, updated_cer])
+                    c_rewards.append(reward)
+                print(f'{augmentation_method} ->', torch.stack(c_rewards))
+                rewards.append(torch.stack(c_rewards))
+                mask_list.append(masks.to(dtype=torch.bool))
             
             print('---')
             #print(reward)
         print('->>') 
+        print(torch.stack(rewards).shape)
         if config['save']:
             torch.save({
                 'reward': torch.stack(rewards),
@@ -190,7 +240,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", "-config", type=str, required=True, help="Path to YAML config file")
     parser.add_argument('--index', '-index', type=int, default=0)
-    parser.add_argument('--steps', '-steps', type=int, default=134)
+    parser.add_argument('--steps', '-steps', type=int, default=124)
     parser.add_argument('--repeats', '-repeats', type=int, default=10)
     parser.add_argument('--dont_save', action='store_true')
     args = parser.parse_args()

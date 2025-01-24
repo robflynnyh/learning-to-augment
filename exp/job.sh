@@ -20,5 +20,4 @@ python generate_test.py --config ./configs/example_3.yaml --index $SLURM_ARRAY_T
 #     python generate.py --config ./configs/example.yaml --index $SLURM_ARRAY_TASK_ID
 # fi
 
-wait
 

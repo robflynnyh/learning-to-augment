@@ -1,16 +1,17 @@
 checkpointing:
   asr_model: "/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_4096_rp_1/step_105360.pt"
+  #"/mnt/parscratch/users/acp21rjf/spotify/checkpoints_seq_scheduler_rb/n_seq_sched_4096_rp_1/step_105360.pt" 
+  #"/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_4096_rp_1/step_105360.pt"
 
 training:
   device: 'cuda'
   random_seed: 1234
-  batch_size: 12
-  lr: 3e-4
+  batch_size: 24
   epochs: 100
-  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/model.pt
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/model3.pt
 
 policy:
-  lr: 1e-4
+  lr: 3e-4
 value:
   save_path: "/mnt/parscratch/users/acp21rjf/l2augment_value/model.pt"
 

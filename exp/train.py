@@ -1,33 +1,22 @@
 import argparse
 import torch
-from functools import partial
 from omegaconf.omegaconf import OmegaConf
-from lcasr.utils.audio_tools import load_tokenizer
-from lcasr.utils.audio_tools import processing_chain
-from lcasr.utils.general import load_model as load_asr_model, get_model_class
-# from l2augment.modelling import load_model as load_rl_models
-from l2augment.rollout import  cpu_rollout
-from l2augment.rollout.gpu_eval import gpu_eval
-from einops import rearrange
 
-from l2augment.modelling.models import Policy, Value
-from lcasr.utils.audio_tools import load_json
+from lcasr.utils.augmentation import SpecAugment
+
+
+from l2augment.modelling.models import Policy
+
 from tqdm import tqdm
 import logging
 import os
 from os.path import join
 from torch.utils.data import Dataset, DataLoader
-import json
+
 import pickle
-import random
 from typing import List, Dict, Any
 from madgrad import MADGRAD
-import subprocess
 import wandb
-from l2augment.utils.data import prepare_chunks
-from l2augment.utils.data import dataset_functions
-from typing import Tuple
-from torch_scatter import scatter_logsumexp
 
 logger = logging.getLogger('train')
 logger.setLevel(logging.INFO)
@@ -41,42 +30,11 @@ AUDIO_CHUNK_SIZE_DEFAULT = 4096
 AUDIO_CHUNK_OVERLAP_DEFAULT = int(0.875*AUDIO_CHUNK_SIZE_DEFAULT)
 
 
-from concurrent.futures import ThreadPoolExecutor
-
-def load_pt_file(file_path):
-    """
-    Load a single PyTorch .pt file
-    
-    Args:
-        file_path (str): Path to the .pt file
-    
-    Returns:
-        Loaded torch object
-    """
-    return torch.load(file_path)
-
-def load_multiple_pt_files(file_paths, max_workers=None):
-    """
-    Load multiple .pt files in parallel
-    
-    Args:
-        file_paths (list): List of file paths to load
-        max_workers (int, optional): Maximum number of threads to use. 
-                                     Defaults to None (auto-determined)
-    
-    Returns:
-        list: Loaded torch objects in the same order as input paths
-    """
-    #return [load_pt_file(file_path) for file_path in file_paths]
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        return list(executor.map(load_pt_file, file_paths))
 
 def load_rl_models(config): 
     policy_net = Policy()
-    # prev_policy_net = Policy()
-    # value_net = Value()
-    # policy_net = policy_net
-    return policy_net #, prev_policy_net, value_net
+    return policy_net 
+
 
 def save_dictionary(dictionary, filename):
     with open(filename, 'wb') as file:
@@ -87,7 +45,6 @@ def load_dictionary(path):
         return pickle.load(file)
     
     
-reward_cache = {}
 class CustomDataset(Dataset):
     def __init__(
             self, 
@@ -97,7 +54,8 @@ class CustomDataset(Dataset):
             scale=True, 
             clamp_min=-5, 
             clamp_max=5,
-            randomize_order=False # debug
+            randomize_order=False, # debug
+            decrease_measurement='absolute' # percentage or absolute
         ):
         self.data = files
         self.keys = sorted(list(self.data.keys()))
@@ -107,6 +65,7 @@ class CustomDataset(Dataset):
         self.clamp_max = clamp_max
         self.scale = scale
         self.randomize_order = randomize_order
+        self.decrease_measurement = decrease_measurement
 
     def __len__(self):
         # Return the total number of samples
@@ -120,21 +79,36 @@ class CustomDataset(Dataset):
             masks_and_rewards_paths = self.data[key]['masks_and_rewards']
             masks_and_rewards = torch.load(masks_and_rewards_paths)
             masks = masks_and_rewards['mask']
-            rewards = masks_and_rewards['reward']
-         
+            decreases = masks_and_rewards['reward'].mean(1, keepdim=True)
+
+            before, after = decreases.chunk(2, dim=-1)
+            if self.decrease_measurement == 'absolute':
+                rewards = before - after
+            elif self.decrease_measurement == 'percentage':
+                rewards = ( (before - after) / before )*100
+            else:
+                raise ValueError(f"Unknown decrease measurement: {self.decrease_measurement} should be 'percentage' or 'absolute'")
+            rewards = rewards.squeeze(-1)
+        
 
             assert len(masks) == len(rewards), f"Length of masks and rewards not equal for {key}"
 
             # replace any nan values with 0 
             rewards[torch.isnan(rewards)] = 0 # can happen due to empty reference and hypothesis
 
+            # notnegative = torch.zeros_like(rewards)
+            # notnegative[rewards >= 0] = 1
+
+            rank_rewards = torch.argsort(torch.argsort(rewards, dim=0, descending=True), dim=0, descending=False)
+            
             if self.clamp_min is not None:
                 rewards = rewards.clamp(min=self.clamp_min)
             if self.clamp_max is not None:
                 rewards = rewards.clamp(max=self.clamp_max)
 
-            rewards_mean, rewards_std = rewards.mean(), rewards.std()
-        
+            rewards_mean, rewards_std = rewards.mean(0, keepdim=True), rewards.std(0, keepdim=True)
+
+
             if self.zero_mean:
                 rewards = rewards - rewards_mean
             if self.standardize_std:
@@ -142,7 +116,9 @@ class CustomDataset(Dataset):
                     rewards = rewards / (rewards_std + 1e-6)
             if self.scale:
                 # min -1, max 1 but avoid 0 division
-                rewards = 2*(rewards - rewards.min())/(rewards.max() - rewards.min() + 1e-6) - 1
+                rewards_min = rewards.min(dim=0, keepdim=True).values
+                rewards_max = rewards.max(dim=0, keepdim=True).values
+                rewards = 2*(rewards - rewards_min)/(rewards_max - rewards_min + 1e-6) - 1
                 rewards = (rewards + 1) / 2
 
             if self.randomize_order:
@@ -151,11 +127,12 @@ class CustomDataset(Dataset):
             # z = torch.zeros_like(rewards)
             # z[rewards > 0] = 1
             # rewards = z
-        
-
+            
+    
+            all_rewards = rank_rewards#torch.cat([rewards, notnegative, rank_rewards], dim=-1)
 
             return {
-                'reward': rewards, # (repeats)
+                'reward': all_rewards, # (repeats)
                 'masks':masks, # (masks, 2, C, T)
                 'audio':audio # (1, C, T)
             }
@@ -193,23 +170,47 @@ def custom_collate_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.T
     }
 
 
-
-def forward_pass(batch, policy, device):
+from einops import rearrange
+def forward_pass(batch, policy, device, augmentation=None):
     masks = batch['masks'].to(device)
     audio = batch['audio'].to(device)
     rewards = batch['rewards'].to(device)
     counts = batch['counts'].to(device)
 
-    x = policy(audio, masks, counts)        
+    if augmentation is not None: audio = augmentation(audio)
 
-    prediction = x.mean(dim=(1,2)).sigmoid()
-    print(prediction[:10])
-    print(rewards[:10])
-    print('--')
-    loss = torch.nn.functional.mse_loss(input=prediction, target=rewards, reduction='mean')
+    #mse_rewards, binary_nonnegative_rewards, rank_rewards = rewards.chunk(3, dim=-1)
+    #mse_rewards=rewards
+    rank_rewards=rewards.to(torch.long)
+
+    x = policy(audio, masks, counts)        
+    #prediction_mse = x.mean(dim=(1)).sigmoid()
+    prediction_rank = x.mean(dim=(1))
+
+    # prediction_mse, prediction_binary, prediction_rank = torch.split(prediction, [3, 3, 20*3], dim=-1)
+    # prediction_mse, prediction_binary = prediction_mse.sigmoid(), prediction_binary.sigmoid()
+    
+    #prediction_rank = rearrange(prediction_rank, 'b (s c) -> (b  c'c=20)
+    # print(prediction_rank.argmax(dim=-1)[:10])
+    # print(rank_rewards[:10])
+
+    #print(prediction.shape, rewards.shape, '--->>>>>', x.shape)
+    # print(prediction_mse[:20].squeeze())
+    # print(mse_rewards[:20].squeeze())
+    # print('------\n')
+    # loss_mse = torch.nn.functional.mse_loss(input=prediction_mse, target=mse_rewards, reduction='mean')
+    #loss_binary = torch.nn.functional.binary_cross_entropy(input=prediction_binary, target=binary_nonnegative_rewards, reduction='mean')
+
+    loss_rank = torch.nn.functional.cross_entropy(input=prediction_rank, target=rank_rewards.squeeze(-1), reduction='mean')
+    losses = {
+        #'mse': loss_mse,
+        # 'binary': loss_binary,
+        'rank': loss_rank
+    }
+    loss = sum(list(losses.values())) / len(list(losses.values()))
     #loss = torch.nn.functional.binary_cross_entropy(input=prediction, target=rewards, reduction='mean')
 
-    return loss
+    return loss, losses
 
 def backward_pass(loss, policy, optim):
     optim.zero_grad()
@@ -229,25 +230,35 @@ def train_policy(
 
         prev_val_loss = float('inf')
         prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
+
+        augmentation = None# SpecAugment(n_time_masks=2, n_freq_masks=2, time_mask_param=-1, freq_mask_param=27, min_p=0.05, max_p=0.3)
         
         for epoch in range(config['training']['epochs']):
             val_loss_sum = 0
             val_count = 0
             
+            all_val_losses = None
 
             pbar = tqdm(val_dataloader)
+            policy = policy.eval()
             for batch in pbar:
                 if batch == None: continue  
                 with torch.no_grad():
-                    loss = forward_pass(batch, policy, device)
+                    loss, all_losses = forward_pass(batch, policy, device)
                 if loss == None: continue
-         
+
+                if all_val_losses == None:
+                    all_val_losses = {k:v.item() for k,v in all_losses.items()}
+                else:
+                    for k,v in all_losses.items():
+                        all_val_losses[k] += v.item()
+
                 val_loss_sum += loss.item()
                 val_count += 1
                 pbar.set_description(desc=f'val_loss: {val_loss_sum/val_count}')
 
             val_loss = val_loss_sum/val_count
-            wandb.log({'val_policy_loss':val_loss, 'epoch': epoch})
+            wandb.log({'val_policy_loss':val_loss, 'epoch': epoch, **{f'val_{k}':v/val_count for k,v in all_val_losses.items()}})
             print(f'val_loss: {val_loss}')
 
             if val_loss > prev_val_loss:
@@ -258,15 +269,15 @@ def train_policy(
             prev_val_loss = val_loss
             prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
 
-
+            policy = policy.train()
             pbar = tqdm(dataloader)
             for batch in pbar:
                 if batch == None: continue  
                 
-                loss = forward_pass(batch, policy, device)
+                loss, losses = forward_pass(batch, policy, device, augmentation=augmentation)
                 if loss == None: continue
          
-                wandb.log({'policy_loss':loss.item(), 'epoch': epoch})
+                wandb.log({'policy_loss':loss.item(), 'epoch': epoch, **{k:v.item() for k,v in losses.items()}})
                 
                 pbar.set_description(desc=f'loss: {loss.item()}')
                 backward_pass(loss, policy, optim)
@@ -387,13 +398,6 @@ def main(config):
     wandb.init(project="l2augment")
     
     train_files, val_files = prepare_data(config)
-    # if not os.path.exists('train_val_files.pkl'):
-    #     train_files, val_files = prepare_data(config)
-    #     with open('train_val_files.pkl', 'wb') as file:
-    #         pickle.dump([train_files, val_files], file)
-    # else:
-    #     with open('train_val_files.pkl', 'rb') as file:
-    #         train_files, val_files = pickle.load(file)
 
     train_dataset = CustomDataset(train_files)
     val_dataset = CustomDataset(val_files)
@@ -404,8 +408,8 @@ def main(config):
         batch_size=config['training']['batch_size'], 
         shuffle=True, 
         collate_fn=custom_collate_fn,
-        num_workers=16,
-        prefetch_factor=8   
+        num_workers=12,
+        prefetch_factor=12   
     )
     val_dataloader = DataLoader(
         val_dataset, 

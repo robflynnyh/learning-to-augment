@@ -1,8 +1,47 @@
 import re
 import os
 import json
-from lcasr.utils.audio_tools import processing_chain
+from lcasr.utils.audio_tools import processing_chain, total_seconds
 import pickle
+from typing import List
+
+def open_stm(path:str) -> List[str]:
+    with open(path, 'r') as f:
+        lines = f.read().split('\n')
+    return lines
+
+def proc_stm_and_timings(stm_path:str):
+    stm = open_stm(stm_path)
+    utts = []
+    for line in stm:
+        sline = line.split(' ')
+        if len(sline) < 6:
+            continue
+        a_id, s_id, spk, start, end, meta = sline[:6]
+        text = ' '.join(sline[6:])
+        if text == 'ignore_time_segment_in_scoring':
+            continue
+        text = re.sub(r" '([a-z])", r"'\1", text)
+        # remove anything inside angle brackets i.e <...> 
+        utts.append({'start': float(start), 'end': float(end), 'text': re.sub(r'<[^>]*>', '', text)})
+    return utts
+
+def segment_spectrogram(spec, frames_per_second, utterances):
+    for utt in utterances:
+        start,end = utt['start'], utt['end']
+        start_frame = int(round(start * frames_per_second))
+        end_frame = int(round(end * frames_per_second))
+        utt['spectrogram'] = spec[:, :, start_frame:end_frame].clone()
+    return utterances
+
+def load_tedlium_recording(stm_path:str, sph_path:str):
+    utts = proc_stm_and_timings(stm_path)
+    audio_path, sr = processing_chain(sph_path, normalise=True) # [b, c, t]
+    assert sr == 16000, f"Sample rate is {sr}, expected 16000"
+    length_in_seconds = total_seconds(audio_path.shape[-1])
+    frames_per_second = audio_path.shape[-1] / length_in_seconds
+    utterances = segment_spectrogram(audio_path, frames_per_second, utts)
+    return utterances
 
 def prepare_chunks(spec, seq_len, overlap):
     spec_n = spec.shape[-1]
@@ -128,9 +167,33 @@ def earnings22_data():
         return return_data
     return get_text_and_audio
 
+def tedlium3_segmented_data():
+    base_path = "/mnt/parscratch/users/acp21rjf/TEDLIUM_release-3/legacy/"
+
+    def process_text_and_audio_fn(rec_dict):
+        utterances = load_tedlium_recording(stm_path=rec_dict['text'], sph_path=rec_dict['audio'])
+        return utterances
+
+    def get_text_and_audio(split):
+        assert split in ['test', 'dev', 'train'], f'Split must be either test or dev or train(got {split})'
+        path = os.path.join(base_path, split)
+        recordings = os.listdir(os.path.join(path, 'sph'))
+
+        return_data = []
+        for rec in range(len(recordings)):
+            return_data.append({
+                'id': recordings[rec].replace('.sph', ''),
+                'text': os.path.join(path, 'stm', recordings[rec].replace('.sph', '.stm')),
+                'audio': os.path.join(path, 'sph', recordings[rec]),
+                "process_fn": process_text_and_audio_fn
+            })
+        return return_data
+    return get_text_and_audio
+
 dataset_functions = {
     "earnings22": earnings22_data(),
-    "this_american_life": this_american_life_data()
+    "this_american_life": this_american_life_data(),
+    "tedlium3_segmented_data": tedlium3_segmented_data()
 }
 
 

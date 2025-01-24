@@ -31,6 +31,7 @@ def cpu_rollout(
         optim_args:Dict[str, Any] = {"lr":1e-1},
         audio_a:Tensor = None,
         audio_b:Tensor = None,
+        augmented_target = False,
         **kwargs
     ):
 
@@ -64,12 +65,14 @@ def cpu_rollout(
   
     with torch.no_grad():
         out_original = asr_model(audio_signal = audio)
-        out_a = asr_model(audio_signal = audio_a)['final_posteriors']
+        if augmented_target: out_a = asr_model(audio_signal = audio_a)['final_posteriors']
+        else: out_a = out_original['final_posteriors'].clone()
     
     out_b = asr_model(audio_signal = audio_b)['final_posteriors']
 
     out_original_posteriors = out_original['final_posteriors'].squeeze(0)
     out_original_predictions = decoder(out_original_posteriors)
+    
 
     pseudo_targets = decoder(out_a.squeeze(0)) 
     pseudo_targets = torch.LongTensor(tokenizer.encode(pseudo_targets))[None]
@@ -96,6 +99,7 @@ def cpu_rollout(
     updated_predictions = decoder(updated_logits)
 
     teacher_targets = decoder(teacher_logits)
+   
     
     #print(teacher_output_posteriors.shape, teacher_logits_at_t.shape, teacher_logits.shape)
 
@@ -107,7 +111,7 @@ def cpu_rollout(
     diff = prev_cer - updated_cer
     print(diff)
     
-    return torch.tensor(diff), masks
+    return torch.tensor(prev_cer), torch.tensor(updated_cer), masks
         
        
 

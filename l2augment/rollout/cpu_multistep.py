@@ -108,6 +108,7 @@ def cpu_rollout(
     asr_model = asr_model.to(device)
     policy = policy.to(device)
     
+    original_wer = 0.24
     if original_wer is None:
         for key in tqdm(training_keys):
             audio_chunk = training_data[key].clone()
@@ -147,7 +148,8 @@ def cpu_rollout(
         if max_steps != None and i > max_steps: break
 
         audio_chunk = training_data[key].clone().to(device)
-        with torch.no_grad(): augmented_audio_sample, masks = policy.augment(audio_chunk, augmentation, repeats=100)
+        with torch.no_grad(): augmented_audio_sample, masks = policy.augment(audio_chunk, repeats=50)
+    
        
         
         # for param_group in optimizer.param_groups:
