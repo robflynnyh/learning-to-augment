@@ -36,11 +36,10 @@ def segment_spectrogram(spec, frames_per_second, utterances):
 
 def load_tedlium_recording(stm_path:str, sph_path:str):
     utts = proc_stm_and_timings(stm_path)
-    audio_path, sr = processing_chain(sph_path, normalise=True) # [b, c, t]
-    assert sr == 16000, f"Sample rate is {sr}, expected 16000"
-    length_in_seconds = total_seconds(audio_path.shape[-1])
-    frames_per_second = audio_path.shape[-1] / length_in_seconds
-    utterances = segment_spectrogram(audio_path, frames_per_second, utts)
+    audio= processing_chain(sph_path, normalise=True) # [b, c, t]
+    length_in_seconds = total_seconds(audio.shape[-1])
+    frames_per_second = audio.shape[-1] / length_in_seconds
+    utterances = segment_spectrogram(audio, frames_per_second, utts)
     return utterances
 
 def prepare_chunks(spec, seq_len, overlap):
