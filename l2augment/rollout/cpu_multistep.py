@@ -59,6 +59,7 @@ def broadcast_multiply(tensor1, tensor2):
 
 def cpu_rollout(
         policy:Module,
+        imitation_net:Module,
         load_asr_model_fn:Callable,
         tokenizer,
         audio:Tensor,
@@ -107,8 +108,9 @@ def cpu_rollout(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     asr_model = asr_model.to(device)
     policy = policy.to(device)
+    imitation_net = imitation_net.to(device)
     
-    original_wer = 0.24
+    #original_wer = 0.283
     if original_wer is None:
         for key in tqdm(training_keys):
             audio_chunk = training_data[key].clone()
@@ -148,7 +150,14 @@ def cpu_rollout(
         if max_steps != None and i > max_steps: break
 
         audio_chunk = training_data[key].clone().to(device)
-        with torch.no_grad(): augmented_audio_sample, masks = policy.augment(audio_chunk, repeats=50)
+        with torch.no_grad():
+            #mask, var = imitation_net(audio_chunk)
+            #normal_dist = torch.distributions.normal.Normal(loc=mask, scale=torch.sqrt(var))
+            #samples = normal_dist.sample(sample_shape=torch.Size([1000])).squeeze(1).transpose(-1,-2)
+            masks = torch.rand_like(audio_chunk) * torch.rand_like(audio_chunk) * 2
+            augmented_audio_sample = audio_chunk + masks
+            #augmented_audio_sample = audio_chunk + mask.transpose(1, 2)
+            #augmented_audio_sample, masks = policy.augment(audio_chunk, repeats=1000)
     
        
         

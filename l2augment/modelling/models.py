@@ -134,17 +134,21 @@ def cutout(spec, seq_len, num_rectangles=5, max_width=100, max_height=10):
     return spec, mask
 
 from lcasr.utils.augmentation import SpecAugment 
+
+
 def augmentation_function(audio, repeats=50):
     b, c, t = audio.shape
 
     audio_spec = audio.repeat(repeats, 1, 1)
-    audio_cutout = audio.repeat(repeats, 1, 1)
+    
     #random.seed(42)
     #torch.manual_seed(42)
-    specaugmentation = SpecAugment(n_time_masks=0, n_freq_masks=6, freq_mask_param=34, zero_masking=True, time_mask_param=0)
+    noise = torch.rand_like(audio_spec) * torch.rand_like(audio_spec)*2
+    mask_spec = noise
+    audio_spec = audio_spec + mask_spec
 
-    masks_spec = specaugmentation(torch.ones_like(audio_spec))
-    audio_spec = audio_spec * masks_spec + (1 - masks_spec) * audio_spec.mean().unsqueeze(0).unsqueeze(0)
+    # masks_spec = specaugmentation(torch.ones_like(audio_spec))
+    # audio_spec = audio_spec * masks_spec + (1 - masks_spec) * audio_spec.mean().unsqueeze(0).unsqueeze(0)
         #print(masks.sum()/masks.numel(), 'soecmask')
    
     # audio_cutout, masks_cutout = cutout(
@@ -161,14 +165,61 @@ def augmentation_function(audio, repeats=50):
     # masks = torch.cat((masks_spec, masks_cutout), dim=0)
     # return audio, masks
 
-    return audio_spec, masks_spec
+    return audio_spec, mask_spec
+
+class ImitationModel(base):
+    def __init__(
+            self,
+            input_dim=80,
+            hidden_dim=80,
+            expansion_factor=2,
+        ) -> None:
+        super().__init__()
+
+        hidden_dim = hidden_dim
+        downsample_kernel = 7
+        gated_kernel = (9,9)
+        
+        self.downsample_kernel = downsample_kernel
+        self.gated_kernel = gated_kernel
+        self.input_dim = input_dim
+        self.block_layers = 6
+        self.hidden_dim = hidden_dim
+
+        self.encode = (
+                nn.Sequential(
+                    *[
+                        ResidualBlock(nn.Sequential(
+                            GatedConv1d(
+                                input_dim=hidden_dim, 
+                                output_dim=hidden_dim, 
+                                expansion_factor=expansion_factor, 
+                                kernel_size=gated_kernel, 
+                                stride=(1,1), 
+                                padding=("same", "same"),
+                            ),
+                            BatchRenorm1d(hidden_dim) 
+                        ))   for _ in range(self.block_layers)
+                    ],
+                    Rearrange('b c t -> b t c'),
+                    nn.LayerNorm(hidden_dim),
+                    nn.Linear(hidden_dim,hidden_dim*2),
+            ))
+    
+
+    def forward(self, x):
+        x = self.encode(x)
+        x, var = x.chunk(2, dim=-1)
+        var = torch.nn.functional.softplus(var) + 1e-9
+        return x, var
+
 
 class Policy(base):
     def __init__(
             self,
             input_dim=80,
             hidden_dim=80,
-            output_dim=20,
+            output_dim=5,
             expansion_factor=1,
         ) -> None:
         super().__init__()
@@ -254,14 +305,18 @@ class Policy(base):
 
 
     @torch.no_grad()
-    def augment(self, data, repeats=100):
-        augmented_data, masks = augmentation_function(data, repeats)
-        
-        if self.mode == 'random':
-            selected_mask = masks[0]
-            augmented_data = augmented_data[0]
+    def augment(self, data, masks=None, repeats=100):
+        if masks == None:
+            augmented_data, masks = augmentation_function(data, repeats)
         else:
-            mask_scores = self(data.repeat(repeats, 1, 1), masks.unsqueeze(1)).mean((1)).softmax(-1)[:,:10].sum(-1)
+            repeats = masks.shape[0]
+            augmented_data = data.repeat(repeats, 1, 1) + masks
+
+        if self.mode == 'random':
+            selected_mask = masks[0][None]
+            augmented_data = augmented_data[0][None]
+        else:
+            mask_scores = self(data.repeat(repeats, 1, 1), masks.unsqueeze(1)).mean((1)).softmax(-1)[:,:1].sum(-1)
             
             if self.mode == 'best':
                 selected_mask = masks[mask_scores.argmax()]
@@ -272,7 +327,7 @@ class Policy(base):
             else:
                 raise ValueError(f"Unknown mode: {self.mode}")
 
-        return augmented_data, selected_mask
+        return augmented_data, selected_mask.unsqueeze(0)
     
 
     def forward(self, data, masks, counts=None):

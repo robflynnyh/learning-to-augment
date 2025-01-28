@@ -5,7 +5,8 @@ from omegaconf.omegaconf import OmegaConf
 from lcasr.utils.augmentation import SpecAugment
 
 
-from l2augment.modelling.models import Policy
+from l2augment.modelling.models import Policy, ImitationModel
+from l2augment.modelling.mdm import MDN_loss
 
 from tqdm import tqdm
 import logging
@@ -33,7 +34,8 @@ AUDIO_CHUNK_OVERLAP_DEFAULT = int(0.875*AUDIO_CHUNK_SIZE_DEFAULT)
 
 def load_rl_models(config): 
     policy_net = Policy()
-    return policy_net 
+    imitation_net = ImitationModel()
+    return policy_net, imitation_net 
 
 
 def save_dictionary(dictionary, filename):
@@ -57,8 +59,8 @@ class CustomDataset(Dataset):
             randomize_order=False, # debug
             decrease_measurement='absolute' # percentage or absolute
         ):
-        self.data = files
-        self.keys = sorted(list(self.data.keys()))
+        self.data = sorted(files)
+    
         self.zero_mean = zero_mean
         self.standardize_std = standardize_std
         self.clamp_min = clamp_min
@@ -69,17 +71,16 @@ class CustomDataset(Dataset):
 
     def __len__(self):
         # Return the total number of samples
-        return len(self.keys)
+        return len(self.data)
     
     def __getitem__(self, idx):
         try:
-            key = self.keys[idx]
-            audio_path = self.data[key]['audio']
-            audio = torch.load(audio_path)
-            masks_and_rewards_paths = self.data[key]['masks_and_rewards']
-            masks_and_rewards = torch.load(masks_and_rewards_paths)
-            masks = masks_and_rewards['mask']
-            decreases = masks_and_rewards['reward'].mean(1, keepdim=True)
+            file = self.data[idx]
+            rollout = torch.load(file, weights_only=True)
+
+            audio = rollout['audio']
+            masks = rollout['mask'].to(torch.float32) # kept in float8 for memory
+            decreases = rollout['reward']          
 
             before, after = decreases.chunk(2, dim=-1)
             if self.decrease_measurement == 'absolute':
@@ -91,7 +92,7 @@ class CustomDataset(Dataset):
             rewards = rewards.squeeze(-1)
         
 
-            assert len(masks) == len(rewards), f"Length of masks and rewards not equal for {key}"
+            assert len(masks) == len(rewards), f"Length of masks and rewards not equal for file {file}"
 
             # replace any nan values with 0 
             rewards[torch.isnan(rewards)] = 0 # can happen due to empty reference and hypothesis
@@ -146,15 +147,27 @@ def custom_collate_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.T
     rewards = []
     item_idxs = []
     counts = []
+    lengths = []
 
     for i, item in enumerate(batch):
         if item == None: continue
         audio.append(item['audio'])
+        lengths.append(item['audio'].shape[-1])
         masks.append(item['masks'])
         rewards.append(item['reward'])
         item_idxs.extend([i]*item['reward'].shape[0])
         counts.append(item['reward'].shape[0])
 
+    lengths = torch.tensor(lengths)
+    if lengths.min() != lengths.max():
+        max_length = lengths.max()
+        for i in range(len(audio)):
+            cur_len = audio[i].shape[-1]
+            if cur_len < max_length:
+                diff = max_length - cur_len
+                audio[i] = torch.cat([audio[i], torch.zeros(audio[i].shape[0], audio[i].shape[1], diff)], dim=-1)
+                masks[i] = torch.cat([masks[i], torch.zeros(masks[i].shape[0], masks[i].shape[1], masks[i].shape[2], diff)], dim=-1)
+                
     audio = torch.cat(audio, dim=0)
     masks = torch.cat(masks, dim=0)
     rewards = torch.cat(rewards, dim=0)
@@ -166,12 +179,11 @@ def custom_collate_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.T
         'masks': masks,
         'rewards': rewards,
         'item_idxs': item_idxs,
-        'counts': counts
+        'counts': counts,
+        'lengths': lengths
     }
 
-
-from einops import rearrange
-def forward_pass(batch, policy, device, augmentation=None):
+def policy_forward_pass(batch, policy, device, augmentation=None):
     masks = batch['masks'].to(device)
     audio = batch['audio'].to(device)
     rewards = batch['rewards'].to(device)
@@ -179,38 +191,55 @@ def forward_pass(batch, policy, device, augmentation=None):
 
     if augmentation is not None: audio = augmentation(audio)
 
-    #mse_rewards, binary_nonnegative_rewards, rank_rewards = rewards.chunk(3, dim=-1)
-    #mse_rewards=rewards
     rank_rewards=rewards.to(torch.long)
 
     x = policy(audio, masks, counts)        
-    #prediction_mse = x.mean(dim=(1)).sigmoid()
     prediction_rank = x.mean(dim=(1))
-
-    # prediction_mse, prediction_binary, prediction_rank = torch.split(prediction, [3, 3, 20*3], dim=-1)
-    # prediction_mse, prediction_binary = prediction_mse.sigmoid(), prediction_binary.sigmoid()
-    
-    #prediction_rank = rearrange(prediction_rank, 'b (s c) -> (b  c'c=20)
-    # print(prediction_rank.argmax(dim=-1)[:10])
-    # print(rank_rewards[:10])
-
-    #print(prediction.shape, rewards.shape, '--->>>>>', x.shape)
-    # print(prediction_mse[:20].squeeze())
-    # print(mse_rewards[:20].squeeze())
-    # print('------\n')
-    # loss_mse = torch.nn.functional.mse_loss(input=prediction_mse, target=mse_rewards, reduction='mean')
-    #loss_binary = torch.nn.functional.binary_cross_entropy(input=prediction_binary, target=binary_nonnegative_rewards, reduction='mean')
 
     loss_rank = torch.nn.functional.cross_entropy(input=prediction_rank, target=rank_rewards.squeeze(-1), reduction='mean')
     losses = {
-        #'mse': loss_mse,
-        # 'binary': loss_binary,
         'rank': loss_rank
     }
     loss = sum(list(losses.values())) / len(list(losses.values()))
-    #loss = torch.nn.functional.binary_cross_entropy(input=prediction, target=rewards, reduction='mean')
 
     return loss, losses
+
+
+def imitation_forward_pass(batch, policy, device, augmentation=None):
+    masks = batch['masks'].to(device)
+    audio = batch['audio'].to(device)
+    rewards = batch['rewards'].to(device)
+    counts = batch['counts'].to(device)
+
+    if augmentation is not None: audio = augmentation(audio)
+
+    rank_rewards=rewards.to(torch.long)
+    audio = audio.repeat_interleave(counts, dim=0)
+    audio = audio[rank_rewards == 0]
+    masks = masks[rank_rewards == 0].squeeze(1).transpose(-1,-2)
+
+    x, var = policy(audio)
+    print(x.min(), x.max(), var.min(), var.max())
+    print(x.shape, masks.shape, var.shape)
+    normal = torch.distributions.Normal(loc=x, scale=torch.sqrt(var))
+    # create distribution using masks
+    target_dist = torch.distributions.Normal(loc=masks, scale=1e-4)
+    kl_div = torch.distributions.kl.kl_divergence(normal, target_dist,)
+    print(kl_div.shape)
+    kl_div = kl_div.mean()
+   
+    losses = {
+        'kl_div_loss': kl_div
+    }
+    loss = sum(list(losses.values())) / len(list(losses.values()))
+
+    return loss, losses
+
+def forward_pass(batch, policy, device, augmentation=None, is_policy=True):
+    if is_policy:
+        return policy_forward_pass(batch, policy, device, augmentation=augmentation)
+    else:
+        return imitation_forward_pass(batch, policy, device, augmentation=augmentation)
 
 def backward_pass(loss, policy, optim):
     optim.zero_grad()
@@ -223,7 +252,8 @@ def train_policy(
         optim:MADGRAD,
         config:Dict[str, Any],
         dataloader:DataLoader,
-        val_dataloader:DataLoader
+        val_dataloader:DataLoader,
+        is_policy=True,
     ):  
         device = config['training']['device']
         policy = policy.train()
@@ -244,7 +274,7 @@ def train_policy(
             for batch in pbar:
                 if batch == None: continue  
                 with torch.no_grad():
-                    loss, all_losses = forward_pass(batch, policy, device)
+                    loss, all_losses = forward_pass(batch, policy, device, is_policy=is_policy)
                 if loss == None: continue
 
                 if all_val_losses == None:
@@ -274,7 +304,7 @@ def train_policy(
             for batch in pbar:
                 if batch == None: continue  
                 
-                loss, losses = forward_pass(batch, policy, device, augmentation=augmentation)
+                loss, losses = forward_pass(batch, policy, device, augmentation=augmentation, is_policy=is_policy)
                 if loss == None: continue
          
                 wandb.log({'policy_loss':loss.item(), 'epoch': epoch, **{k:v.item() for k,v in losses.items()}})
@@ -284,8 +314,8 @@ def train_policy(
 
         return policy
         
-def save_policy(model, config):
-    save_path = config['training']['model_save_path']
+def save_policy(model, config, save_path=None):
+    save_path = config['training']['model_save_path'] if save_path is None else save_path
     isnan = False
     for name, param in model.state_dict().items():
         if torch.isnan(param).any():
@@ -353,46 +383,20 @@ def load_asr_model_fn(asr_model, state_dict):
     return asr_model
 
 def prepare_data(config):
-    rollout_directory = config['generation']['save_dir']
-    audio_directory = config['teacher_logits_generation']['save_dir']
+    rollout_directory_train = os.path.join(config['generation']['save_dir'], 'train')
+    rollout_directory_val = os.path.join(config['generation']['save_dir'], 'dev')
+   
 
-    all_rollouts = os.listdir(rollout_directory)
-    all_rollouts_masks_and_rewards = [el for el in all_rollouts if 'rewards_and_masks' in el and el.endswith('.pt')]
+    all_rollouts_train = os.listdir(rollout_directory_train)
+    all_rollouts_val = os.listdir(rollout_directory_val)
 
-    all_audio = os.listdir(audio_directory)
-    all_audio = [el for el in all_audio if '_audio_' in el and el.endswith('.pt')]
+    all_rollouts_train = [el for el in all_rollouts_train if el.endswith('.pt')]
+    all_rollouts_val = [el for el in all_rollouts_val if el.endswith('.pt')]
+    
+    all_rollouts_train = [os.path.join(rollout_directory_train, el) for el in all_rollouts_train]
+    all_rollouts_val = [os.path.join(rollout_directory_val, el) for el in all_rollouts_val]
 
-    id_mask_and_reward_pairs = {}
-
-
-    for file in tqdm(all_rollouts_masks_and_rewards):
-        id = file.replace('rewards_and_masks', 'audio')
-        id_mask_and_reward_pairs[id] = file
-
-    all_data = {}
-    for file in tqdm(all_audio):
-        if file in id_mask_and_reward_pairs and file in id_mask_and_reward_pairs:
-            audio = join(audio_directory, file)
-            masks_and_rewards = join(rollout_directory, id_mask_and_reward_pairs[file])
-            
-            
-            all_data[file] = {
-                'audio': audio,
-                'masks_and_rewards': masks_and_rewards
-            }
-
-
-    all_recordings = sorted(list(set(["_".join(el.split("_")[:-1]) for el in list(all_data.keys())])))
-    assert len(all_recordings) > 2, "Need atleast 2 unique recordings to train the model for train and val split"
-    num_val = min(int(len(all_recordings)*0.025), 1)
-    val_files = all_recordings[:num_val]
-    #train_files = all_recordings[num_val:num_val+100]
-    train_files = all_recordings[num_val:]
-
-    all_val_recordings = {el:all_data[el] for el in all_data if "_".join(el.split("_")[:-1]) in val_files}
-    all_train_recordings = {el:all_data[el] for el in all_data if "_".join(el.split("_")[:-1]) in train_files}
-
-    return all_train_recordings, all_val_recordings
+    return all_rollouts_train, all_rollouts_val
 
 def main(config):
     wandb.init(project="l2augment")
@@ -421,19 +425,25 @@ def main(config):
     )
   
 
-    policy = load_rl_models(config=config) 
+    policy, imitation_net = load_rl_models(config=config) 
     policy = policy.to(config['training']['device'])
+    
 
     total_params = sum(p.numel() for p in policy.parameters() if p.requires_grad)
     total_params_in_million = total_params / 1_000_000
+    print(f"Total trainable parameters (policy): {total_params_in_million:.2f} million")
 
-    print(f"Total trainable parameters: {total_params_in_million:.2f} million")
+    # policy_optim = MADGRAD(policy.parameters(), lr=config['policy']['lr'])
 
-    policy_optim = MADGRAD(policy.parameters(), lr=config['policy']['lr'])
+    # policy = train_policy(policy, policy_optim, config, train_dataloader, val_dataloader)
+    # save_policy(policy, config)
 
-    policy = train_policy(policy, policy_optim, config, train_dataloader, val_dataloader)
+    imitation_net = imitation_net.to(config['training']['device'])
+    print(f"Total trainable parameters (imitation): {sum(p.numel() for p in imitation_net.parameters() if p.requires_grad) / 1_000_000:.2f} million")
+    imitation_optim = MADGRAD(imitation_net.parameters(), lr=config['imitation']['lr'])
+    imitation_net = train_policy(imitation_net, imitation_optim, config, train_dataloader, val_dataloader, is_policy=False)
+    save_policy(imitation_net, config, save_path=config['imitation']['save_path'])
 
-    save_policy(policy, config)
     print(f'Finished')
 
         
@@ -448,34 +458,3 @@ if __name__ == "__main__":
 
 
 
-
-
-
-#   ###################
-#         load_policy(policy, config)
-#         asr_model_checkpoint = torch.load(config["checkpointing"]["asr_model"], map_location="cpu", weights_only=False)
-#         asr_model_config = asr_model_checkpoint['config']
-#         asr_model_state_dict = asr_model_checkpoint['model']
-#         tokenizer = load_tokenizer()
-#         asr_model_class = get_model_class(config = config)
-
-#         partial_load_asr_model_fn = partial(
-#             load_asr_model_fn,
-#             load_asr_model(asr_model_config, tokenizer.vocab_size(), asr_model_class),
-#             asr_model_state_dict,
-#         )
-#         dataset = "this_american_life"
-#         data = dataset_functions[dataset]("dev")
-#         cur_data = data[0]
-#         audio_spec, text = cur_data['process_fn'](cur_data)
-#         gpu_eval(
-#             policy=policy,
-#             load_asr_model_fn=partial_load_asr_model_fn,
-#             tokenizer=tokenizer,
-#             audio=audio_spec,
-#             text=text,
-#             device = config['training']['device'],
-#             max_steps = config['generation']['max_steps'],
-#         )
-#         ####################
-#         #exit()

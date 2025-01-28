@@ -12,6 +12,9 @@ from functools import partial
 from einops import repeat, rearrange
 import math
 from tqdm import tqdm
+from whisper.normalizers import EnglishTextNormalizer
+
+normalize = EnglishTextNormalizer()
 
 DEFAULT_OPTIMIZER_CLASS = torch.optim.SGD
 
@@ -25,20 +28,18 @@ def cpu_rollout(
         tokenizer,
         audio:Tensor,
         teacher_logits:Tensor,
-        seq_len:int=4096,
-        overlap=0.875,
-        optim_args:Dict[str, Any] = {"lr":2e-3},
-        max_steps = None,
+        optim_args:Dict[str, Any] = {"lr":1e-1},
+        audio_a:Tensor = None,
+        audio_b:Tensor = None,
+        augmented_target = False,
         **kwargs
     ):
 
     dtype = torch.float32 #temporary
 
-    overlap = round(seq_len*overlap)
     audio = audio.to(dtype=dtype) #temporary
-    audio_n = audio.shape[-1]
 
-    torch.manual_seed(0)
+    #torch.manual_seed(0)
     torch.use_deterministic_algorithms(True)
 
     
@@ -50,101 +51,67 @@ def cpu_rollout(
     ctc_loss_fn = torch.nn.CTCLoss(blank=asr_model.decoder.num_classes-1, reduction='sum')
 
 
-    if seq_len > audio_n:
-        seq_len, overlap = audio_n, 0
 
-    all_logits, logit_count = torch.zeros((1, audio_n//4 + seq_len, tokenizer.vocab_size() + 1)), torch.zeros((1, audio_n//4 + seq_len, tokenizer.vocab_size() + 1))
 
-    training_data, training_keys = prepare_chunks(audio, seq_len, overlap)
-    training_keys = list(training_data.keys())
-
-    model_outputs = {}
     asr_model.eval()
-    
 
-    policy_states = None
-    policy_cache = None
-    masks = []
-    logit_position = 0
-    rewards = []
-    #lr_indexes = []
-    total_steps = len(training_keys)
-    if max_steps != None and max_steps < len(training_keys): total_steps = max_steps
-    for i, key in tqdm(enumerate(training_keys), total=total_steps):
-        if max_steps != None and i > max_steps: break
-
-        audio_chunk = training_data[key].clone()
-        with torch.no_grad(): policy_output = policy.augment(audio_chunk, state=policy_states, cache=policy_cache)
-    
+    if audio_a is None or audio_b is None:
+        print('--')
+        with torch.no_grad(): policy_output = policy.augment(audio)
         audio_a, audio_b = policy_output['augmented_data'].chunk(2, dim=0)
+        masks = policy_output['masks']
+    else: masks = None
 
-        policy_states = policy_output['next_state']
-        policy_cache = policy_output['next_cache']
-
-        masks.append(policy_output['masks'].to(dtype=torch.bool))
-
-        with torch.no_grad():
-            out_original = asr_model(audio_signal = audio_chunk)
-        
-        out_a = asr_model(audio_signal = audio_a)['final_posteriors']
-        out_b = asr_model(audio_signal = audio_b)['final_posteriors']
-
-        out_original_posteriors = out_original['final_posteriors'].squeeze(0)
-
-        pseudo_targets_a = decoder(out_a.squeeze(0)) 
-        pseudo_targets_a = torch.LongTensor(tokenizer.encode(pseudo_targets_a))[None]
-
-        pseudo_targets_b = decoder(out_b.squeeze(0)) 
-        pseudo_targets_b = torch.LongTensor(tokenizer.encode(pseudo_targets_b))[None]
-
-
-        N, B = out_a.shape[1], out_a.shape[0]
-        total_tokens_in_loss = N * B
-        loss_a = ctc_loss_fn(out_a.transpose(0, 1), pseudo_targets_b, torch.LongTensor([N] * out_a.shape[0]), torch.LongTensor([pseudo_targets_b.shape[1]] * pseudo_targets_b.shape[0])) / total_tokens_in_loss
-        loss_b = ctc_loss_fn(out_b.transpose(0, 1), pseudo_targets_a, torch.LongTensor([N] * out_b.shape[0]), torch.LongTensor([pseudo_targets_a.shape[1]] * pseudo_targets_a.shape[0])) / total_tokens_in_loss
-        loss = (loss_a + loss_b) / 2
-        optimizer.zero_grad()
-        loss.backward()
-
-        if kwargs.get("clip", False): torch.nn.utils.clip_grad_norm_(asr_model.parameters(), kwargs["clip"]) 
-
-        optimizer.step()
-
-        with torch.no_grad():
-            out_updated = asr_model(audio_signal = audio_chunk)
-        updated_logits = out_updated['final_posteriors'].squeeze(0) # BNC -> NC
-
-        ds_len = updated_logits.shape[-2]
-        teacher_logits_at_t = teacher_logits[0, logit_position:logit_position+ds_len]
-        teacher_targets_at_t = decoder(teacher_logits_at_t)
-        teacher_targets_at_t = torch.LongTensor(tokenizer.encode(teacher_targets_at_t))[None]
-        #print(teacher_output_posteriors.shape, teacher_logits_at_t.shape, teacher_logits.shape)
-        
-        prev_ctc_loss = ctc_loss_fn(out_original_posteriors, teacher_targets_at_t, torch.LongTensor([N] * 1), torch.LongTensor([teacher_targets_at_t.shape[0]] * 1)) / total_tokens_in_loss
-        updated_ctc_loss = ctc_loss_fn(updated_logits, teacher_targets_at_t, torch.LongTensor([N] * 1), torch.LongTensor([teacher_targets_at_t.shape[0]] * 1)) / total_tokens_in_loss
-
-        diff = (prev_ctc_loss - updated_ctc_loss)
-        print(diff)
-        rewards.append(diff)
-        
-        #print(kl_diff.mean())
-        ratio = audio_chunk.shape[-1] / ds_len
-        overlap_ds = int(overlap / ratio)
-        #print(logit_position, ds_len, overlap_ds)
-        logit_position += ds_len - overlap_ds
-
-    masks = torch.cat(masks, 0).squeeze(-1)
-    rewards = torch.stack(rewards)
+  
+    with torch.no_grad():
+        out_original = asr_model(audio_signal = audio)
+        if augmented_target: out_a = asr_model(audio_signal = audio_a)['final_posteriors']
+        else: out_a = out_original['final_posteriors'].clone()
     
-    #lrs = torch.stack(lr_indexes, 0).squeeze(-1)
+    out_b = asr_model(audio_signal = audio_b)['final_posteriors']
 
-    return {
-        'masks': masks,
-        'rewards': rewards,
-        #'lrs':lrs,
-    }
+    out_original_posteriors = out_original['final_posteriors'].squeeze(0)
+    out_original_predictions = decoder(out_original_posteriors)
+    
 
- 
+    pseudo_targets = decoder(out_a.squeeze(0)) 
+    pseudo_targets = torch.LongTensor(tokenizer.encode(pseudo_targets))[None]
+
+
+
+    N, B = out_a.shape[1], out_a.shape[0]
+    total_tokens_in_loss = N * B
+    #loss_a = torch.nn.functional.kl_div(out_a, out_b, reduction='sum', log_target=True) / total_tokens_in_loss
+
+    loss_b = ctc_loss_fn(out_b.transpose(0, 1), pseudo_targets, torch.LongTensor([N] * out_b.shape[0]), torch.LongTensor([pseudo_targets.shape[1]] * pseudo_targets.shape[0])) / total_tokens_in_loss
+    loss = loss_b#(loss_a + loss_b)/2
+
+    optimizer.zero_grad()
+    loss.backward()
+
+    if kwargs.get("clip", False): torch.nn.utils.clip_grad_norm_(asr_model.parameters(), kwargs["clip"]) 
+
+    optimizer.step()
+
+    with torch.no_grad():
+        out_updated = asr_model(audio_signal = audio)
+    updated_logits = out_updated['final_posteriors'].squeeze(0) # BNC -> NC
+    updated_predictions = decoder(updated_logits)
+
+    teacher_targets = decoder(teacher_logits)
+   
+    
+    #print(teacher_output_posteriors.shape, teacher_logits_at_t.shape, teacher_logits.shape)
+
+    prev_cer = word_error_rate_detail(hypotheses=[normalize(out_original_predictions)], references=[normalize(teacher_targets)], use_cer=True)[0] * 100
+    updated_cer = word_error_rate_detail(hypotheses=[normalize(updated_predictions)], references=[normalize(teacher_targets)], use_cer=True)[0] * 100
+    # prev_ctc_loss = ctc_loss_fn(out_original_posteriors, teacher_logits, torch.LongTensor([N] * 1), torch.LongTensor([teacher_logits.shape[0]] * 1)) / total_tokens_in_loss
+    # updated_ctc_loss = ctc_loss_fn(updated_logits, teacher_logits, torch.LongTensor([N] * 1), torch.LongTensor([teacher_logits.shape[0]] * 1)) / total_tokens_in_loss
+
+    diff = prev_cer - updated_cer
+    print(diff)
+    
+    return torch.tensor(prev_cer), torch.tensor(updated_cer), masks
         
        
 

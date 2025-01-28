@@ -6,18 +6,14 @@ checkpointing:
 training:
   device: 'cuda'
   random_seed: 1234
-  batch_size: 64
+  batch_size: 24
   epochs: 100
-  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/model.pt
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/model3.pt
 
 policy:
-  lr: 6e-4
-
-imitation:
-  lr: 6e-4
-  save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/imitation.pt
-
-
+  lr: 3e-4
+value:
+  save_path: "/mnt/parscratch/users/acp21rjf/l2augment_value/model.pt"
 
 generation:
   save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout/"

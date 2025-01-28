@@ -27,7 +27,7 @@ def cpu_rollout(
         load_asr_model_fn:Callable,
         tokenizer,
         audio:Tensor,
-        teacher_logits:Tensor,
+        text:str,
         optim_args:Dict[str, Any] = {"lr":1e-1},
         audio_a:Tensor = None,
         audio_b:Tensor = None,
@@ -36,15 +36,16 @@ def cpu_rollout(
     ):
 
     dtype = torch.float32 #temporary
+    device = audio.device
 
     audio = audio.to(dtype=dtype) #temporary
 
     #torch.manual_seed(0)
-    torch.use_deterministic_algorithms(True)
+    torch.use_deterministic_algorithms(True, warn_only=True)
 
     
     asr_model = load_asr_model_fn()
-    asr_model = asr_model.to(dtype=dtype)
+    asr_model = asr_model.to(dtype=dtype).to(device)
     optimizer = kwargs.get("optimizer_class", DEFAULT_OPTIMIZER_CLASS)(asr_model.parameters(), **optim_args)
     decoder = GreedyCTCDecoder(tokenizer = tokenizer, blank_id = asr_model.decoder.num_classes-1)
 
@@ -98,7 +99,7 @@ def cpu_rollout(
     updated_logits = out_updated['final_posteriors'].squeeze(0) # BNC -> NC
     updated_predictions = decoder(updated_logits)
 
-    teacher_targets = decoder(teacher_logits)
+    teacher_targets = text
    
     
     #print(teacher_output_posteriors.shape, teacher_logits_at_t.shape, teacher_logits.shape)
