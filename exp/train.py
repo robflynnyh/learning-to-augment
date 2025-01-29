@@ -5,8 +5,7 @@ from omegaconf.omegaconf import OmegaConf
 from lcasr.utils.augmentation import SpecAugment
 
 
-from l2augment.modelling.models import Policy, ImitationModel
-from l2augment.modelling.mdm import MDN_loss
+from l2augment.modelling.models import Policy
 
 from tqdm import tqdm
 import logging
@@ -34,8 +33,7 @@ AUDIO_CHUNK_OVERLAP_DEFAULT = int(0.875*AUDIO_CHUNK_SIZE_DEFAULT)
 
 def load_rl_models(config): 
     policy_net = Policy()
-    imitation_net = ImitationModel()
-    return policy_net, imitation_net 
+    return policy_net 
 
 
 def save_dictionary(dictionary, filename):
@@ -52,8 +50,8 @@ class CustomDataset(Dataset):
             self, 
             files, 
             zero_mean=True, 
-            standardize_std=False, 
-            scale=True, 
+            standardize_std=True, 
+            scale=False, 
             clamp_min=-5, 
             clamp_max=5,
             randomize_order=False, # debug
@@ -102,16 +100,19 @@ class CustomDataset(Dataset):
 
             rank_rewards = torch.argsort(torch.argsort(rewards, dim=0, descending=True), dim=0, descending=False)
             
+
+
+            rewards_mean = rewards.mean(0, keepdim=True)
+
+            if self.zero_mean:
+                rewards = rewards - rewards_mean
             if self.clamp_min is not None:
                 rewards = rewards.clamp(min=self.clamp_min)
             if self.clamp_max is not None:
                 rewards = rewards.clamp(max=self.clamp_max)
+            
+            rewards_std = rewards.std(0, keepdim=True) # center mean then clamp then calculate std before standardizing
 
-            rewards_mean, rewards_std = rewards.mean(0, keepdim=True), rewards.std(0, keepdim=True)
-
-
-            if self.zero_mean:
-                rewards = rewards - rewards_mean
             if self.standardize_std:
                 if rewards.shape[0] > 1 or rewards_std == 0:
                     rewards = rewards / (rewards_std + 1e-6)
@@ -119,8 +120,11 @@ class CustomDataset(Dataset):
                 # min -1, max 1 but avoid 0 division
                 rewards_min = rewards.min(dim=0, keepdim=True).values
                 rewards_max = rewards.max(dim=0, keepdim=True).values
-                rewards = 2*(rewards - rewards_min)/(rewards_max - rewards_min + 1e-6) - 1
-                rewards = (rewards + 1) / 2
+                if rewards_min == rewards_max:
+                    rewards = torch.zeros_like(rewards)
+                else:
+                    rewards = 2*(rewards - rewards_min)/(rewards_max - rewards_min) - 1
+                #rewards = (rewards + 1) / 2
 
             if self.randomize_order:
                 rewards = rewards[torch.randperm(rewards.shape[0])] # debug
@@ -130,11 +134,11 @@ class CustomDataset(Dataset):
             # rewards = z
             
     
-            all_rewards = rank_rewards#torch.cat([rewards, notnegative, rank_rewards], dim=-1)
+            all_rewards = rewards#torch.cat([rewards, notnegative, rank_rewards], dim=-1)
 
             return {
                 'reward': all_rewards, # (repeats)
-                'masks':masks, # (masks, 2, C, T)
+                'masks':masks, # (masks, 1, C, T)
                 'audio':audio # (1, C, T)
             }
         except Exception as e:
@@ -183,68 +187,39 @@ def custom_collate_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.T
         'lengths': lengths
     }
 
-def policy_forward_pass(batch, policy, device, augmentation=None):
-    masks = batch['masks'].to(device)
+from einops import rearrange
+
+def forward_pass(batch, policy, device, augmentation=None):
+    indexes = policy.discretize(batch['masks']).squeeze(1).transpose(-1,-2).unsqueeze(-1).to(device)
     audio = batch['audio'].to(device)
     rewards = batch['rewards'].to(device)
     counts = batch['counts'].to(device)
+    lengths = batch['lengths'].to(device)
 
     if augmentation is not None: audio = augmentation(audio)
 
-    rank_rewards=rewards.to(torch.long)
+    pred = policy(audio)     
+    pred = pred.to(torch.bfloat16) # to save memory
+    pred = pred.repeat_interleave(counts, dim=0)
+    pred = rearrange(pred, 'b t (c p) -> b t c p', p=policy.output_dim).log_softmax(dim=-1)
+    # select pred at indexes
+    pred = torch.gather(pred, -1, indexes).squeeze(-1)
+    if lengths.min() != lengths.max():
+        lengths = lengths.repeat_interleave(counts)
+        b, t, c = pred.shape
+        pad_mask = torch.arange(t).to(device) >= lengths[:, None]
+        pred = torch.masked_fill(pred, pad_mask.unsqueeze(-1), 0)
+    
+    rewards = rewards.to(torch.bfloat16)
+    loss = -1 * (pred * rewards[:, None, None]).sum() / pred.shape[0]
+    return loss, {'loss':loss}
+    
 
-    x = policy(audio, masks, counts)        
-    prediction_rank = x.mean(dim=(1))
-
-    loss_rank = torch.nn.functional.cross_entropy(input=prediction_rank, target=rank_rewards.squeeze(-1), reduction='mean')
-    losses = {
-        'rank': loss_rank
-    }
-    loss = sum(list(losses.values())) / len(list(losses.values()))
-
-    return loss, losses
-
-
-def imitation_forward_pass(batch, policy, device, augmentation=None):
-    masks = batch['masks'].to(device)
-    audio = batch['audio'].to(device)
-    rewards = batch['rewards'].to(device)
-    counts = batch['counts'].to(device)
-
-    if augmentation is not None: audio = augmentation(audio)
-
-    rank_rewards=rewards.to(torch.long)
-    audio = audio.repeat_interleave(counts, dim=0)
-    audio = audio[rank_rewards == 0]
-    masks = masks[rank_rewards == 0].squeeze(1).transpose(-1,-2)
-
-    x, var = policy(audio)
-    print(x.min(), x.max(), var.min(), var.max())
-    print(x.shape, masks.shape, var.shape)
-    normal = torch.distributions.Normal(loc=x, scale=torch.sqrt(var))
-    # create distribution using masks
-    target_dist = torch.distributions.Normal(loc=masks, scale=1e-4)
-    kl_div = torch.distributions.kl.kl_divergence(normal, target_dist,)
-    print(kl_div.shape)
-    kl_div = kl_div.mean()
-   
-    losses = {
-        'kl_div_loss': kl_div
-    }
-    loss = sum(list(losses.values())) / len(list(losses.values()))
-
-    return loss, losses
-
-def forward_pass(batch, policy, device, augmentation=None, is_policy=True):
-    if is_policy:
-        return policy_forward_pass(batch, policy, device, augmentation=augmentation)
-    else:
-        return imitation_forward_pass(batch, policy, device, augmentation=augmentation)
 
 def backward_pass(loss, policy, optim):
     optim.zero_grad()
     loss.backward()
-    torch.nn.utils.clip_grad_norm_(policy.parameters(), 1.0) 
+    torch.nn.utils.clip_grad_norm_(policy.parameters(),  1.0) 
     optim.step()
 
 def train_policy(
@@ -253,7 +228,6 @@ def train_policy(
         config:Dict[str, Any],
         dataloader:DataLoader,
         val_dataloader:DataLoader,
-        is_policy=True,
     ):  
         device = config['training']['device']
         policy = policy.train()
@@ -274,7 +248,7 @@ def train_policy(
             for batch in pbar:
                 if batch == None: continue  
                 with torch.no_grad():
-                    loss, all_losses = forward_pass(batch, policy, device, is_policy=is_policy)
+                    loss, all_losses = forward_pass(batch, policy, device)
                 if loss == None: continue
 
                 if all_val_losses == None:
@@ -291,7 +265,7 @@ def train_policy(
             wandb.log({'val_policy_loss':val_loss, 'epoch': epoch, **{f'val_{k}':v/val_count for k,v in all_val_losses.items()}})
             print(f'val_loss: {val_loss}')
 
-            if val_loss > prev_val_loss:
+            if (val_loss > prev_val_loss) or torch.isnan(torch.tensor(val_loss)):
                 policy.load_state_dict(prev_state_dict)
                 print(f'Validation loss increased. Reverting to previous state')
                 break
@@ -304,7 +278,7 @@ def train_policy(
             for batch in pbar:
                 if batch == None: continue  
                 
-                loss, losses = forward_pass(batch, policy, device, augmentation=augmentation, is_policy=is_policy)
+                loss, losses = forward_pass(batch, policy, device, augmentation=augmentation)
                 if loss == None: continue
          
                 wandb.log({'policy_loss':loss.item(), 'epoch': epoch, **{k:v.item() for k,v in losses.items()}})
@@ -425,7 +399,7 @@ def main(config):
     )
   
 
-    policy, imitation_net = load_rl_models(config=config) 
+    policy = load_rl_models(config=config) 
     policy = policy.to(config['training']['device'])
     
 
@@ -433,17 +407,12 @@ def main(config):
     total_params_in_million = total_params / 1_000_000
     print(f"Total trainable parameters (policy): {total_params_in_million:.2f} million")
 
-    # policy_optim = MADGRAD(policy.parameters(), lr=config['policy']['lr'])
+    policy_optim = MADGRAD(policy.parameters(), lr=config['policy']['lr'])
 
-    # policy = train_policy(policy, policy_optim, config, train_dataloader, val_dataloader)
-    # save_policy(policy, config)
+    policy = train_policy(policy, policy_optim, config, train_dataloader, val_dataloader)
+    save_policy(policy, config)
 
-    imitation_net = imitation_net.to(config['training']['device'])
-    print(f"Total trainable parameters (imitation): {sum(p.numel() for p in imitation_net.parameters() if p.requires_grad) / 1_000_000:.2f} million")
-    imitation_optim = MADGRAD(imitation_net.parameters(), lr=config['imitation']['lr'])
-    imitation_net = train_policy(imitation_net, imitation_optim, config, train_dataloader, val_dataloader, is_policy=False)
-    save_policy(imitation_net, config, save_path=config['imitation']['save_path'])
-
+  
     print(f'Finished')
 
         

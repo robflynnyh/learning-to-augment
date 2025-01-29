@@ -167,11 +167,12 @@ def augmentation_function(audio, repeats=50):
 
     return audio_spec, mask_spec
 
-class ImitationModel(base):
+class Policy(base):
     def __init__(
             self,
             input_dim=80,
             hidden_dim=80,
+            output_dim=20,
             expansion_factor=2,
         ) -> None:
         super().__init__()
@@ -183,8 +184,9 @@ class ImitationModel(base):
         self.downsample_kernel = downsample_kernel
         self.gated_kernel = gated_kernel
         self.input_dim = input_dim
-        self.block_layers = 6
+        self.block_layers = 5
         self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
 
         self.encode = (
                 nn.Sequential(
@@ -202,146 +204,170 @@ class ImitationModel(base):
                         ))   for _ in range(self.block_layers)
                     ],
                     Rearrange('b c t -> b t c'),
+                    nn.Linear(hidden_dim,hidden_dim),
                     nn.LayerNorm(hidden_dim),
-                    nn.Linear(hidden_dim,hidden_dim*2),
+                    nn.Linear(hidden_dim,output_dim*input_dim),
             ))
     
 
     def forward(self, x):
         x = self.encode(x)
-        x, var = x.chunk(2, dim=-1)
-        var = torch.nn.functional.softplus(var) + 1e-9
-        return x, var
+        return x
+    
+    def augment(self, audio):
+        pred = self(audio) # b, t, output_dim
+        pred = rearrange(pred, 'b t (c p) -> b t c p', p=self.output_dim)
+        pred = pred.softmax(-1)
+        b = pred.shape[0]
+        pred = rearrange(pred, 'b t c p-> (b t c) p')
+        indexes = torch.multinomial(pred, 1).squeeze(-1)
+        values = torch.round(-0.5 + indexes.float() * (2.0 / (self.output_dim - 1)), decimals=3)
+        noise = rearrange(values, '(b t c) -> b c t', b=b, c=self.input_dim)
+        augmented_audio = audio + noise
+        return augmented_audio, noise
+    
+    def discretize(self, float_mask):
+        indices = torch.round((float_mask + 0.5) * ((self.output_dim - 1) / 2.0)).long()
+        indices = torch.clamp(indices, 0, self.output_dim - 1)
+        return indices
+    
+# val = 16
+# values = round(-0.5 + val * (2.0 / 19.0),3)  # 
+# values = torch.tensor(values)
+# indices = torch.round((values + 0.5) * (19.0 / 2.0))
+# indices = indices.long()  # Convert to integer indices
+# indices = torch.clamp(indices, 0, 19)  # Ensure indices are within [0, 19]
+# indices
 
 
-class Policy(base):
-    def __init__(
-            self,
-            input_dim=80,
-            hidden_dim=80,
-            output_dim=5,
-            expansion_factor=1,
-        ) -> None:
-        super().__init__()
+# class Policy(base):
+#     def __init__(
+#             self,
+#             input_dim=80,
+#             hidden_dim=80,
+#             output_dim=5,
+#             expansion_factor=1,
+#         ) -> None:
+#         super().__init__()
 
-        hidden_dim = hidden_dim
-        downsample_kernel = 7
-        gated_kernel = (13,13)
+#         hidden_dim = hidden_dim
+#         downsample_kernel = 7
+#         gated_kernel = (13,13)
         
-        self.downsample_kernel = downsample_kernel
-        self.gated_kernel = gated_kernel
-        self.input_dim = input_dim
-        self.mode = 'best' # 'best' | 'worst' | 'random' - how to select the mask acording to the scores
-        self.block_layers = 1    
-        self.hidden_dim = hidden_dim
-        mask_with_audio_dim = input_dim * 2# concatenated
+#         self.downsample_kernel = downsample_kernel
+#         self.gated_kernel = gated_kernel
+#         self.input_dim = input_dim
+#         self.mode = 'best' # 'best' | 'worst' | 'random' - how to select the mask acording to the scores
+#         self.block_layers = 1    
+#         self.hidden_dim = hidden_dim
+#         mask_with_audio_dim = input_dim * 2# concatenated
 
-        self.masks_encode = nn.Conv1d(in_channels=input_dim, out_channels=input_dim, kernel_size=1, stride=1, padding=0)
-        self.encode = nn.Sequential(
-            DepthWiseSeparableConv1d(input_dim=mask_with_audio_dim, output_dim=hidden_dim, kernel_size=downsample_kernel, stride=2),
-            nn.ReLU(),
-            BatchRenorm1d(hidden_dim),
-            DepthWiseSeparableConv1d(input_dim=hidden_dim, kernel_size=downsample_kernel, stride=2),
-            nn.ReLU(),
-            BatchRenorm1d(hidden_dim),
-            DepthWiseSeparableConv1d(input_dim=hidden_dim, kernel_size=downsample_kernel, stride=2),
-            ResidualBlock(
-                nn.Sequential(
-                    *[
-                        nn.Sequential(
-                            GatedConv1d(
-                                input_dim=hidden_dim, 
-                                output_dim=hidden_dim, 
-                                expansion_factor=expansion_factor, 
-                                kernel_size=gated_kernel, 
-                                stride=(1,1), 
-                                padding=("same", "same"),
-                            ),
-                            BatchRenorm1d(hidden_dim) 
-                        )   for _ in range(self.block_layers)
-                    ]
-                )
-            ),
-            DepthWiseSeparableConv1d(input_dim=hidden_dim, kernel_size=downsample_kernel, stride=2),
-            ResidualBlock(
-                nn.Sequential(
-                    *[
-                        nn.Sequential(
-                            GatedConv1d(
-                                input_dim=hidden_dim, 
-                                output_dim=hidden_dim, 
-                                expansion_factor=expansion_factor, 
-                                kernel_size=gated_kernel, 
-                                stride=(1,1), 
-                                padding=("same", "same"),
-                            ),
-                            BatchRenorm1d(hidden_dim) 
-                        )   for _ in range(self.block_layers)
-                    ]
-                )
-            ),
-            DepthWiseSeparableConv1d(input_dim=hidden_dim, kernel_size=downsample_kernel, stride=2),
-            ResidualBlock(
-                nn.Sequential(
-                    *[
-                        nn.Sequential(
-                            GatedConv1d(
-                                input_dim=hidden_dim, 
-                                output_dim=hidden_dim, 
-                                expansion_factor=expansion_factor, 
-                                kernel_size=gated_kernel, 
-                                stride=(1,1), 
-                                padding=("same", "same"),
-                            ),
-                            BatchRenorm1d(hidden_dim) 
-                        )   for _ in range(self.block_layers)
-                    ]
-                )
-            ),
-            Rearrange('b c t -> b t c'),
-            nn.LayerNorm(hidden_dim),
-            nn.Linear(hidden_dim,output_dim),
-        )
+#         self.masks_encode = nn.Conv1d(in_channels=input_dim, out_channels=input_dim, kernel_size=1, stride=1, padding=0)
+#         self.encode = nn.Sequential(
+#             DepthWiseSeparableConv1d(input_dim=mask_with_audio_dim, output_dim=hidden_dim, kernel_size=downsample_kernel, stride=2),
+#             nn.ReLU(),
+#             BatchRenorm1d(hidden_dim),
+#             DepthWiseSeparableConv1d(input_dim=hidden_dim, kernel_size=downsample_kernel, stride=2),
+#             nn.ReLU(),
+#             BatchRenorm1d(hidden_dim),
+#             DepthWiseSeparableConv1d(input_dim=hidden_dim, kernel_size=downsample_kernel, stride=2),
+#             ResidualBlock(
+#                 nn.Sequential(
+#                     *[
+#                         nn.Sequential(
+#                             GatedConv1d(
+#                                 input_dim=hidden_dim, 
+#                                 output_dim=hidden_dim, 
+#                                 expansion_factor=expansion_factor, 
+#                                 kernel_size=gated_kernel, 
+#                                 stride=(1,1), 
+#                                 padding=("same", "same"),
+#                             ),
+#                             BatchRenorm1d(hidden_dim) 
+#                         )   for _ in range(self.block_layers)
+#                     ]
+#                 )
+#             ),
+#             DepthWiseSeparableConv1d(input_dim=hidden_dim, kernel_size=downsample_kernel, stride=2),
+#             ResidualBlock(
+#                 nn.Sequential(
+#                     *[
+#                         nn.Sequential(
+#                             GatedConv1d(
+#                                 input_dim=hidden_dim, 
+#                                 output_dim=hidden_dim, 
+#                                 expansion_factor=expansion_factor, 
+#                                 kernel_size=gated_kernel, 
+#                                 stride=(1,1), 
+#                                 padding=("same", "same"),
+#                             ),
+#                             BatchRenorm1d(hidden_dim) 
+#                         )   for _ in range(self.block_layers)
+#                     ]
+#                 )
+#             ),
+#             DepthWiseSeparableConv1d(input_dim=hidden_dim, kernel_size=downsample_kernel, stride=2),
+#             ResidualBlock(
+#                 nn.Sequential(
+#                     *[
+#                         nn.Sequential(
+#                             GatedConv1d(
+#                                 input_dim=hidden_dim, 
+#                                 output_dim=hidden_dim, 
+#                                 expansion_factor=expansion_factor, 
+#                                 kernel_size=gated_kernel, 
+#                                 stride=(1,1), 
+#                                 padding=("same", "same"),
+#                             ),
+#                             BatchRenorm1d(hidden_dim) 
+#                         )   for _ in range(self.block_layers)
+#                     ]
+#                 )
+#             ),
+#             Rearrange('b c t -> b t c'),
+#             nn.LayerNorm(hidden_dim),
+#             nn.Linear(hidden_dim,output_dim),
+#         )
 
 
-    @torch.no_grad()
-    def augment(self, data, masks=None, repeats=100):
-        if masks == None:
-            augmented_data, masks = augmentation_function(data, repeats)
-        else:
-            repeats = masks.shape[0]
-            augmented_data = data.repeat(repeats, 1, 1) + masks
+#     @torch.no_grad()
+#     def augment(self, data, masks=None, repeats=100):
+#         if masks == None:
+#             augmented_data, masks = augmentation_function(data, repeats)
+#         else:
+#             repeats = masks.shape[0]
+#             augmented_data = data.repeat(repeats, 1, 1) + masks
 
-        if self.mode == 'random':
-            selected_mask = masks[0][None]
-            augmented_data = augmented_data[0][None]
-        else:
-            mask_scores = self(data.repeat(repeats, 1, 1), masks.unsqueeze(1)).mean((1)).softmax(-1)[:,:1].sum(-1)
+#         if self.mode == 'random':
+#             selected_mask = masks[0][None]
+#             augmented_data = augmented_data[0][None]
+#         else:
+#             mask_scores = self(data.repeat(repeats, 1, 1), masks.unsqueeze(1)).mean((1)).softmax(-1)[:,:1].sum(-1)
             
-            if self.mode == 'best':
-                selected_mask = masks[mask_scores.argmax()]
-                augmented_data = augmented_data[mask_scores.argmax(), None]
-            elif self.mode == 'worst':
-                selected_mask = masks[mask_scores.argmin()]
-                augmented_data = augmented_data[mask_scores.argmin(), None]
-            else:
-                raise ValueError(f"Unknown mode: {self.mode}")
+#             if self.mode == 'best':
+#                 selected_mask = masks[mask_scores.argmax()]
+#                 augmented_data = augmented_data[mask_scores.argmax(), None]
+#             elif self.mode == 'worst':
+#                 selected_mask = masks[mask_scores.argmin()]
+#                 augmented_data = augmented_data[mask_scores.argmin(), None]
+#             else:
+#                 raise ValueError(f"Unknown mode: {self.mode}")
 
-        return augmented_data, selected_mask.unsqueeze(0)
+#         return augmented_data, selected_mask.unsqueeze(0)
     
 
-    def forward(self, data, masks, counts=None):
-        x = data
-        if counts is not None: x = x.repeat_interleave(counts, dim=0)
+#     def forward(self, data, masks, counts=None):
+#         x = data
+#         if counts is not None: x = x.repeat_interleave(counts, dim=0)
         
-        masks = rearrange(masks, 'b 1 c t -> b (1 c) t').to(x.dtype)
-        masks = self.masks_encode(masks)
+#         masks = rearrange(masks, 'b 1 c t -> b (1 c) t').to(x.dtype)
+#         masks = self.masks_encode(masks)
         
-        x = torch.cat((x, masks), dim=1)
+#         x = torch.cat((x, masks), dim=1)
    
-        x = self.encode(x)
+#         x = self.encode(x)
 
-        return x
+#         return x
 
 
 

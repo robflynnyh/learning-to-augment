@@ -65,6 +65,7 @@ def load_policy(model, config):
         print(f"Model successfully loaded from {save_path}")
         return
     except FileNotFoundError:
+        print(f"Model not found at {save_path}")
         return 
     except Exception as e:
         print(f"Error loading model: {e}")
@@ -86,12 +87,10 @@ def main(config):
     )
 
     policy_path = config['training']['model_save_path']
+    policy_net = Policy()
     if os.path.exists(policy_path):
-        policy_net = Policy()
-        policy_net = policy_net
         load_policy(policy_net, config)
-    else:
-        policy_net = None
+
 
     for i in range(config['steps']):
         index = config['index']*config['steps'] + i
@@ -134,14 +133,7 @@ def main(config):
                     noise = noise.to(torch.float8_e5m2)
                     audio_b = audio_a + noise.to(audio_a.dtype)
                 else:
-                    min_size = 512
-                    audio_size = audio_a.shape[-1]
-                    if audio_size < min_size:
-                        audio_a = torch.cat([audio_a, torch.zeros(audio_a.shape[0], audio_a.shape[1], min_size - audio_size)], dim=-1)
-                    audio_b, noise = policy_net.augment(audio_a, repeats=100)
-                    audio_b = audio_b[:,:, :audio_size]
-                    audio_a = audio_a[:,:, :audio_size]
-                    noise = noise[:, :, :audio_size]
+                    audio_b, noise = policy_net.augment(audio_a)
                     noise = noise.to(torch.float8_e5m2)
                     
                 prev_cer, u_cer, _ = rollout_fn(
@@ -181,7 +173,7 @@ if __name__ == "__main__":
     parser.add_argument("--config", "-config", type=str, required=True, help="Path to YAML config file")
     parser.add_argument('--index', '-index', type=int, default=0)
     parser.add_argument('--steps', '-steps', type=int, default=5)
-    parser.add_argument('--repeats', '-repeats', type=int, default=100)
+    parser.add_argument('--repeats', '-repeats', type=int, default=2)
     parser.add_argument('--split', '-split', type=str, default='train')
     parser.add_argument('--dont_save', action='store_true')
     args = parser.parse_args()
