@@ -59,14 +59,13 @@ def broadcast_multiply(tensor1, tensor2):
 
 def cpu_rollout(
         policy:Module,
-        imitation_net:Module,
         load_asr_model_fn:Callable,
         tokenizer,
         audio:Tensor,
         text:str,
-        seq_len:int=4096,
+        seq_len:int=2048,
         overlap=0.875,
-        optim_args:Dict[str, Any] = {"lr":1e-5},
+        optim_args:Dict[str, Any] = {"lr":8e-6},
         original_wer = None,
         max_steps = None,
         shuffle=True,
@@ -108,7 +107,6 @@ def cpu_rollout(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     asr_model = asr_model.to(device)
     policy = policy.to(device)
-    imitation_net = imitation_net.to(device)
     
     #original_wer = 0.283
     if original_wer is None:
@@ -144,6 +142,7 @@ def cpu_rollout(
     
 
     total_steps = len(training_keys)
+    masks = []
     if max_steps != None and max_steps < len(training_keys): total_steps = max_steps
     if shuffle: random.shuffle(training_keys)
     for i, key in tqdm(enumerate(training_keys), total=total_steps):
@@ -151,14 +150,10 @@ def cpu_rollout(
 
         audio_chunk = training_data[key].clone().to(device)
         with torch.no_grad():
-            #mask, var = imitation_net(audio_chunk)
-            #normal_dist = torch.distributions.normal.Normal(loc=mask, scale=torch.sqrt(var))
-            #samples = normal_dist.sample(sample_shape=torch.Size([1000])).squeeze(1).transpose(-1,-2)
-            masks = torch.rand_like(audio_chunk) * torch.rand_like(audio_chunk) * 2
-            augmented_audio_sample = audio_chunk + masks
-            #augmented_audio_sample = audio_chunk + mask.transpose(1, 2)
-            #augmented_audio_sample, masks = policy.augment(audio_chunk, repeats=1000)
-    
+            # masks = torch.rand_like(audio_chunk) * torch.rand_like(audio_chunk) * 2
+            # augmented_audio_sample = audio_chunk + masks
+            augmented_audio_sample, mask = policy.augment(audio_chunk, sample=False)
+            if isinstance(masks, list): masks.append(mask)
        
         
         # for param_group in optimizer.param_groups:
@@ -183,6 +178,8 @@ def cpu_rollout(
 
     all_logits, logit_count = torch.zeros((1, audio_n//4 + seq_len, tokenizer.vocab_size() + 1)), torch.zeros((1, audio_n//4 + seq_len, tokenizer.vocab_size() + 1))
 
+    torch.save(masks, 'noise.pt')
+    
 
     for key in tqdm(training_keys):
         audio_chunk = training_data[key].clone()

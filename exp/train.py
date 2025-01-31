@@ -30,6 +30,38 @@ AUDIO_CHUNK_SIZE_DEFAULT = 4096
 AUDIO_CHUNK_OVERLAP_DEFAULT = int(0.875*AUDIO_CHUNK_SIZE_DEFAULT)
 
 
+import subprocess
+def count_slurm_jobs(user_pattern="rjf", job_pattern="job"):
+    """
+    Count Slurm jobs matching specific patterns.
+    
+    Args:
+        user_pattern (str): Pattern to search for in the job details (default: "rjf")
+        job_pattern (str): Additional pattern to search for (default: "job")
+    
+    Returns:
+        int: Number of matching jobs
+        
+    Raises:
+        subprocess.CalledProcessError: If the squeue command fails
+        FileNotFoundError: If squeue is not available on the system
+    """
+    try:
+        # Construct the command as a list of arguments
+        cmd = f"squeue | grep {user_pattern} | grep {job_pattern} | awk '{{print $1}}' | wc -l"
+        
+        # Execute the command and capture output
+        result = subprocess.check_output(cmd, shell=True, text=True)
+        
+        # Convert the result to an integer and return
+        return int(result.strip())
+    
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing command: {e}")
+        raise
+    except FileNotFoundError:
+        print("Error: squeue command not found. Are you on a system with Slurm installed?")
+        raise
 
 def load_rl_models(config): 
     policy_net = Policy()
@@ -77,7 +109,7 @@ class CustomDataset(Dataset):
             rollout = torch.load(file, weights_only=True)
 
             audio = rollout['audio']
-            masks = rollout['mask'].to(torch.float32) # kept in float8 for memory
+            masks = rollout['mask'] # kept in float8 for memory
             decreases = rollout['reward']          
 
             before, after = decreases.chunk(2, dim=-1)
@@ -157,7 +189,7 @@ def custom_collate_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.T
         if item == None: continue
         audio.append(item['audio'])
         lengths.append(item['audio'].shape[-1])
-        masks.append(item['masks'])
+        masks.append(item['masks'].to(torch.float16))
         rewards.append(item['reward'])
         item_idxs.extend([i]*item['reward'].shape[0])
         counts.append(item['reward'].shape[0])
@@ -170,7 +202,7 @@ def custom_collate_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.T
             if cur_len < max_length:
                 diff = max_length - cur_len
                 audio[i] = torch.cat([audio[i], torch.zeros(audio[i].shape[0], audio[i].shape[1], diff)], dim=-1)
-                masks[i] = torch.cat([masks[i], torch.zeros(masks[i].shape[0], masks[i].shape[1], masks[i].shape[2], diff)], dim=-1)
+                masks[i] = torch.cat([masks[i], torch.zeros((masks[i].shape[0], masks[i].shape[1], masks[i].shape[2], diff), dtype=masks[i].dtype)], dim=-1)
                 
     audio = torch.cat(audio, dim=0)
     masks = torch.cat(masks, dim=0)
@@ -189,29 +221,40 @@ def custom_collate_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.T
 
 from einops import rearrange
 
+
+
 def forward_pass(batch, policy, device, augmentation=None):
-    indexes = policy.discretize(batch['masks']).squeeze(1).transpose(-1,-2).unsqueeze(-1).to(device)
-    audio = batch['audio'].to(device)
+    indexes = policy.discretize(batch['masks'].to(device, dtype=torch.float32)).squeeze(1).transpose(-1,-2).unsqueeze(-1)
     rewards = batch['rewards'].to(device)
-    counts = batch['counts'].to(device)
+    audio = batch['audio'].to(device)
+    item_idxs = batch['item_idxs'].to(device)
+
+    # add rewards together to go from batch*rollouts num_rewards to batch num_rewards
+    out = torch.zeros_like(indexes, dtype=torch.float32).expand(-1, -1, -1, policy.output_dim)
+    src = rearrange(rewards, 'r -> r 1 1 1').expand(-1, out.shape[1], out.shape[2], out.shape[3])
+    rewards = torch.scatter_add(out, -1, indexes, src)
+    out = rearrange(torch.zeros_like(audio), 'b c t -> b t c 1').expand(-1, -1, -1, policy.output_dim)
+    item_idxs = rearrange(item_idxs, 'idx -> idx 1 1 1').expand_as(rewards)
+    rewards = torch.scatter_add(out, 0, item_idxs, rewards)
+    rewards = rearrange(rewards, 'b t c p -> b t c p')
+    # -
+
+    audio = batch['audio'].to(device)
+    
     lengths = batch['lengths'].to(device)
 
     if augmentation is not None: audio = augmentation(audio)
 
     pred = policy(audio)     
-    pred = pred.to(torch.bfloat16) # to save memory
-    pred = pred.repeat_interleave(counts, dim=0)
+
     pred = rearrange(pred, 'b t (c p) -> b t c p', p=policy.output_dim).log_softmax(dim=-1)
-    # select pred at indexes
-    pred = torch.gather(pred, -1, indexes).squeeze(-1)
+
     if lengths.min() != lengths.max():
-        lengths = lengths.repeat_interleave(counts)
-        b, t, c = pred.shape
+        b, t, c, p = pred.shape
         pad_mask = torch.arange(t).to(device) >= lengths[:, None]
-        pred = torch.masked_fill(pred, pad_mask.unsqueeze(-1), 0)
+        pred = torch.masked_fill(pred, pad_mask.unsqueeze(-1).unsqueeze(-1), 0)
     
-    rewards = rewards.to(torch.bfloat16)
-    loss = -1 * (pred * rewards[:, None, None]).sum() / pred.shape[0]
+    loss = -1 * (pred * rewards).sum() / item_idxs.shape[0]
     return loss, {'loss':loss}
     
 
@@ -221,6 +264,7 @@ def backward_pass(loss, policy, optim):
     loss.backward()
     torch.nn.utils.clip_grad_norm_(policy.parameters(),  1.0) 
     optim.step()
+
 
 def train_policy(
         policy:Policy,
@@ -236,8 +280,10 @@ def train_policy(
         prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
 
         augmentation = None# SpecAugment(n_time_masks=2, n_freq_masks=2, time_mask_param=-1, freq_mask_param=27, min_p=0.05, max_p=0.3)
-        
-        for epoch in range(config['training']['epochs']):
+        cur_epoch = 0
+        running = True
+
+        while running:
             val_loss_sum = 0
             val_count = 0
             
@@ -262,12 +308,16 @@ def train_policy(
                 pbar.set_description(desc=f'val_loss: {val_loss_sum/val_count}')
 
             val_loss = val_loss_sum/val_count
-            wandb.log({'val_policy_loss':val_loss, 'epoch': epoch, **{f'val_{k}':v/val_count for k,v in all_val_losses.items()}})
+            wandb.log({'val_policy_loss':val_loss, 'epoch': cur_epoch, **{f'val_{k}':v/val_count for k,v in all_val_losses.items()}})
             print(f'val_loss: {val_loss}')
 
             if (val_loss > prev_val_loss) or torch.isnan(torch.tensor(val_loss)):
                 policy.load_state_dict(prev_state_dict)
                 print(f'Validation loss increased. Reverting to previous state')
+                break
+
+            if cur_epoch >= config['training']['epochs']:
+                running = False
                 break
 
             prev_val_loss = val_loss
@@ -281,15 +331,21 @@ def train_policy(
                 loss, losses = forward_pass(batch, policy, device, augmentation=augmentation)
                 if loss == None: continue
          
-                wandb.log({'policy_loss':loss.item(), 'epoch': epoch, **{k:v.item() for k,v in losses.items()}})
+                wandb.log({'policy_loss':loss.item(), 'epoch': cur_epoch, **{k:v.item() for k,v in losses.items()}})
                 
                 pbar.set_description(desc=f'loss: {loss.item()}')
                 backward_pass(loss, policy, optim)
+
+            cur_epoch += 1
+
+            if config['training'].get('tmp_model_save_path', False):
+                save_policy(policy, config, save_path=config['training']['tmp_model_save_path'])
 
         return policy
         
 def save_policy(model, config, save_path=None):
     save_path = config['training']['model_save_path'] if save_path is None else save_path
+
     isnan = False
     for name, param in model.state_dict().items():
         if torch.isnan(param).any():
@@ -372,50 +428,79 @@ def prepare_data(config):
 
     return all_rollouts_train, all_rollouts_val
 
+import time
 def main(config):
     wandb.init(project="l2augment")
-    
-    train_files, val_files = prepare_data(config)
 
-    train_dataset = CustomDataset(train_files)
-    val_dataset = CustomDataset(val_files)
+    running = True
+    while running:
+        num_jobs = count_slurm_jobs()
+        if num_jobs == 0:
+            # run commands sbatch sbatch job_val.sh
+            result = subprocess.run(['sbatch', 'job_val.sh'])
+            print(f"Submitted job: {result}")
+            result = subprocess.run(['sbatch', 'job.sh'])
+            print(f"Submitted job: {result}")
+            # rerun count_slurm_jobs every 10 seconds
+        finished_slurm_jobs = False
+        while not finished_slurm_jobs:
+            num_jobs = count_slurm_jobs()
+            if num_jobs == 0:
+                finished_slurm_jobs = True
+            else:
+                print(f"Waiting for jobs to finish. {num_jobs} jobs running, sleeping for 10 seconds")
+                time.sleep(10)
 
-    
-    train_dataloader = DataLoader(
-        train_dataset, 
-        batch_size=config['training']['batch_size'], 
-        shuffle=True, 
-        collate_fn=custom_collate_fn,
-        num_workers=12,
-        prefetch_factor=12   
-    )
-    val_dataloader = DataLoader(
-        val_dataset, 
-        batch_size=config['training']['batch_size'], 
-        shuffle=False, 
-        collate_fn=custom_collate_fn,
-        num_workers=4,
-        prefetch_factor=2
-    )
-  
 
-    policy = load_rl_models(config=config) 
-    policy = policy.to(config['training']['device'])
-    
+        train_files, val_files = prepare_data(config)
 
-    total_params = sum(p.numel() for p in policy.parameters() if p.requires_grad)
-    total_params_in_million = total_params / 1_000_000
-    print(f"Total trainable parameters (policy): {total_params_in_million:.2f} million")
-
-    policy_optim = MADGRAD(policy.parameters(), lr=config['policy']['lr'])
-
-    policy = train_policy(policy, policy_optim, config, train_dataloader, val_dataloader)
-    save_policy(policy, config)
-
-  
-    print(f'Finished')
+        train_dataset = CustomDataset(train_files)
+        val_dataset = CustomDataset(val_files)
 
         
+        train_dataloader = DataLoader(
+            train_dataset, 
+            batch_size=config['training']['batch_size'], 
+            shuffle=True, 
+            collate_fn=custom_collate_fn,
+            num_workers=12,
+            prefetch_factor=12   
+        )
+        val_dataloader = DataLoader(
+            val_dataset, 
+            batch_size=config['training']['batch_size'], 
+            shuffle=False, 
+            collate_fn=custom_collate_fn,
+            num_workers=4,
+            prefetch_factor=2
+        )
+    
+
+        policy = load_rl_models(config=config) 
+        policy = policy.to(config['training']['device'])
+        
+
+        total_params = sum(p.numel() for p in policy.parameters() if p.requires_grad)
+        total_params_in_million = total_params / 1_000_000
+        print(f"Total trainable parameters (policy): {total_params_in_million:.2f} million")
+
+        policy_optim = MADGRAD(policy.parameters(), lr=config['policy']['lr'])
+
+        policy = train_policy(policy, policy_optim, config, train_dataloader, val_dataloader)
+        save_policy(policy, config)
+
+
+    print(f'Finished')
+
+# # import subprocess
+# import subprocess
+# def get_jobs():
+#     # run squeue | grep rjf | grep job | awk '{print $1}' | wc -l
+#     cmd = "squeue | grep rjf | grep job | awk '{print $1}' | wc -l"
+#     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+#     (output, err) = p.communicate()
+    
+
 
 
 if __name__ == "__main__":

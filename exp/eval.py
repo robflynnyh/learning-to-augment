@@ -7,7 +7,7 @@ from lcasr.utils.audio_tools import processing_chain
 from lcasr.utils.general import load_model as load_asr_model, get_model_class
 # from l2augment.modelling import load_model as load_rl_models
 from l2augment.rollout.cpu_multistep     import  cpu_rollout
-from l2augment.modelling.models import Policy, ImitationModel
+from l2augment.modelling.models import Policy
 from lcasr.utils.audio_tools import load_json
 import re
 import os
@@ -17,14 +17,13 @@ import pickle
 import random
 from l2augment.utils.data import dataset_functions
 
-AUDIO_CHUNK_SIZE_DEFAULT = 4096
+AUDIO_CHUNK_SIZE_DEFAULT = 2048
 AUDIO_CHUNK_OVERLAP_DEFAULT = 0
 
 def load_rl_models(config): 
     policy_net = Policy()
     policy_net = policy_net
-    imitation_net = ImitationModel()
-    return policy_net, imitation_net
+    return policy_net
 
 def load_asr_model_fn(asr_model, state_dict):
     asr_model.load_state_dict(state_dict)
@@ -78,9 +77,8 @@ def main(config):
         load_asr_model(asr_model_config, tokenizer.vocab_size(), asr_model_class),
         asr_model_state_dict,
     )
-    policy_net, imitation_net = load_rl_models(config)
+    policy_net = load_rl_models(config)
     load_policy(policy_net, config)
-    load_policy(imitation_net, config, path=config['imitation']['save_path'])
 
     original_wer = None # find_existing_run_wer(directory=config['generation']['save_dir'], id=config['index'])
    
@@ -103,7 +101,6 @@ def main(config):
 
     rollout_output = rollout_fn(
         policy = policy_net,
-        imitation_net = imitation_net,
         audio = audio_spec,
         text = gold_text,
     )
