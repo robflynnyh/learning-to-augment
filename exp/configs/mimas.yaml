@@ -1,0 +1,23 @@
+checkpointing:
+  asr_model: "/store/store5/data/acp21rjf_checkpoints/lcasr/6l_256d_repeat1_step_105360.pt"
+
+training:
+  device: 'cuda'
+  random_seed: 1234
+  batch_size: 8
+  epochs: 10
+  model_save_path: /store/store4/data/learn2augment/checkpoints/model.pt
+  tmp_model_save_path: /store/store4/data/learn2augment/checkpoints/tmp_model.pt
+
+policy:
+  lr: 2e-5
+
+audio_samples:
+  train: /store/store4/data/learn2augment/train_samples/
+  dev: /store/store4/data/learn2augment/dev_samples/
+
+generation:
+  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout/"
+
+
+tedlium_path: /store/store4/data/TEDLIUM_release-3/legacy/

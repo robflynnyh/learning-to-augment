@@ -212,10 +212,11 @@ class Policy(base):
 
     def forward(self, x):
         x = self.encode(x)
-        return x
+        return x    
     
-    def augment(self, audio, sample=True, return_probs=False):
+    def augment(self, audio, sample=True, return_probs=False, lengths=None):
         pred = self(audio) # b, t, output_dim
+
         pred = rearrange(pred, 'b t (c p) -> b t c p', p=self.output_dim)
         pred = pred.softmax(-1)
         b = pred.shape[0]
@@ -227,15 +228,21 @@ class Policy(base):
         
         values = torch.round(-0.5 + indexes.float() * (2.0 / (self.output_dim - 1)), decimals=1)
         noise = rearrange(values, '(b t c) -> b c t', b=b, c=self.input_dim)
- 
+        
+        if lengths is not None and lengths.min() != lengths.max():
+            b, _, t = noise.shape
+            pad_mask = torch.arange(t).to(lengths.device) >= lengths[:, None]
+            noise = torch.masked_fill(noise, pad_mask.unsqueeze(1), 0)
+
         augmented_audio = audio + noise
         
         if return_probs: return augmented_audio, noise, probs
         else: return augmented_audio, noise
     
-    def discretize(self, float_mask):
+    def discretize(self, float_mask, lengths=None):
         indices = torch.round((float_mask + 0.5) * ((self.output_dim - 1) / 2.0)).long()
         indices = torch.clamp(indices, 0, self.output_dim - 1)
+
         return indices
     
 # val = 16
