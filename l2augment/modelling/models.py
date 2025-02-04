@@ -214,7 +214,7 @@ class Policy(base):
         x = self.encode(x)
         return x
     
-    def augment(self, audio, sample=True):
+    def augment(self, audio, sample=True, return_probs=False):
         pred = self(audio) # b, t, output_dim
         pred = rearrange(pred, 'b t (c p) -> b t c p', p=self.output_dim)
         pred = pred.softmax(-1)
@@ -223,12 +223,15 @@ class Policy(base):
         
         if sample: indexes = torch.multinomial(pred, 1).squeeze(-1)
         else: indexes = pred.argmax(-1)
+        if return_probs: probs = torch.gather(pred, -1, indexes.unsqueeze(-1)).squeeze(-1)
         
         values = torch.round(-0.5 + indexes.float() * (2.0 / (self.output_dim - 1)), decimals=1)
         noise = rearrange(values, '(b t c) -> b c t', b=b, c=self.input_dim)
  
         augmented_audio = audio + noise
-        return augmented_audio, noise
+        
+        if return_probs: return augmented_audio, noise, probs
+        else: return augmented_audio, noise
     
     def discretize(self, float_mask):
         indices = torch.round((float_mask + 0.5) * ((self.output_dim - 1) / 2.0)).long()

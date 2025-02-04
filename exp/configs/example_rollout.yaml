@@ -8,7 +8,7 @@ training:
   random_seed: 1234
   batch_size: 24
   epochs: 100
-  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/model_.pt
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/model.pt
 
 policy:
   lr: 3e-4

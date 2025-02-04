@@ -72,7 +72,7 @@ def load_policy(model, config):
         raise
 
 def main(config):
-
+    
 
     asr_model_checkpoint = torch.load(config["checkpointing"]["asr_model"], map_location="cpu", weights_only=False)
     asr_model_config = asr_model_checkpoint['config']
@@ -122,11 +122,14 @@ def main(config):
                                 tokenizer = tokenizer,
                                 text = text
             )      
-    
+            path = join(save_path, f'{utt_id}.pt')
+            repeats = config['repeats']
+            if config['save'] and not os.path.exists(path) and repeats == 1:
+                repeats = 2 # to ensure that we can get mean and std stats on first run!
 
             rewards = []
             mask_list = []
-            for i in range(config['repeats']):
+            for i in range(repeats):
                 audio_a = audio.clone()
                 if policy_net is None:
                     noise = torch.rand_like(audio_a) * torch.rand_like(audio_a) * 2
@@ -145,17 +148,18 @@ def main(config):
                 reward = torch.stack([prev_cer, u_cer], dim=-1)
                 print(reward)
                 rewards.append(reward)
+                # if i == repeats - 1:
                 mask_list.append(noise.to(dtype=torch.float8_e5m2))
                 #print(reward)
 
-            path = join(save_path, f'{utt_id}.pt')
             print(path)
             if config['save']:
-                if os.path.exists(path):
+                if os.path.exists(path) and config['buffer_size'] > 0:
                     prev_data = torch.load(path)
+
                     torch.save({
-                        'reward': torch.cat([prev_data['reward'], torch.stack(rewards)], dim=0),
-                        'mask': torch.cat([prev_data['mask'], torch.stack(mask_list)], dim=0),
+                        'reward': torch.cat([prev_data['reward'][-config['buffer_size']:], torch.stack(rewards)]),
+                        'mask': torch.cat([prev_data['mask'][-config['buffer_size']:], torch.stack(mask_list)]),
                         'audio': audio.to(torch.float16),
                     }, path)
                 else:
@@ -173,8 +177,9 @@ if __name__ == "__main__":
     parser.add_argument("--config", "-config", type=str, required=True, help="Path to YAML config file")
     parser.add_argument('--index', '-index', type=int, default=0)
     parser.add_argument('--steps', '-steps', type=int, default=5)
-    parser.add_argument('--repeats', '-repeats', type=int, default=2)
+    parser.add_argument('--repeats', '-repeats', type=int, default=10)
     parser.add_argument('--split', '-split', type=str, default='train')
+    parser.add_argument('--buffer_size', '-buffer_size', type=int, default=0)
     parser.add_argument('--dont_save', action='store_true')
     args = parser.parse_args()
     config = OmegaConf.load(args.config)
@@ -183,6 +188,7 @@ if __name__ == "__main__":
     config['repeats'] = args.repeats
     config['save'] = not args.dont_save
     config['split'] = args.split
+    config['buffer_size'] = args.buffer_size
     main(config)
 
 

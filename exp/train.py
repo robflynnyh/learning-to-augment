@@ -122,18 +122,14 @@ class CustomDataset(Dataset):
             rewards = rewards.squeeze(-1)
         
 
-            assert len(masks) == len(rewards), f"Length of masks and rewards not equal for file {file}"
-
             # replace any nan values with 0 
             rewards[torch.isnan(rewards)] = 0 # can happen due to empty reference and hypothesis
 
             # notnegative = torch.zeros_like(rewards)
             # notnegative[rewards >= 0] = 1
 
-            rank_rewards = torch.argsort(torch.argsort(rewards, dim=0, descending=True), dim=0, descending=False)
+            #rank_rewards = torch.argsort(torch.argsort(rewards, dim=0, descending=True), dim=0, descending=False)
             
-
-
             rewards_mean = rewards.mean(0, keepdim=True)
 
             if self.zero_mean:
@@ -142,11 +138,11 @@ class CustomDataset(Dataset):
                 rewards = rewards.clamp(min=self.clamp_min)
             if self.clamp_max is not None:
                 rewards = rewards.clamp(max=self.clamp_max)
-            
-            rewards_std = rewards.std(0, keepdim=True) # center mean then clamp then calculate std before standardizing
+        
 
             if self.standardize_std:
                 if rewards.shape[0] > 1 or rewards_std == 0:
+                    rewards_std = rewards.std(0, keepdim=True) # center mean then clamp then calculate std before standardizing
                     rewards = rewards / (rewards_std + 1e-6)
             if self.scale:
                 # min -1, max 1 but avoid 0 division
@@ -158,14 +154,10 @@ class CustomDataset(Dataset):
                     rewards = 2*(rewards - rewards_min)/(rewards_max - rewards_min) - 1
                 #rewards = (rewards + 1) / 2
 
-            if self.randomize_order:
-                rewards = rewards[torch.randperm(rewards.shape[0])] # debug
-
             # z = torch.zeros_like(rewards)
             # z[rewards > 0] = 1
             # rewards = z
             
-    
             all_rewards = rewards#torch.cat([rewards, notnegative, rank_rewards], dim=-1)
 
             return {
@@ -230,10 +222,12 @@ def forward_pass(batch, policy, device, augmentation=None):
     item_idxs = batch['item_idxs'].to(device)
 
     # add rewards together to go from batch*rollouts num_rewards to batch num_rewards
+    rewards = rewards.to(torch.float32)
     out = torch.zeros_like(indexes, dtype=torch.float32).expand(-1, -1, -1, policy.output_dim)
     src = rearrange(rewards, 'r -> r 1 1 1').expand(-1, out.shape[1], out.shape[2], out.shape[3])
     rewards = torch.scatter_add(out, -1, indexes, src)
     out = rearrange(torch.zeros_like(audio), 'b c t -> b t c 1').expand(-1, -1, -1, policy.output_dim)
+    out = out.to(torch.float32)
     item_idxs = rearrange(item_idxs, 'idx -> idx 1 1 1').expand_as(rewards)
     rewards = torch.scatter_add(out, 0, item_idxs, rewards)
     rewards = rearrange(rewards, 'b t c p -> b t c p')
@@ -432,6 +426,20 @@ import time
 def main(config):
     wandb.init(project="l2augment")
 
+    policy = load_rl_models(config=config) 
+    policy_path = config['training']['model_save_path']
+    if os.path.exists(policy_path):
+        load_policy(policy, config)
+    policy = policy.to(config['training']['device'])
+    
+
+    total_params = sum(p.numel() for p in policy.parameters() if p.requires_grad)
+    total_params_in_million = total_params / 1_000_000
+    print(f"Total trainable parameters (policy): {total_params_in_million:.2f} million")
+
+    policy_optim = MADGRAD(policy.parameters(), lr=config['policy']['lr'])
+
+
     running = True
     while running:
         num_jobs = count_slurm_jobs()
@@ -475,17 +483,6 @@ def main(config):
             prefetch_factor=2
         )
     
-
-        policy = load_rl_models(config=config) 
-        policy = policy.to(config['training']['device'])
-        
-
-        total_params = sum(p.numel() for p in policy.parameters() if p.requires_grad)
-        total_params_in_million = total_params / 1_000_000
-        print(f"Total trainable parameters (policy): {total_params_in_million:.2f} million")
-
-        policy_optim = MADGRAD(policy.parameters(), lr=config['policy']['lr'])
-
         policy = train_policy(policy, policy_optim, config, train_dataloader, val_dataloader)
         save_policy(policy, config)
 
