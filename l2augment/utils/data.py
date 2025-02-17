@@ -167,13 +167,14 @@ def earnings22_data():
     return get_text_and_audio
 
 def tedlium3_segmented_data():
-    base_path = "/mnt/parscratch/users/acp21rjf/TEDLIUM_release-3/legacy/"
+    default_base_path = "/mnt/parscratch/users/acp21rjf/TEDLIUM_release-3/legacy/"
 
     def process_text_and_audio_fn(rec_dict):
         utterances = load_tedlium_recording(stm_path=rec_dict['text'], sph_path=rec_dict['audio'])
         return utterances
 
-    def get_text_and_audio(split):
+    def get_text_and_audio(split, base_path=None):
+        base_path = base_path or default_base_path
         assert split in ['test', 'dev', 'train'], f'Split must be either test or dev or train(got {split})'
         path = os.path.join(base_path, split)
         recordings = os.listdir(os.path.join(path, 'sph'))
