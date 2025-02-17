@@ -5,10 +5,9 @@ from omegaconf.omegaconf import OmegaConf
 from lcasr.utils.audio_tools import load_tokenizer
 from lcasr.utils.audio_tools import processing_chain
 from lcasr.utils.general import load_model as load_asr_model, get_model_class
-# from l2augment.modelling import load_model as load_rl_models
+
 from l2augment.rollout import  cpu_rollout
-from l2augment.modelling.models import Policy
-from lcasr.utils.audio_tools import load_json
+from l2augment.utils.helpers import load_rl_models
 from l2augment.utils.data import dataset_functions
 
 import os
@@ -20,10 +19,7 @@ import random
 AUDIO_CHUNK_SIZE_DEFAULT = 4096
 AUDIO_CHUNK_OVERLAP_DEFAULT = 0
 
-def load_rl_models(config): 
-    policy_net = Policy()
-    policy_net = policy_net
-    return policy_net
+
 
 def load_asr_model_fn(asr_model, state_dict):
     asr_model.load_state_dict(state_dict)
@@ -87,7 +83,8 @@ def main(config):
     )
 
     policy_path = config['training']['model_save_path']
-    policy_net = Policy()
+    policy_net = load_rl_models(config)
+    print(f'Loaded Policy Class: {policy_net.__class__.__name__}')
     if os.path.exists(policy_path):
         load_policy(policy_net, config)
 
@@ -124,20 +121,18 @@ def main(config):
             )      
             path = join(save_path, f'{utt_id}.pt')
             repeats = config['repeats']
-            if config['save'] and not os.path.exists(path) and repeats == 1:
-                repeats = 2 # to ensure that we can get mean and std stats on first run!
+            use_random = False
+            if config['save'] and not os.path.exists(path):
+                if repeats == 1: repeats = 2 # to ensure that we can get mean and std stats on first run!
+                use_random = True
+            
 
             rewards = []
             mask_list = []
             for i in range(repeats):
                 audio_a = audio.clone()
-                if policy_net is None:
-                    noise = torch.rand_like(audio_a) * torch.rand_like(audio_a) * 2
-                    noise = noise.to(torch.float8_e5m2)
-                    audio_b = audio_a + noise.to(audio_a.dtype)
-                else:
-                    audio_b, noise = policy_net.augment(audio_a, use_random=False)
-                    noise = noise.to(torch.float8_e5m2)
+                audio_b, noise = policy_net.augment(audio_a, use_random=use_random)
+                noise = noise.to(torch.float8_e5m2)
                     
                 prev_cer, u_cer, _ = rollout_fn(
                     policy = None,

@@ -13,10 +13,7 @@ training:
 
 policy:
   lr: 1e-4
-
-imitation:
-  lr: 6e-4
-  save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/imitation.pt
+  class: FrequencyMaskingRanker
 
 generation:
   save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout/"
