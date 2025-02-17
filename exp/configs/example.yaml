@@ -7,12 +7,12 @@ training:
   device: 'cuda'
   random_seed: 1234
   batch_size: 84
-  epochs: 1
+  epochs: 2
   model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/model.pt
   tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/tmp_model.pt
 
 policy:
-  lr: 2e-4
+  lr: 1e-4
 
 imitation:
   lr: 6e-4

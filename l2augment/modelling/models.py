@@ -214,12 +214,20 @@ class Policy(base):
         x = self.encode(x)
         return x
     
-    def augment(self, audio, sample=True, return_probs=False):
-        pred = self(audio) # b, t, output_dim
-        pred = rearrange(pred, 'b t (c p) -> b t c p', p=self.output_dim)
-        pred = pred.softmax(-1)
+    def augment(self, audio, sample=True, return_probs=False, use_random=False):
+
+        if not use_random:
+            pred = self(audio) # b, c, t
+            pred = rearrange(pred, 'b t (c p) -> b t c p', p=self.output_dim)
+            pred = pred.softmax(-1)
+        else:
+            b, c, t = audio.shape
+            pred = (torch.zeros(b, t, self.input_dim, self.output_dim) + 1/self.output_dim).to(audio.device)
+        
+
         b = pred.shape[0]
         pred = rearrange(pred, 'b t c p-> (b t c) p')
+
         
         if sample: indexes = torch.multinomial(pred, 1).squeeze(-1)
         else: indexes = pred.argmax(-1)

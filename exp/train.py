@@ -83,6 +83,7 @@ class CustomDataset(Dataset):
             files, 
             zero_mean=True, 
             standardize_std=True, 
+            divide_by_100=False,
             scale=False, 
             clamp_min=-5, 
             clamp_max=5,
@@ -98,6 +99,7 @@ class CustomDataset(Dataset):
         self.scale = scale
         self.randomize_order = randomize_order
         self.decrease_measurement = decrease_measurement
+        self.divide_by_100 = divide_by_100
 
     def __len__(self):
         # Return the total number of samples
@@ -134,6 +136,9 @@ class CustomDataset(Dataset):
 
             if self.zero_mean:
                 rewards = rewards - rewards_mean
+            if self.divide_by_100:
+                rewards = rewards / 100
+                
             if self.clamp_min is not None:
                 rewards = rewards.clamp(min=self.clamp_min)
             if self.clamp_max is not None:
@@ -286,20 +291,24 @@ def train_policy(
             pbar = tqdm(val_dataloader)
             policy = policy.eval()
             for batch in pbar:
-                if batch == None: continue  
-                with torch.no_grad():
-                    loss, all_losses = forward_pass(batch, policy, device)
-                if loss == None: continue
+                try:
+                    if batch == None: continue  
+                    with torch.no_grad():
+                        loss, all_losses = forward_pass(batch, policy, device)
+                    if loss == None: continue
 
-                if all_val_losses == None:
-                    all_val_losses = {k:v.item() for k,v in all_losses.items()}
-                else:
-                    for k,v in all_losses.items():
-                        all_val_losses[k] += v.item()
+                    if all_val_losses == None:
+                        all_val_losses = {k:v.item() for k,v in all_losses.items()}
+                    else:
+                        for k,v in all_losses.items():
+                            all_val_losses[k] += v.item()
 
-                val_loss_sum += loss.item()
-                val_count += 1
-                pbar.set_description(desc=f'val_loss: {val_loss_sum/val_count}')
+                    val_loss_sum += loss.item()
+                    val_count += 1
+                    pbar.set_description(desc=f'val_loss: {val_loss_sum/val_count}')
+                except Exception as e:
+                    print(f"Error in validation: {e}")
+                    continue
 
             val_loss = val_loss_sum/val_count
             wandb.log({'val_policy_loss':val_loss, 'epoch': cur_epoch, **{f'val_{k}':v/val_count for k,v in all_val_losses.items()}})
@@ -320,15 +329,19 @@ def train_policy(
             policy = policy.train()
             pbar = tqdm(dataloader)
             for batch in pbar:
-                if batch == None: continue  
-                
-                loss, losses = forward_pass(batch, policy, device, augmentation=augmentation)
-                if loss == None: continue
-         
-                wandb.log({'policy_loss':loss.item(), 'epoch': cur_epoch, **{k:v.item() for k,v in losses.items()}})
-                
-                pbar.set_description(desc=f'loss: {loss.item()}')
-                backward_pass(loss, policy, optim)
+                if batch == None: continue
+                try:  
+                    
+                    loss, losses = forward_pass(batch, policy, device, augmentation=augmentation)
+                    if loss == None: continue
+            
+                    wandb.log({'policy_loss':loss.item(), 'epoch': cur_epoch, **{k:v.item() for k,v in losses.items()}})
+                    
+                    pbar.set_description(desc=f'loss: {loss.item()}')
+                    backward_pass(loss, policy, optim)
+                except Exception as e:
+                    print(f"Error in training: {e}")
+                    continue
 
             cur_epoch += 1
 
@@ -485,6 +498,7 @@ def main(config):
     
         policy = train_policy(policy, policy_optim, config, train_dataloader, val_dataloader)
         save_policy(policy, config)
+        running = False
 
 
     print(f'Finished')

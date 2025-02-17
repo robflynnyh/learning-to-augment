@@ -136,7 +136,7 @@ def main(config):
                     noise = noise.to(torch.float8_e5m2)
                     audio_b = audio_a + noise.to(audio_a.dtype)
                 else:
-                    audio_b, noise = policy_net.augment(audio_a)
+                    audio_b, noise = policy_net.augment(audio_a, use_random=False)
                     noise = noise.to(torch.float8_e5m2)
                     
                 prev_cer, u_cer, _ = rollout_fn(
@@ -177,9 +177,9 @@ if __name__ == "__main__":
     parser.add_argument("--config", "-config", type=str, required=True, help="Path to YAML config file")
     parser.add_argument('--index', '-index', type=int, default=0)
     parser.add_argument('--steps', '-steps', type=int, default=5)
-    parser.add_argument('--repeats', '-repeats', type=int, default=10)
+    parser.add_argument('--repeats', '-repeats', type=int, default=6)
     parser.add_argument('--split', '-split', type=str, default='train')
-    parser.add_argument('--buffer_size', '-buffer_size', type=int, default=0)
+    parser.add_argument('--buffer_size', '-buffer_size', type=int, default=4)
     parser.add_argument('--dont_save', action='store_true')
     args = parser.parse_args()
     config = OmegaConf.load(args.config)
