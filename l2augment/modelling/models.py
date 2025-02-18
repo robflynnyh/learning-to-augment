@@ -134,21 +134,56 @@ class FrequencyMaskingRanker(Policy):
         self.masker = SpecAugment(n_time_masks=0, n_freq_masks=6, freq_mask_param=34, zero_masking=True)
         self.zero_masking = zero_masking
 
-    def augment(self, audio, use_random=False):
+    def apply_mask(self, audio, mask):
+        if not self.zero_masking:
+            audio = audio * mask + (1 - mask) * audio.mean(dim=(1,2), keepdim=True)
+        else:
+            audio = audio * mask
+        return audio
+        
+    def augment(self, audio, use_random=False, repeats=1):
         assert audio.dim() == 3, 'audio must be 3D tensor'
         
         if use_random:
             mask_spec = self.masker(torch.ones_like(audio))
-            if self.zero_masking:
-                audio = audio * mask_spec + (1 - mask_spec) * audio.mean(dim=(1,2), keepdim=True)
-            else:
-                audio = audio * mask_spec
+            
+            audio = self.apply_mask(audio, mask_spec)
+            
             assert mask_spec.shape[1] == 80, 'mask_spec must have 80 channels'
-            mask_spec = mask_spec.mean(dim=1)
 
-            return audio, mask_spec
+            return audio, mask_spec[:,:,0] # mask is same across all time steps so we can just return the first one
         else: 
-            raise NotImplementedError
+            return self.learnt_augmentation(audio, repeats=repeats)
+        
+    def learnt_augmentation(self, audio, repeats=1):
+        raise NotImplementedError # must be implemented in subclass
+        
+class UnconditionalFrequencyMaskingRanker(FrequencyMaskingRanker):
+    def __init__(self, zero_masking=True) -> None:
+        super().__init__(zero_masking)
+        self.network = nn.Sequential(
+            SwiGlu(input_dim=80, output_dim=1, expansion_factor=3),
+            Rearrange('b 1 -> b') 
+        )
+
+    def learnt_augmentation(self, audio, repeats=1):
+        b, c, t = audio.shape
+        assert c == 80, 'audio must have 80 channels'
+        masks = torch.ones(b * repeats, c, 1).to(audio.device)
+        masks = self.masker(masks).squeeze(-1)
+        mask_scores = self.network(masks)
+        masks = rearrange(masks, '(b r) c -> b r c', r=repeats)
+        masks_scores = rearrange(mask_scores, '(b r) -> b r', r=repeats)
+        # select repeat with highest score
+        best_repeat = masks_scores.argmax(dim=1)
+        best_masks = masks[torch.arange(b), best_repeat]
+
+        audio = self.apply_mask(audio, best_masks.unsqueeze(-1))
+        return audio, best_masks
+
+    def forward(self, mask):
+        return self.network(mask)
+
         
 policy_dict['FrequencyMaskingRanker'] = FrequencyMaskingRanker
 
