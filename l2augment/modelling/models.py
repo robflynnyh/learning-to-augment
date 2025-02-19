@@ -159,12 +159,15 @@ class FrequencyMaskingRanker(Policy):
         raise NotImplementedError # must be implemented in subclass
         
 class UnconditionalFrequencyMaskingRanker(FrequencyMaskingRanker):
-    def __init__(self, zero_masking=True) -> None:
+    def __init__(self, zero_masking=True, loss_type='mse') -> None:
         super().__init__(zero_masking)
+        assert loss_type in ['mse', 'mult']
+        self.loss_type = loss_type
         self.network = nn.Sequential(
             SwiGlu(input_dim=80, output_dim=1, expansion_factor=3),
             Rearrange('b 1 -> b') 
         )
+
 
     def learnt_augmentation(self, audio, repeats=1):
         b, c, t = audio.shape
@@ -177,15 +180,30 @@ class UnconditionalFrequencyMaskingRanker(FrequencyMaskingRanker):
         # select repeat with highest score
         best_repeat = masks_scores.argmax(dim=1)
         best_masks = masks[torch.arange(b), best_repeat]
-
         audio = self.apply_mask(audio, best_masks.unsqueeze(-1))
         return audio, best_masks
 
     def forward(self, mask):
         return self.network(mask)
+    
+    def forward_pass(self, batch, device, **kwargs):
+        masks = batch['masks'].to(device, dtype=torch.float32).squeeze(1) # B, 1, C -> B, C
+        rewards = batch['rewards'].to(device)
+
+        score = self(masks)
+
+        if self.loss_type == 'mse':
+            loss = nn.functional.mse_loss(score, rewards, reduction='mean')
+        elif self.loss_type == 'mult':
+            loss = -torch.mean(score * rewards)
+        else:
+            raise ValueError(f'Invalid loss type {self.loss_type}')
+        
+        return loss, {'loss':loss}
 
         
 policy_dict['FrequencyMaskingRanker'] = FrequencyMaskingRanker
+policy_dict['UnconditionalFrequencyMaskingRanker'] = UnconditionalFrequencyMaskingRanker
 
 
 class AdditivePolicy(Policy):

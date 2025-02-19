@@ -2,6 +2,7 @@ import re
 import os
 import json
 from lcasr.utils.audio_tools import processing_chain, total_seconds
+from lcasr.eval.utils import zero_out_spectogram
 import pickle
 from typing import List
 
@@ -10,21 +11,6 @@ def open_stm(path:str) -> List[str]:
         lines = f.read().split('\n')
     return lines
 
-def proc_stm_and_timings(stm_path:str):
-    stm = open_stm(stm_path)
-    utts = []
-    for line in stm:
-        sline = line.split(' ')
-        if len(sline) < 6:
-            continue
-        a_id, s_id, spk, start, end, meta = sline[:6]
-        text = ' '.join(sline[6:])
-        if text == 'ignore_time_segment_in_scoring':
-            continue
-        text = re.sub(r" '([a-z])", r"'\1", text)
-        # remove anything inside angle brackets i.e <...> 
-        utts.append({'start': float(start), 'end': float(end), 'text': re.sub(r'<[^>]*>', '', text)})
-    return utts
 
 def segment_spectrogram(spec, frames_per_second, utterances):
     for utt in utterances:
@@ -34,13 +20,7 @@ def segment_spectrogram(spec, frames_per_second, utterances):
         utt['spectrogram'] = spec[:, :, start_frame:end_frame].clone()
     return utterances
 
-def load_tedlium_recording(stm_path:str, sph_path:str):
-    utts = proc_stm_and_timings(stm_path)
-    audio= processing_chain(sph_path, normalise=True) # [b, c, t]
-    length_in_seconds = total_seconds(audio.shape[-1])
-    frames_per_second = audio.shape[-1] / length_in_seconds
-    utterances = segment_spectrogram(audio, frames_per_second, utts)
-    return utterances
+
 
 def prepare_chunks(spec, seq_len, overlap):
     spec_n = spec.shape[-1]
@@ -169,6 +149,30 @@ def earnings22_data():
 def tedlium3_segmented_data():
     default_base_path = "/mnt/parscratch/users/acp21rjf/TEDLIUM_release-3/legacy/"
 
+    def proc_stm_and_timings(stm_path:str):
+        stm = open_stm(stm_path)
+        utts = []
+        for line in stm:
+            sline = line.split(' ')
+            if len(sline) < 6:
+                continue
+            a_id, s_id, spk, start, end, meta = sline[:6]
+            text = ' '.join(sline[6:])
+            if text == 'ignore_time_segment_in_scoring':
+                continue
+            text = re.sub(r" '([a-z])", r"'\1", text)
+            # remove anything inside angle brackets i.e <...> 
+            utts.append({'start': float(start), 'end': float(end), 'text': re.sub(r'<[^>]*>', '', text)})
+        return utts
+
+    def load_tedlium_recording(stm_path:str, sph_path:str):
+        utts = proc_stm_and_timings(stm_path)
+        audio= processing_chain(sph_path, normalise=True) # [b, c, t]
+        length_in_seconds = total_seconds(audio.shape[-1])
+        frames_per_second = audio.shape[-1] / length_in_seconds
+        utterances = segment_spectrogram(audio, frames_per_second, utts)
+        return utterances
+
     def process_text_and_audio_fn(rec_dict):
         utterances = load_tedlium_recording(stm_path=rec_dict['text'], sph_path=rec_dict['audio'])
         return utterances
@@ -190,10 +194,76 @@ def tedlium3_segmented_data():
         return return_data
     return get_text_and_audio
 
+def tedlium3_data():
+    default_base_path = "/mnt/parscratch/users/acp21rjf/TEDLIUM_release-3/legacy/"
+
+    def proc_stm_and_timings(stm_path:str):
+        stm = open_stm(stm_path)
+        all_text = ""
+        timings = []
+        remove_timings = []
+        for line in stm:
+            sline = line.split(' ')
+            if len(sline) < 6:
+                continue
+            a_id, s_id, spk, start, end, meta = sline[:6]
+            text = ' '.join(sline[6:])
+            if text == 'ignore_time_segment_in_scoring':
+                remove_timings.append({'start': float(start), 'end': float(end)})
+                continue
+            all_text += text + ' '
+            timings.append({'start': float(start), 'end': float(end)})
+        all_text = all_text.strip()
+        # regex to do all of the above
+        # i.e replace space followed by a apostrophe followed by a letter with just the apostrophe and letter
+        all_text = re.sub(r" '([a-z])", r"'\1", all_text)
+        # remove multiple spaces
+        all_text = re.sub(r" +", r" ", all_text)
+        return all_text, timings, remove_timings
+
+    def fetch_data(path:str):
+        audio_path = os.path.join(path, 'sph')
+        audio_files = [os.path.join(audio_path, el) for el in os.listdir(audio_path) if el.endswith('.sph')]
+        audio_files.sort()
+        text_path = os.path.join(path, 'stm')
+        text_files = [os.path.join(text_path, el) for el in os.listdir(text_path) if el.endswith('.stm')]
+        text_files.sort()
+        assert len(audio_files) == len(text_files), 'Number of audio files and text files must match'
+        return audio_files, text_files
+
+    def process_text_and_audio_fn(rec_dict, single_utterance=False):
+        audio, text = rec_dict['audio'], rec_dict['text']
+        audio_spec = processing_chain(audio)
+
+        gold_text, _, remove_timings = proc_stm_and_timings(stm_path=text)
+        audio_spec = zero_out_spectogram(spec = audio_spec, remove_timings = remove_timings)
+        return audio_spec, (gold_text).lower().strip()
+       
+
+    def get_text_and_audio(split, base_path=None, **kwargs):
+        assert split in ['test', 'dev', 'train'], f'Split must be either test or dev train (got {split})'
+        base_path = base_path or default_base_path
+        path = os.path.join(base_path, split)
+        
+        audio_files, text_files = fetch_data(path=path)
+        return_data = []
+        for rec in range(len(audio_files)):
+            return_data.append({
+                'id': audio_files[rec],
+                'text': text_files[rec], 
+                'audio': audio_files[rec], 
+                "process_fn": process_text_and_audio_fn
+            })
+        return_data = sorted(return_data, key=lambda x: x['id'])
+
+        return return_data
+    return get_text_and_audio
+
 dataset_functions = {
     "earnings22": earnings22_data(),
     "this_american_life": this_american_life_data(),
-    "tedlium3_segmented_data": tedlium3_segmented_data()
+    "tedlium3_segmented_data": tedlium3_segmented_data(),
+    "tedlium": tedlium3_data()
 }
 
 

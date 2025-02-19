@@ -7,16 +7,31 @@ training:
   device: 'cuda'
   random_seed: 1234
   batch_size: 84
-  epochs: 2
-  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/model.pt
-  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/tmp_model.pt
+  epochs: 100
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/multloss/model.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/multloss/tmp_model.pt
+
+evaluation:
+  dataset: 'tedlium'
+  augmentation_config:
+    repeats: 10
+    use_random: true
+
+
+dataset:
+  load_audio: false
+  clamp_min: null
+  clamp_max: null
 
 policy:
   lr: 1e-4
-  class: FrequencyMaskingRanker
+  class: UnconditionalFrequencyMaskingRanker
+  config:
+    loss_type: 'mult'
 
 generation:
   save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout/"
+
 
   
 #this_american_life_566_audio_307200.pt

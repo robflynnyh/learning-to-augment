@@ -16,14 +16,11 @@ import json
 import pickle
 import random
 from l2augment.utils.data import dataset_functions
+from l2augment.utils.helpers import load_rl_models
 
 AUDIO_CHUNK_SIZE_DEFAULT = 2048
 AUDIO_CHUNK_OVERLAP_DEFAULT = 0
 
-def load_rl_models(config): 
-    policy_net = Policy()
-    policy_net = policy_net
-    return policy_net
 
 def load_asr_model_fn(asr_model, state_dict):
     asr_model.load_state_dict(state_dict)
@@ -64,7 +61,7 @@ def load_policy(model, config, path=None):
         raise
 
 def main(config):
-    save_path = config['generation']['save_dir']
+
     tokenizer = load_tokenizer()
     asr_model_class = get_model_class(config = config)
     
@@ -91,7 +88,9 @@ def main(config):
     )
     
 
-    data = dataset_functions['earnings22']("test")
+    dataset = config.get('evaluation', {}).get('dataset', 'earnings22')
+    split = config.get('evaluation', {}).get('split', 'test')
+    data = dataset_functions[dataset](split)
 
     cur_data = data[config['index']]
     print('---', cur_data['id'], '---')
@@ -103,6 +102,7 @@ def main(config):
         policy = policy_net,
         audio = audio_spec,
         text = gold_text,
+        augmentation_config = config.get('evaluation', {}).get('augmentation_config', {}),
     )
 
     print(rollout_output['original_wer'], rollout_output['updated_wer'])

@@ -69,6 +69,7 @@ def cpu_rollout(
         original_wer = None,
         max_steps = None,
         shuffle=True,
+        augmentation_config:Dict[str, Any] = {},
         **kwargs
     ):
 
@@ -142,7 +143,7 @@ def cpu_rollout(
     
 
     total_steps = len(training_keys)
-    masks = []
+    masks = None
     if max_steps != None and max_steps < len(training_keys): total_steps = max_steps
     if shuffle: random.shuffle(training_keys)
     for i, key in tqdm(enumerate(training_keys), total=total_steps):
@@ -150,14 +151,9 @@ def cpu_rollout(
 
         audio_chunk = training_data[key].clone().to(device)
         with torch.no_grad():
-            # masks = torch.rand_like(audio_chunk) * torch.rand_like(audio_chunk) * 2
-            # augmented_audio_sample = audio_chunk + masks
-            augmented_audio_sample, mask = policy.augment(audio_chunk, sample=False)
+            augmented_audio_sample, mask = policy.augment(audio_chunk, **augmentation_config)
             if isinstance(masks, list): masks.append(mask)
        
-        
-        # for param_group in optimizer.param_groups:
-        #     param_group['lr'] = (optim_args['lr'] * lr).item()
 
         with torch.no_grad():
             out_teacher = asr_model(audio_signal = audio_chunk)
@@ -218,6 +214,8 @@ def cpu_rollout(
     return {
         'original_wer': original_wer,
         'updated_wer': new_wer,
+        'hypothesis': out_text,
+        'reference': text,
     }
 
  
