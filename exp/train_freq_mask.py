@@ -16,6 +16,7 @@ import pickle
 from typing import List, Dict, Any
 from madgrad import MADGRAD
 import wandb
+from eval import main as run_eval
 
 logger = logging.getLogger('train')
 logger.setLevel(logging.INFO)
@@ -37,7 +38,22 @@ def save_dictionary(dictionary, filename):
 def load_dictionary(path):
     with open(path, 'rb') as file:
         return pickle.load(file)
-    
+
+def make_color(text, color):
+    colors = { # use neon colors
+        'green': '\033[38;5;46m',
+        'red': '\033[38;5;196m',
+        'blue': '\033[38;5;27m',
+        'yellow': '\033[38;5;226m',
+        'purple': '\033[38;5;129m',
+        'cyan': '\033[38;5;45m',
+        'white': '\033[38;5;231m',
+        'orange': '\033[38;5;208m',
+        'pink': '\033[38;5;198m',
+        'black': '\033[38;5;0m',
+    }
+    assert color in colors, f"Color {color} not found. Choose from {list(colors.keys())}"
+    return f"{colors[color]}{text}\033[0m"
     
 class CustomDataset(Dataset):
     def __init__(
@@ -174,67 +190,44 @@ def backward_pass(loss,     policy, optim):
     torch.nn.utils.clip_grad_norm_(policy.parameters(),  1.0) 
     optim.step()
 
+def get_eval_config(config):
+    return {'evaluation': config['validation'], 'checkpointing': config['checkpointing']}
 
 def train_policy(
         policy:Policy,
         optim:MADGRAD,
         config:Dict[str, Any],
         dataloader:DataLoader,
-        val_dataloader:DataLoader,
     ):  
         device = policy.device
 
         policy = policy.train()
 
-        prev_val_loss = float('inf')
+        prev_val_cer = float('inf')
         prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
 
-        augmentation = None# SpecAugment(n_time_masks=2, n_freq_masks=2, time_mask_param=-1, freq_mask_param=27, min_p=0.05, max_p=0.3)
         cur_epoch = 0
         running = True
 
         while running:
-            val_loss_sum = 0
-            val_count = 0
             
-            all_val_losses = None
-
-            pbar = tqdm(val_dataloader)
             policy = policy.eval()
-            for batch in pbar:
-                try:
-                    if batch == None: continue  
-                    with torch.no_grad():
-                        loss, all_losses = policy.forward_pass(batch, device)
-                    if loss == None: continue
+            val_cer = run_eval(config = get_eval_config(config), policy_net=policy)
 
-                    if all_val_losses == None:
-                        all_val_losses = {k:v.item() for k,v in all_losses.items()}
-                    else:
-                        for k,v in all_losses.items():
-                            all_val_losses[k] += v.item()
+            
+            wandb.log({'val_wer':val_cer, 'epoch': cur_epoch})
+            print(f'val_wer: {val_cer}')
 
-                    val_loss_sum += loss.item()
-                    val_count += 1
-                    pbar.set_description(desc=f'val_loss: {val_loss_sum/val_count}')
-                except Exception as e:
-                    print(f"Error in validation: {e}")
-                    continue
-
-            val_loss = val_loss_sum/val_count
-            wandb.log({'val_policy_loss':val_loss, 'epoch': cur_epoch, **{f'val_{k}':v/val_count for k,v in all_val_losses.items()}})
-            print(f'val_loss: {val_loss}')
-
-            if (val_loss > prev_val_loss) or torch.isnan(torch.tensor(val_loss)):
+            if (val_cer > prev_val_cer) or torch.isnan(torch.tensor(val_cer)):
                 policy.load_state_dict(prev_state_dict)
                 print(f'Validation loss increased. Reverting to previous state')
                 break
 
             if cur_epoch >= config['training']['epochs']:
-                running = False
+                print(f'Reached max epochs: {cur_epoch}/{config["training"]["epochs"]}')
                 break
 
-            prev_val_loss = val_loss
+            prev_val_cer = val_cer
             prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
 
             policy = policy.train()
@@ -278,20 +271,6 @@ def save_policy(model, config, save_path=None):
     else:
         logger.info(f"Model not saved due to NaN in weights!")
 
-def load_value(model, config):
-    save_path = config['value']['save_path']
-    try:
-        # Load the checkpoint
-        checkpoint = torch.load(save_path, map_location='cpu')
-        # Load the model state dictionary
-        model.load_state_dict(checkpoint['model_state_dict'])    
-        print(f"Model successfully loaded from {save_path}")
-        return
-    except FileNotFoundError:
-        return 
-    except Exception as e:
-        print(f"Error loading model: {e}")
-        raise
 
 def load_policy(model, config):
     save_path = config['training']['model_save_path']
@@ -300,7 +279,7 @@ def load_policy(model, config):
         checkpoint = torch.load(save_path, map_location='cpu')
         # Load the model state dictionary
         model.load_state_dict(checkpoint['model_state_dict'])    
-        print(f"Model successfully loaded from {save_path}")
+        print(make_color(f"Model successfully loaded from {save_path}", 'red'))
         return True
     except FileNotFoundError:
         return False
@@ -363,18 +342,16 @@ def main(config):
 
     total_params = sum(p.numel() for p in policy.parameters() if p.requires_grad)
     total_params_in_million = total_params / 1_000_000
-    print(f"Total trainable parameters (policy): {total_params_in_million:.2f} million")
+    print(make_color(f"Total trainable parameters (policy): {total_params_in_million:.2f} million", 'green'))
 
     policy_optim = MADGRAD(policy.parameters(), lr=config['policy']['lr'])
 
 
 
-
-    train_files, val_files = prepare_data(config)
+    train_files, _ = prepare_data(config)
 
     dataset_config = config.get('dataset', {})
     train_dataset = CustomDataset(train_files, **dataset_config)
-    val_dataset = CustomDataset(val_files, **dataset_config)
 
     
     train_dataloader = DataLoader(
@@ -385,16 +362,9 @@ def main(config):
         num_workers=12,
         prefetch_factor=12   
     )
-    val_dataloader = DataLoader(
-        val_dataset, 
-        batch_size=config['training']['batch_size'], 
-        shuffle=False, 
-        collate_fn=custom_collate_fn,
-        num_workers=4,
-        prefetch_factor=2
-    )
 
-    policy = train_policy(policy, policy_optim, config, train_dataloader, val_dataloader)
+
+    policy = train_policy(policy, policy_optim, config, train_dataloader)
     save_policy(policy, config)
 
 

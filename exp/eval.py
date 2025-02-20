@@ -17,6 +17,8 @@ import pickle
 import random
 from l2augment.utils.data import dataset_functions
 from l2augment.utils.helpers import load_rl_models
+from lcasr.eval.wer import word_error_rate_detail
+
 
 AUDIO_CHUNK_SIZE_DEFAULT = 2048
 AUDIO_CHUNK_OVERLAP_DEFAULT = 0
@@ -60,7 +62,7 @@ def load_policy(model, config, path=None):
         print(f"Error loading model: {e}")
         raise
 
-def main(config):
+def main(config, policy_net=None):
 
     tokenizer = load_tokenizer()
     asr_model_class = get_model_class(config = config)
@@ -74,8 +76,10 @@ def main(config):
         load_asr_model(asr_model_config, tokenizer.vocab_size(), asr_model_class),
         asr_model_state_dict,
     )
-    policy_net = load_rl_models(config)
-    load_policy(policy_net, config)
+
+    if policy_net is None:
+        policy_net = load_rl_models(config)
+        load_policy(policy_net, config)
 
     original_wer = None # find_existing_run_wer(directory=config['generation']['save_dir'], id=config['index'])
    
@@ -84,45 +88,63 @@ def main(config):
                          tokenizer = tokenizer, 
                          verbose = False, 
                          original_wer=original_wer,
-                         max_steps = config['generation'].get('max_steps', None)
     )
     
 
     dataset = config.get('evaluation', {}).get('dataset', 'earnings22')
     split = config.get('evaluation', {}).get('split', 'test')
     data = dataset_functions[dataset](split)
+    
+    indexes = config.get('indexes', [-1])
+    indexes = indexes if sum(indexes) != -1 else range(len(data))
 
-    cur_data = data[config['index']]
-    print('---', cur_data['id'], '---')
-    audio_spec, gold_text = cur_data['process_fn'](cur_data)
+    u_hyps, o_hyps, refs = [], [], [] 
+    for i, index in enumerate(indexes):
+        print(f'Index {i+1}/{len(indexes)} - {index}')
+        cur_data = data[index]
+        print('---', cur_data['id'], '---')
+        audio_spec, gold_text = cur_data['process_fn'](cur_data)
 
-   
+    
 
-    rollout_output = rollout_fn(
-        policy = policy_net,
-        audio = audio_spec,
-        text = gold_text,
-        augmentation_config = config.get('evaluation', {}).get('augmentation_config', {}),
-    )
+        rollout_output = rollout_fn(
+            policy = policy_net,
+            audio = audio_spec,
+            text = gold_text,
+            augmentation_config = config.get('evaluation', {}).get('augmentation_config', {}),
+        )
 
-    print(rollout_output['original_wer'], rollout_output['updated_wer'])
+        print(rollout_output['original_cer'], rollout_output['updated_cer'])
+
+        u_hyps.append(rollout_output['hypothesis'])
+        if rollout_output['original_hypothesis'] is not None: o_hyps.append(rollout_output['original_hypothesis']) 
+        refs.append(rollout_output['reference'])
+
+
+    cer = config.get('evaluation', {}).get('use_cer', False)
+    if len(o_hyps) == len(refs):
+        original_wer = word_error_rate_detail(hypotheses=o_hyps, references=refs, use_cer=cer)[0]
+        print(f"Original WER: {original_wer}")
+
+    wer = word_error_rate_detail(hypotheses=u_hyps, references=refs, use_cer=cer)[0]
+    print(f"Updated WER: {wer}")
 
     # if save_path: # debug
     #     save_dictionary(
     #         rollout_output, 
     #         filename=join(save_path, r_id)
     #     )
-    
+    return wer
 
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", "-config", type=str, required=True, help="Path to YAML config file")
-    parser.add_argument('--index', '-index', type=int, default=0)
+    parser.add_argument('--indexes', '-indexes', type=int, nargs='+', help='Indexes of the data to evaluate', default=[-1]) # -1 means all
     args = parser.parse_args()
     config = OmegaConf.load(args.config)
-    config['index'] = args.index
+    config['indexes'] = args.indexes
     main(config)
 
 
