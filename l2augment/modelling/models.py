@@ -205,6 +205,172 @@ class UnconditionalFrequencyMaskingRanker(FrequencyMaskingRanker):
 policy_dict['FrequencyMaskingRanker'] = FrequencyMaskingRanker
 policy_dict['UnconditionalFrequencyMaskingRanker'] = UnconditionalFrequencyMaskingRanker
 
+class VAEBase(base):
+    def __init__(self) -> None:
+        super().__init__()
+        if type(self) == VAEBase: raise Exception('VAEBase class is not meant to be instantiated directly. Use a subclass like VariationalAutoEncoder')
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+    
+    def forward_pass(self, batch, device, **kwargs):
+        audio = batch['audio'].to(device)
+        lengths = batch['lengths'].to(device)
+        audio_out, mu, logvar = self(audio, lengths)
+        
+        if lengths.min() != lengths.max():
+            mask = torch.arange(audio.size(-1)).to(lengths.device) < lengths[:, None]
+            audio = torch.masked_fill(audio, ~mask.unsqueeze(1), 0)
+
+        loss = nn.functional.mse_loss(audio_out, audio, reduction='mean')
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        KLD = KLD / (logvar.shape[0] * logvar.shape[1] * logvar.shape[2])
+        loss += self.kld_weight * KLD
+        return loss, {'loss':loss, 'KLD':KLD}, audio_out
+    
+
+class VariationalAutoEncoder(VAEBase):
+    def __init__(self, input_dim=80, hidden_dim=128, latent_dim=16, layers=6, kld_weight=0.00025):
+        super().__init__()
+        self.d_model = hidden_dim
+        self.input_dim = input_dim
+        self.layers = layers
+        self.latent_dim = latent_dim
+        self.kld_weight = kld_weight
+        self.encoder = nn.Sequential(
+            nn.Conv1d(input_dim, hidden_dim, kernel_size=1, stride=1),
+            *[
+                nn.Sequential(
+                    nn.Conv1d(hidden_dim, hidden_dim, kernel_size=7, stride=2, padding=1),
+                    nn.BatchNorm1d(hidden_dim),
+                    nn.SiLU(),
+                ) 
+                for _ in range(layers)
+            ],
+            nn.Conv1d(hidden_dim, hidden_dim, kernel_size=1, stride=1),
+        )
+        self.mu = nn.Conv1d(hidden_dim, latent_dim, kernel_size=1, stride=1)
+        self.logvar = nn.Conv1d(hidden_dim, latent_dim, kernel_size=1, stride=1)
+        
+        self.decoder = nn.Sequential(
+            nn.Conv1d(latent_dim, hidden_dim, kernel_size=1, stride=1),
+            *[
+                nn.Sequential(
+                    nn.ConvTranspose1d(hidden_dim, hidden_dim, kernel_size=7, stride=2, padding=1),
+                    nn.BatchNorm1d(hidden_dim),
+                    nn.SiLU()
+                ) 
+                for _ in range(layers)
+            ],
+        )
+        self.output = nn.Conv1d(hidden_dim, input_dim, kernel_size=1, stride=1)
+
+
+
+    def forward(self, x, lengths=None):
+        in_length = x.size(-1)
+        x = self.encoder(x)
+
+        mu = self.mu(x)
+        logvar = self.logvar(x)
+        z = self.reparameterize(mu, logvar)
+
+        if lengths is not None:
+            out_length = x.size(-1)
+            downsampled_lengths = (lengths * out_length + in_length - 1) // in_length
+            mask = torch.arange(out_length).unsqueeze(0).to(downsampled_lengths.device) < downsampled_lengths.unsqueeze(-1)
+            z = torch.masked_fill(z, ~mask.unsqueeze(1), 0)
+            mu = torch.masked_fill(mu, ~mask.unsqueeze(1), 0)
+            logvar = torch.masked_fill(logvar, ~mask.unsqueeze(1), 0)
+
+        x = self.decoder(z)
+        x = torch.nn.functional.interpolate(x, size=in_length, mode='linear', align_corners=False)
+        x = self.output(x)
+        return x, mu, logvar
+    
+
+class SingleStateVariationalAutoEncoder(VAEBase):
+    def __init__(self, input_dim=80, hidden_dim=128, latent_dim=256, layers=6, kld_weight=0.000002):
+        super().__init__()
+        self.d_model = hidden_dim
+        self.input_dim = input_dim
+        self.layers = layers
+        self.latent_dim = latent_dim
+        self.kld_weight = kld_weight
+        self.encoder = nn.Sequential(
+            nn.Conv1d(input_dim, hidden_dim, kernel_size=1, stride=1),
+            *[
+                nn.Sequential(
+                    nn.Conv1d(hidden_dim, hidden_dim, kernel_size=7, stride=2, padding=1),
+                    nn.BatchNorm1d(hidden_dim),
+                    nn.SiLU(),
+                ) 
+                for _ in range(layers)
+            ],
+            nn.Conv1d(hidden_dim, hidden_dim, kernel_size=1, stride=1),
+        )
+        self.mu = nn.Conv1d(hidden_dim, latent_dim, kernel_size=1, stride=1)
+        self.logvar = nn.Conv1d(hidden_dim, latent_dim, kernel_size=1, stride=1)
+
+        self.lstm_enc = nn.LSTM(latent_dim, latent_dim, num_layers=2, batch_first=True, bidirectional=False)
+        self.lst_dec = nn.LSTM(latent_dim, latent_dim, num_layers=2, batch_first=True, bidirectional=False)
+        
+        self.decoder = nn.Sequential(
+            nn.Conv1d(latent_dim, hidden_dim, kernel_size=1, stride=1),
+            *[
+                nn.Sequential(
+                    nn.ConvTranspose1d(hidden_dim, hidden_dim, kernel_size=7, stride=2, padding=1),
+                    nn.BatchNorm1d(hidden_dim),
+                    nn.SiLU()
+                ) 
+                for _ in range(layers)
+            ],
+        )
+        self.output = nn.Conv1d(hidden_dim, input_dim, kernel_size=1, stride=1)
+
+
+    
+    def bottleneck(self, x, lengths):
+        t = x.size(-1)
+        x = rearrange(x, 'b c t -> b t c')
+        x = torch.nn.utils.rnn.pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=False)
+        _, (h_n, _) = self.lstm_enc(x)
+      
+        h_n = rearrange(h_n[-1], 'b c -> b 1 c')
+        h_n = repeat(h_n, 'b 1 c -> b t c', t=t)
+    
+        x = torch.nn.utils.rnn.pack_padded_sequence(h_n, lengths.cpu(), batch_first=True, enforce_sorted=False)
+        x, _ = self.lst_dec(x)
+        x, _ = torch.nn.utils.rnn.pad_packed_sequence(x, batch_first=True, total_length=t)
+        x = rearrange(x, 'b t c -> b c t')
+        return x
+
+
+    def forward(self, x, lengths=None):
+        in_length = x.size(-1)
+        x = self.encoder(x)
+
+        mu = self.mu(x)
+        logvar = self.logvar(x)
+        z = self.reparameterize(mu, logvar)
+
+        out_length = x.size(-1)
+        downsampled_lengths = (lengths * out_length + in_length - 1) // in_length
+        if lengths is not None:
+            mask = torch.arange(out_length).unsqueeze(0).to(downsampled_lengths.device) < downsampled_lengths.unsqueeze(-1)
+            z = torch.masked_fill(z, ~mask.unsqueeze(1), 0)
+            mu = torch.masked_fill(mu, ~mask.unsqueeze(1), 0)
+            logvar = torch.masked_fill(logvar, ~mask.unsqueeze(1), 0)
+        
+        z = self.bottleneck(z, downsampled_lengths)
+        x = self.decoder(z)
+        x = torch.nn.functional.interpolate(x, size=in_length, mode='linear', align_corners=False)
+        x = self.output(x)
+        return x, mu, logvar
+    
+
 
 class AdditivePolicy(Policy):
     def __init__(

@@ -52,7 +52,8 @@ def find_existing_run_wer(directory, id):
     return None
 
 def load_policy(model, config):
-    save_path = config['training']['model_save_path']
+    save_path = config.get('training',{}).get('model_save_path', None)
+    if save_path == None: return
     try:
         # Load the checkpoint
         checkpoint = torch.load(save_path, map_location='cpu')
@@ -82,10 +83,13 @@ def main(config):
         asr_model_state_dict,
     )
 
-    policy_path = config['training']['model_save_path']
+    optim_args = config['generation'].get('optim_args', {"lr": 1e-1})
+    print(f"Optim Args: {optim_args}")
+
+    policy_path = config.get('training',{}).get('model_save_path', None)
     policy_net = load_rl_models(config)
     print(f'Loaded Policy Class: {policy_net.__class__.__name__}')
-    if os.path.exists(policy_path):
+    if policy_path != None and os.path.exists(policy_path):
         load_policy(policy_net, config)
 
 
@@ -117,7 +121,8 @@ def main(config):
             rollout_fn = partial(cpu_rollout, 
                                 load_asr_model_fn = partial_load_asr_model_fn, 
                                 tokenizer = tokenizer,
-                                text = text
+                                text = text,
+                                optim_args = optim_args,
             )      
             path = join(save_path, f'{utt_id}.pt')
             repeats = config['repeats']

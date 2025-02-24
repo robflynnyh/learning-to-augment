@@ -110,6 +110,7 @@ def cpu_rollout(
     policy = policy.to(device)
     
     #original_wer = 0.283
+    original_hypothesis = None
     if original_wer is None:
         for key in tqdm(training_keys):
             audio_chunk = training_data[key].clone()
@@ -140,6 +141,7 @@ def cpu_rollout(
         out_text = decoder(logits.squeeze())
         out_text = normalizer(out_text)
         original_wer = word_error_rate_detail(hypotheses=[out_text], references=[text], use_cer=True)[0]
+        original_hypothesis = out_text
     
 
     total_steps = len(training_keys)
@@ -173,8 +175,8 @@ def cpu_rollout(
         optimizer.step()
 
     all_logits, logit_count = torch.zeros((1, audio_n//4 + seq_len, tokenizer.vocab_size() + 1)), torch.zeros((1, audio_n//4 + seq_len, tokenizer.vocab_size() + 1))
-
-    torch.save(masks, 'noise.pt')
+    
+    if masks != None: torch.save(masks, 'noise.pt')
     
 
     for key in tqdm(training_keys):
@@ -212,9 +214,10 @@ def cpu_rollout(
     
 
     return {
-        'original_wer': original_wer,
-        'updated_wer': new_wer,
+        'original_cer': original_wer,
+        'updated_cer': new_wer,
         'hypothesis': out_text,
+        'original_hypothesis': original_hypothesis,
         'reference': text,
     }
 

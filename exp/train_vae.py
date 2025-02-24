@@ -2,8 +2,7 @@ import argparse
 import torch
 from omegaconf.omegaconf import OmegaConf
 
-from l2augment.modelling.models import Policy
-from l2augment.utils.helpers import load_rl_models
+from l2augment.modelling.models import SingleStateVariationalAutoEncoder as VariationalAutoEncoder
 
 from tqdm import tqdm
 import logging
@@ -11,12 +10,12 @@ import os
 from os.path import join
 from torch.utils.data import Dataset, DataLoader
 from einops import rearrange
-
+import random
 import pickle
 from typing import List, Dict, Any
 from madgrad import MADGRAD
+import matplotlib.pyplot as plt
 import wandb
-from eval import main as run_eval
 
 logger = logging.getLogger('train')
 logger.setLevel(logging.INFO)
@@ -59,27 +58,9 @@ class CustomDataset(Dataset):
     def __init__(
             self, 
             files, 
-            zero_mean=True, 
-            standardize_std=True, 
-            divide_by_100=False,
-            scale=False, 
-            clamp_min=-5, 
-            clamp_max=5,
-            randomize_order=False, # debug
-            decrease_measurement='absolute', # percentage or absolute
-            load_audio=True,
         ):
         self.data = sorted(files)
-    
-        self.zero_mean = zero_mean
-        self.standardize_std = standardize_std
-        self.clamp_min = clamp_min
-        self.clamp_max = clamp_max
-        self.scale = scale
-        self.randomize_order = randomize_order
-        self.decrease_measurement = decrease_measurement
-        self.divide_by_100 = divide_by_100
-        self.load_audio = load_audio
+
 
     def __len__(self):
         # Return the total number of samples
@@ -90,142 +71,104 @@ class CustomDataset(Dataset):
             file = self.data[idx]
             rollout = torch.load(file, weights_only=True)
 
-            audio = rollout['audio'] if self.load_audio else None
-            masks = rollout['mask'] # kept in float8 for memory
-            decreases = rollout['reward']          
-
-            before, after = decreases.chunk(2, dim=-1)
-            if self.decrease_measurement == 'absolute':
-                rewards = before - after
-            elif self.decrease_measurement == 'percentage':
-                rewards = ( (before - after) / before )*100
-            else:
-                raise ValueError(f"Unknown decrease measurement: {self.decrease_measurement} should be 'percentage' or 'absolute'")
-            rewards = rewards.squeeze(-1)
-        
-
-            # replace any nan values with 0 
-            rewards[torch.isnan(rewards)] = 0 # can happen due to empty reference and hypothesis
-
-            # notnegative = torch.zeros_like(rewards)
-            # notnegative[rewards >= 0] = 1
-
-            #rank_rewards = torch.argsort(torch.argsort(rewards, dim=0, descending=True), dim=0, descending=False)
-            
-            rewards_mean = rewards.mean(0, keepdim=True)
-
-            if self.zero_mean:
-                rewards = rewards - rewards_mean
-            if self.divide_by_100:
-                rewards = rewards / 100
-                
-            if self.clamp_min is not None:
-                rewards = rewards.clamp(min=self.clamp_min)
-            if self.clamp_max is not None:
-                rewards = rewards.clamp(max=self.clamp_max)
-        
-
-            if self.standardize_std:
-                if rewards.shape[0] > 1 or rewards_std == 0:
-                    rewards_std = rewards.std(0, keepdim=True) # center mean then clamp then calculate std before standardizing
-                    rewards = rewards / (rewards_std + 1e-6)
-            if self.scale:
-                # min -1, max 1 but avoid 0 division
-                rewards_min = rewards.min(dim=0, keepdim=True).values
-                rewards_max = rewards.max(dim=0, keepdim=True).values
-                if rewards_min == rewards_max:
-                    rewards = torch.zeros_like(rewards)
-                else:
-                    rewards = 2*(rewards - rewards_min)/(rewards_max - rewards_min) - 1
-                #rewards = (rewards + 1) / 2
-
-            # z = torch.zeros_like(rewards)
-            # z[rewards > 0] = 1
-            # rewards = z
-            
-            all_rewards = rewards#torch.cat([rewards, notnegative, rank_rewards], dim=-1)
+            audio = rollout['audio']       
 
             return {
-                'reward': all_rewards, # (repeats)
-                'masks':masks, # (masks, 1, C, T)
-                **({'audio':audio} if self.load_audio else {})
+                'audio': audio,
             }
         except Exception as e:
             print(f"Error loading data: {e}")
             return None
     
 def custom_collate_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:    
-    masks = []
-    rewards = []
-    item_idxs = []
-    counts = []
+    audio = []
+    lengths = []
 
     for i, item in enumerate(batch):
         if item == None: continue
-        masks.append(item['masks'].to(torch.float16))
-        rewards.append(item['reward'])
-        item_idxs.extend([i]*item['reward'].shape[0])
-        counts.append(item['reward'].shape[0])
+        audio.append(item['audio'])
+        lengths.append(item['audio'].shape[-1])
 
+    lengths = torch.tensor(lengths)
+    if lengths.min() != lengths.max():
+        max_length = lengths.max()
+        for i in range(len(audio)):
+            cur_len = audio[i].shape[-1]
+            if cur_len != lengths.max():
+                diff = max_length - cur_len
+                audio[i] = torch.cat([audio[i], torch.zeros(audio[i].shape[0], audio[i].shape[1], diff)], dim=-1)
 
-    masks = torch.cat(masks, dim=0)
-    rewards = torch.cat(rewards, dim=0)
-    item_idxs = torch.tensor(item_idxs)
-    counts = torch.tensor(counts)
+    audio = torch.cat(audio)
     
     return {
-        'masks': masks,
-        'rewards': rewards,
-        'item_idxs': item_idxs,
-        'counts': counts,
+        'audio': audio,
+        'lengths': lengths
     }
 
 
-    
-
-
-def backward_pass(loss,     policy, optim):
+def backward_pass(loss, model, optim):
     optim.zero_grad()
     loss.backward()
-    torch.nn.utils.clip_grad_norm_(policy.parameters(),  1.0) 
+    torch.nn.utils.clip_grad_norm_(model.parameters(),  1.0) 
     optim.step()
 
 def get_eval_config(config):
     return {'evaluation': config['validation'], 'checkpointing': config['checkpointing']}
 
-def train_policy(
-        policy:Policy,
+def train_vae(
+        vae:VariationalAutoEncoder,
         optim:MADGRAD,
         config:Dict[str, Any],
         dataloader:DataLoader,
+        val_dataloader:DataLoader
     ):  
-        device = policy.device
+        device = vae.device
 
-        policy = policy.train()
+        vae = vae.train()
 
-        prev_val_cer = float('inf')
-        prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
+        prev_val_loss = float('inf')
+        prev_state_dict = {k:v.clone() for k,v in vae.state_dict().items()}
 
         cur_epoch = 0
-        remaining_tolerance = 2
+        max_tolerance = 4
+        remaining_tolerance = max_tolerance
         running = True
 
         while running:
             
-            policy = policy.eval()
-            val_cer = run_eval(config = get_eval_config(config), policy_net=policy)
-
+            vae = vae.eval()
+            val_loss_sum = 0
+            val_count = 0
             
-            wandb.log({'val_cer':val_cer, 'epoch': cur_epoch})
-            print(f'val_cer: {val_cer}')
+            all_val_losses = None
 
-            if (val_cer > prev_val_cer) or torch.isnan(torch.tensor(val_cer)): remaining_tolerance -= 1
+            pbar = tqdm(val_dataloader)
+            for batch in pbar:
+                with torch.no_grad():
+                    loss, all_losses, _ = vae.forward_pass(batch, device)
+                    if loss == None: continue
+                    val_loss_sum += loss.item()
+                    val_count += 1
+                    if all_val_losses is None:
+                        all_val_losses = {k:v.item() for k,v in all_losses.items()}
+                    else:
+                        for k,v in all_losses.items():
+                            all_val_losses[k] += v.item()
+                    pbar.set_description(desc=f'val_loss: {loss.item()}')
+
+            val_loss = val_loss_sum / val_count
+            wandb.log({'val_loss':val_loss, 'epoch': cur_epoch, **{k:v/val_count for k,v in all_val_losses.items()}})
+            print(f'Validation loss: {val_loss}')
+
+            if (val_loss > prev_val_loss) or torch.isnan(torch.tensor(val_loss)): remaining_tolerance -= 1
             else:
-                prev_val_cer = val_cer
-                prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
+                prev_val_loss = val_loss
+                prev_state_dict = {k:v.clone() for k,v in vae.state_dict().items()}
+                remaining_tolerance = max_tolerance
+
 
             if remaining_tolerance == 0:
-                policy.load_state_dict(prev_state_dict)
+                vae.load_state_dict(prev_state_dict)
                 print(f'Validation loss increased. Reverting to previous state')
                 break
 
@@ -234,19 +177,29 @@ def train_policy(
                 break
 
 
-            policy = policy.train()
+            vae = vae.train()
             pbar = tqdm(dataloader)
             for batch in pbar:
                 if batch == None: continue
                 try:  
                     
-                    loss, losses = policy.forward_pass(batch, device)
+                    loss, losses, prediction = vae.forward_pass(batch, device)
                     if loss == None: continue
-            
+
+                    if random.random() < 0.025:
+                        length = batch['lengths'][0].item()
+                        plt.imshow(prediction[0,:,:length].detach().cpu().numpy(), aspect='auto', origin='lower', interpolation='nearest', cmap='magma', vmin=-1, vmax=1)
+                        wandb.log({'prediction': plt})
+                        plt.close()
+                        plt.imshow(batch['audio'][0,:,:length].detach().cpu().numpy(), aspect='auto', origin='lower', interpolation='nearest', cmap='magma', vmin=-1, vmax=1)
+                        wandb.log({'original': plt})
+                        plt.close()
+
+
                     wandb.log({'policy_loss':loss.item(), 'epoch': cur_epoch, **{k:v.item() for k,v in losses.items()}})
                     
                     pbar.set_description(desc=f'loss: {loss.item()}')
-                    backward_pass(loss, policy, optim)
+                    backward_pass(loss, vae, optim)
                 except Exception as e:
                     print(f"Error in training: {e}")
                     continue
@@ -254,9 +207,9 @@ def train_policy(
             cur_epoch += 1
 
             if config['training'].get('tmp_model_save_path', False):
-                save_policy(policy, config, save_path=config['training']['tmp_model_save_path'])
+                save_policy(vae, config, save_path=config['training']['tmp_model_save_path'])
 
-        return policy
+        return vae
         
 def save_policy(model, config, save_path=None):
     save_path = config['training']['model_save_path'] if save_path is None else save_path
@@ -276,7 +229,7 @@ def save_policy(model, config, save_path=None):
         logger.info(f"Model not saved due to NaN in weights!")
 
 
-def load_policy(model, config):
+def load_model(model, config):
     save_path = config['training']['model_save_path']
     try:
         # Load the checkpoint
@@ -333,43 +286,53 @@ import time
 def main(config):
     wandb.init(project="l2augment")
 
-    policy = load_rl_models(config=config) 
-    policy_path = config['training']['model_save_path']
-    if os.path.exists(policy_path):
-        load_policy(policy, config)
+    vae_config = config.get('vae', {})
+    vae = VariationalAutoEncoder(**vae_config.get('model', {}))
+    vae_path = config['training']['model_save_path']
+    
+    if os.path.exists(vae_path):
+        load_model(vae, config)
 
     device = config.get('training',{}).get('device', 'cuda')
     if not torch.cuda.is_available(): device = torch.device('cpu')
-    policy.device = device
-    policy = policy.to(device)
+    vae.device = device
+    vae = vae.to(device)
     
 
-    total_params = sum(p.numel() for p in policy.parameters() if p.requires_grad)
+    total_params = sum(p.numel() for p in vae.parameters() if p.requires_grad)
     total_params_in_million = total_params / 1_000_000
-    print(make_color(f"Total trainable parameters (policy): {total_params_in_million:.2f} million", 'green'))
+    print(make_color(f"Total trainable parameters (vae): {total_params_in_million:.2f} million", 'green'))
 
-    policy_optim = MADGRAD(policy.parameters(), lr=config['policy']['lr'])
+    vae_optim = MADGRAD(vae.parameters(), lr=config.get('vae',{}).get('lr', 9e-4))
 
-
-
-    train_files, _ = prepare_data(config)
+    train_files, val_files = prepare_data(config)
 
     dataset_config = config.get('dataset', {})
     train_dataset = CustomDataset(train_files, **dataset_config)
-
+    val_dataset = CustomDataset(val_files, **dataset_config)
     
     train_dataloader = DataLoader(
         train_dataset, 
         batch_size=config['training']['batch_size'], 
         shuffle=True, 
         collate_fn=custom_collate_fn,
-        num_workers=12,
-        prefetch_factor=12   
+        num_workers=4,
+        prefetch_factor=6   
     )
 
+    val_dataloader = DataLoader(
+        val_dataset, 
+        batch_size=config['training']['batch_size'], 
+        shuffle=False, 
+        collate_fn=custom_collate_fn,
+        num_workers=4,
+        prefetch_factor=2
+    )
 
-    policy = train_policy(policy, policy_optim, config, train_dataloader)
-    save_policy(policy, config)
+    
+
+    vae = train_vae(vae, vae_optim, config, train_dataloader, val_dataloader)
+    save_policy(vae, config)
 
 
     print(f'Finished')

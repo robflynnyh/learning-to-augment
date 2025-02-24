@@ -1,0 +1,16 @@
+training:
+  device: 'cuda'
+  random_seed: 1234
+  batch_size: 84
+  epochs: 1000
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ssvae/model.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ssvae/tmp_model.pt
+
+
+generation:
+  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_2e1/"
+
+
+
+  
+#this_american_life_566_audio_307200.pt

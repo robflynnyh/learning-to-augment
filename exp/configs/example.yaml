@@ -21,7 +21,8 @@ validation:
 
 evaluation:
   dataset: 'tedlium'
-  split: 'dev'
+  split: 'test'
+  use_cer: true
   augmentation_config:
     repeats: 10
     use_random: false
@@ -38,7 +39,8 @@ policy:
     loss_type: 'mse'
 
 generation:
-  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout/"
+  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_2e1/"
+
 
 
   

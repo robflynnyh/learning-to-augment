@@ -122,12 +122,14 @@ def main(config, policy_net=None):
 
 
     cer = config.get('evaluation', {}).get('use_cer', False)
+    eval_type = 'WER' if not cer else 'CER'
     if len(o_hyps) == len(refs):
         original_wer = word_error_rate_detail(hypotheses=o_hyps, references=refs, use_cer=cer)[0]
-        print(f"Original WER: {original_wer}")
+        print(f"Original {eval_type}: {original_wer}")
 
     wer = word_error_rate_detail(hypotheses=u_hyps, references=refs, use_cer=cer)[0]
-    print(f"Updated WER: {wer}")
+    
+    print(f"Updated {eval_type}: {wer}")
 
     # if save_path: # debug
     #     save_dictionary(
