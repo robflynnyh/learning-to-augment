@@ -134,6 +134,7 @@ class FrequencyMaskingRanker(Policy):
         self.masker = SpecAugment(n_time_masks=0, n_freq_masks=6, freq_mask_param=34, zero_masking=True)
         self.zero_masking = zero_masking
 
+
     def apply_mask(self, audio, mask):
         if not self.zero_masking:
             audio = audio * mask + (1 - mask) * audio.mean(dim=(1,2), keepdim=True)
@@ -158,7 +159,33 @@ class FrequencyMaskingRanker(Policy):
     def learnt_augmentation(self, audio, repeats=1):
         raise NotImplementedError # must be implemented in subclass
         
-class UnconditionalFrequencyMaskingRanker(FrequencyMaskingRanker):
+class TrainableFrequencyMaskingRanker(FrequencyMaskingRanker):
+    def __init__(self, zero_masking=True) -> None:
+        super().__init__(zero_masking)
+        if type(self) == TrainableFrequencyMaskingRanker: raise Exception('TrainableFrequencyMaskingRanker class is not meant to be instantiated directly. Use a subclass like FrequencyMaskingRanker or UnconditionalFrequencyMaskingRanker')
+
+    def forward_pass(self, batch, device, **kwargs):
+        network_inputs = {}
+        network_inputs['mask'] = batch['masks'].to(device, dtype=torch.float32).squeeze(1) # B, 1, C -> B, C
+        
+        rewards = batch['rewards'].to(device)
+
+        if 'audio' in batch: network_inputs['audio'] = batch['audio'].to(device)
+        if 'lengths' in batch: network_inputs['lengths'] = batch['lengths'].to(device)
+        if 'counts' in batch: network_inputs['counts'] = batch['counts'].to(device)
+
+        score = self(**network_inputs)
+
+        if self.loss_type == 'mse':
+            loss = nn.functional.mse_loss(score, rewards, reduction='mean')
+        elif self.loss_type == 'mult':
+            loss = -torch.mean(score * rewards)
+        else:
+            raise ValueError(f'Invalid loss type {self.loss_type}')
+        
+        return loss, {'loss':loss}
+
+class UnconditionalFrequencyMaskingRanker(TrainableFrequencyMaskingRanker):
     def __init__(self, zero_masking=True, loss_type='mse') -> None:
         super().__init__(zero_masking)
         assert loss_type in ['mse', 'mult']
@@ -174,7 +201,7 @@ class UnconditionalFrequencyMaskingRanker(FrequencyMaskingRanker):
         assert c == 80, 'audio must have 80 channels'
         masks = torch.ones(b * repeats, c, 1).to(audio.device)
         masks = self.masker(masks).squeeze(-1)
-        mask_scores = self.network(masks)
+        mask_scores = self(masks)
         masks = rearrange(masks, '(b r) c -> b r c', r=repeats)
         masks_scores = rearrange(mask_scores, '(b r) -> b r', r=repeats)
         # select repeat with highest score
@@ -183,36 +210,20 @@ class UnconditionalFrequencyMaskingRanker(FrequencyMaskingRanker):
         audio = self.apply_mask(audio, best_masks.unsqueeze(-1))
         return audio, best_masks
 
-    def forward(self, mask):
+    def forward(self, mask, **kwargs):
         return self.network(mask)
-    
-    def forward_pass(self, batch, device, **kwargs):
-        masks = batch['masks'].to(device, dtype=torch.float32).squeeze(1) # B, 1, C -> B, C
-        rewards = batch['rewards'].to(device)
 
-        score = self(masks)
 
-        if self.loss_type == 'mse':
-            loss = nn.functional.mse_loss(score, rewards, reduction='mean')
-        elif self.loss_type == 'mult':
-            loss = -torch.mean(score * rewards)
-        else:
-            raise ValueError(f'Invalid loss type {self.loss_type}')
-        
-        return loss, {'loss':loss}
 
-        
-policy_dict['FrequencyMaskingRanker'] = FrequencyMaskingRanker
-policy_dict['UnconditionalFrequencyMaskingRanker'] = UnconditionalFrequencyMaskingRanker
 
 class VAEBase(base):
     def __init__(self) -> None:
         super().__init__()
         if type(self) == VAEBase: raise Exception('VAEBase class is not meant to be instantiated directly. Use a subclass like VariationalAutoEncoder')
 
-    def reparameterize(self, mu, logvar):
+    def reparameterize(self, mu, logvar, eps=None):
         std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
+        eps = torch.randn_like(std) if eps is None else eps
         return mu + eps * std
     
     def forward_pass(self, batch, device, **kwargs):
@@ -269,13 +280,13 @@ class VariationalAutoEncoder(VAEBase):
 
 
 
-    def forward(self, x, lengths=None):
+    def forward(self, x, lengths=None, eps=None):
         in_length = x.size(-1)
         x = self.encoder(x)
 
         mu = self.mu(x)
         logvar = self.logvar(x)
-        z = self.reparameterize(mu, logvar)
+        z = self.reparameterize(mu, logvar, eps)
 
         if lengths is not None:
             out_length = x.size(-1)
@@ -292,13 +303,14 @@ class VariationalAutoEncoder(VAEBase):
     
 
 class SingleStateVariationalAutoEncoder(VAEBase):
-    def __init__(self, input_dim=80, hidden_dim=128, latent_dim=256, layers=6, kld_weight=0.000002):
+    def __init__(self, input_dim=80, hidden_dim=128, latent_dim=256, layers=6, kld_weight=0.000002, min_input_size=128):
         super().__init__()
         self.d_model = hidden_dim
         self.input_dim = input_dim
         self.layers = layers
         self.latent_dim = latent_dim
         self.kld_weight = kld_weight
+        self.min_input_size = min_input_size
         self.encoder = nn.Sequential(
             nn.Conv1d(input_dim, hidden_dim, kernel_size=1, stride=1),
             *[
@@ -332,13 +344,17 @@ class SingleStateVariationalAutoEncoder(VAEBase):
 
 
     
-    def bottleneck(self, x, lengths):
+    def bottleneck(self, x, lengths, mode='autoenc'):
         t = x.size(-1)
         x = rearrange(x, 'b c t -> b t c')
         x = torch.nn.utils.rnn.pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=False)
         _, (h_n, _) = self.lstm_enc(x)
       
         h_n = rearrange(h_n[-1], 'b c -> b 1 c')
+
+        if mode == 'compress':
+            return h_n
+
         h_n = repeat(h_n, 'b 1 c -> b t c', t=t)
     
         x = torch.nn.utils.rnn.pack_padded_sequence(h_n, lengths.cpu(), batch_first=True, enforce_sorted=False)
@@ -348,13 +364,21 @@ class SingleStateVariationalAutoEncoder(VAEBase):
         return x
 
 
-    def forward(self, x, lengths=None):
+    def forward(self, x, lengths=None, mode='autoenc', eps=None):
+        assert mode in ['autoenc', 'compress'], 'mode must be either autoenc or compress. compress returns the latent representation without decoding'
         in_length = x.size(-1)
+        if lengths == None: lengths = torch.tensor([in_length] * x.size(0)).to(x.device)
+
+        pad = 0
+        if in_length < self.min_input_size:
+            pad = self.min_input_size - in_length
+            x = torch.cat((x, torch.zeros(x.size(0), x.size(1), pad).to(x.device)), dim=-1)
+
         x = self.encoder(x)
 
         mu = self.mu(x)
         logvar = self.logvar(x)
-        z = self.reparameterize(mu, logvar)
+        z = self.reparameterize(mu, logvar, eps)
 
         out_length = x.size(-1)
         downsampled_lengths = (lengths * out_length + in_length - 1) // in_length
@@ -364,12 +388,81 @@ class SingleStateVariationalAutoEncoder(VAEBase):
             mu = torch.masked_fill(mu, ~mask.unsqueeze(1), 0)
             logvar = torch.masked_fill(logvar, ~mask.unsqueeze(1), 0)
         
-        z = self.bottleneck(z, downsampled_lengths)
+        z = self.bottleneck(z, downsampled_lengths, mode=mode)
+        
+        if mode == 'compress': return z
+
         x = self.decoder(z)
         x = torch.nn.functional.interpolate(x, size=in_length, mode='linear', align_corners=False)
         x = self.output(x)
+        if pad > 0: x = x[:,:,:-pad]
         return x, mu, logvar
     
+
+class ConditionalFrequencyMaskingRanker(TrainableFrequencyMaskingRanker):
+    def __init__(
+            self,
+            latent_dim=256,
+            mel_bins=80,
+            vae_config:Dict={},
+            vae_state_dict_path:str=None,
+            zero_masking=True, 
+            loss_type='mse'
+        ) -> None:
+        super().__init__(zero_masking)
+        assert loss_type in ['mse', 'mult']
+        self.loss_type = loss_type
+        self.mel_bins = mel_bins
+        
+        self.vae = SingleStateVariationalAutoEncoder(**vae_config)
+
+        if vae_state_dict_path is not None: 
+            vae_state_dict = torch.load(vae_state_dict_path, map_location='cpu')['model_state_dict']
+            self.vae.load_state_dict(vae_state_dict)
+            print(f'Loaded VAE state dict from {vae_state_dict_path}')
+
+        self.encode_mask = SwiGlu(self.mel_bins, output_dim=self.mel_bins, expansion_factor=1)
+        self.encode_audio = nn.Sequential(
+            SwiGlu(input_dim=latent_dim, output_dim=latent_dim, expansion_factor=1),
+            nn.LayerNorm(latent_dim)
+        )
+        
+        self.predict = nn.Sequential(
+            SwiGlu(input_dim=latent_dim + self.mel_bins, output_dim=1, expansion_factor=2),
+            Rearrange('b 1 -> b')
+        )
+
+
+    def learnt_augmentation(self, audio, repeats=1, lengths=None):
+        b, c, t = audio.shape
+        assert c == self.mel_bins, f'audio must have {self.mel_bins} channels'
+        masks = torch.ones(b * repeats, c, 1).to(audio.device)
+
+        masks = self.masker(masks).squeeze(-1)
+        mask_scores = self(audio.repeat(repeats, 1, 1), masks, lengths=lengths)
+        masks = rearrange(masks, '(b r) c -> b r c', r=repeats)
+        masks_scores = rearrange(mask_scores, '(b r) -> b r', r=repeats)
+        # select repeat with highest score
+        best_repeat = masks_scores.argmax(dim=1)
+        best_masks = masks[torch.arange(b), best_repeat]
+        audio = self.apply_mask(audio, best_masks.unsqueeze(-1))
+        
+        return audio, best_masks
+
+    def forward(self, audio, mask, lengths=None, counts=None):
+        with torch.no_grad(): z_audio = rearrange(self.vae(audio, lengths=lengths, mode='compress'), 'b 1 c -> b c')
+
+        z_audio = self.encode_audio(z_audio)
+        z_mask = self.encode_mask(mask)
+     
+
+        if counts is not None: z_audio = torch.repeat_interleave(z_audio, counts, dim=0)
+        
+        z = torch.cat((z_audio, z_mask), dim=-1)
+        return self.predict(z)
+
+
+
 
 
 class AdditivePolicy(Policy):
@@ -457,5 +550,10 @@ class AdditivePolicy(Policy):
 
         return indices
     
+
+policy_dict['FrequencyMaskingRanker'] = FrequencyMaskingRanker
+policy_dict['UnconditionalFrequencyMaskingRanker'] = UnconditionalFrequencyMaskingRanker
+policy_dict['ConditionalFrequencyMaskingRanker'] = ConditionalFrequencyMaskingRanker
+
 policy_dict['AdditivePolicy'] = AdditivePolicy
 policy_dict['default'] = AdditivePolicy

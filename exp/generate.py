@@ -85,6 +85,8 @@ def main(config):
 
     optim_args = config['generation'].get('optim_args', {"lr": 1e-1})
     print(f"Optim Args: {optim_args}")
+    augmentation_args = config['generation'].get('augmentation_config', {})
+    print(f"Augmentation Args: {augmentation_args}")
 
     policy_path = config.get('training',{}).get('model_save_path', None)
     policy_net = load_rl_models(config)
@@ -126,17 +128,16 @@ def main(config):
             )      
             path = join(save_path, f'{utt_id}.pt')
             repeats = config['repeats']
-            use_random = False
+          
             if config['save'] and not os.path.exists(path):
                 if repeats == 1: repeats = 2 # to ensure that we can get mean and std stats on first run!
-                use_random = True
             
 
             rewards = []
             mask_list = []
             for i in range(repeats):
                 audio_a = audio.clone()
-                audio_b, noise = policy_net.augment(audio_a, use_random=use_random)
+                audio_b, noise = policy_net.augment(audio_a, **augmentation_args)
                 noise = noise.to(torch.float8_e5m2)
                     
                 prev_cer, u_cer, _ = rollout_fn(
@@ -153,13 +154,21 @@ def main(config):
                 #print(reward)
 
             print(path)
+            #print(torch.cat([torch.load(path)['reward'], torch.stack(rewards)]))
             if config['save']:
                 if os.path.exists(path) and config['buffer_size'] > 0:
                     prev_data = torch.load(path)
 
+                    prev_reward = prev_data['reward']
+                    prev_mask = prev_data['mask']
+                    if config['buffer_size'] != -1:
+                        prev_reward = prev_reward[-config['buffer_size']:]
+                        prev_mask = prev_mask[-config['buffer_size']:]
+                    
+                    
                     torch.save({
-                        'reward': torch.cat([prev_data['reward'][-config['buffer_size']:], torch.stack(rewards)]),
-                        'mask': torch.cat([prev_data['mask'][-config['buffer_size']:], torch.stack(mask_list)]),
+                        'reward': torch.cat([prev_reward, torch.stack(rewards)]),
+                        'mask': torch.cat([prev_mask, torch.stack(mask_list)]),
                         'audio': audio.to(torch.float16),
                     }, path)
                 else:
@@ -177,9 +186,9 @@ if __name__ == "__main__":
     parser.add_argument("--config", "-config", type=str, required=True, help="Path to YAML config file")
     parser.add_argument('--index', '-index', type=int, default=0)
     parser.add_argument('--steps', '-steps', type=int, default=5)
-    parser.add_argument('--repeats', '-repeats', type=int, default=6)
+    parser.add_argument('--repeats', '-repeats', type=int, default=2)
     parser.add_argument('--split', '-split', type=str, default='train')
-    parser.add_argument('--buffer_size', '-buffer_size', type=int, default=4)
+    parser.add_argument('--buffer_size', '-buffer_size', type=int, default=-1)
     parser.add_argument('--dont_save', action='store_true')
     args = parser.parse_args()
     config = OmegaConf.load(args.config)

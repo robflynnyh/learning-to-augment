@@ -5,6 +5,8 @@ from omegaconf.omegaconf import OmegaConf
 from l2augment.modelling.models import Policy
 from l2augment.utils.helpers import load_rl_models
 
+from l2augment.utils.collate_functions import collate_functions_dict
+
 from tqdm import tqdm
 import logging
 import os
@@ -153,36 +155,8 @@ class CustomDataset(Dataset):
         except Exception as e:
             print(f"Error loading data: {e}")
             return None
-    
-def custom_collate_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:    
-    masks = []
-    rewards = []
-    item_idxs = []
-    counts = []
-
-    for i, item in enumerate(batch):
-        if item == None: continue
-        masks.append(item['masks'].to(torch.float16))
-        rewards.append(item['reward'])
-        item_idxs.extend([i]*item['reward'].shape[0])
-        counts.append(item['reward'].shape[0])
-
-
-    masks = torch.cat(masks, dim=0)
-    rewards = torch.cat(rewards, dim=0)
-    item_idxs = torch.tensor(item_idxs)
-    counts = torch.tensor(counts)
-    
-    return {
-        'masks': masks,
-        'rewards': rewards,
-        'item_idxs': item_idxs,
-        'counts': counts,
-    }
-
 
     
-
 
 def backward_pass(loss,     policy, optim):
     optim.zero_grad()
@@ -207,7 +181,8 @@ def train_policy(
         prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
 
         cur_epoch = 0
-        remaining_tolerance = 2
+        max_tolerance = 4
+        remaining_tolerance = max_tolerance
         running = True
 
         while running:
@@ -223,6 +198,7 @@ def train_policy(
             else:
                 prev_val_cer = val_cer
                 prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
+                remaining_tolerance = max_tolerance
 
             if remaining_tolerance == 0:
                 policy.load_state_dict(prev_state_dict)
@@ -238,18 +214,15 @@ def train_policy(
             pbar = tqdm(dataloader)
             for batch in pbar:
                 if batch == None: continue
-                try:  
-                    
-                    loss, losses = policy.forward_pass(batch, device)
-                    if loss == None: continue
-            
-                    wandb.log({'policy_loss':loss.item(), 'epoch': cur_epoch, **{k:v.item() for k,v in losses.items()}})
-                    
-                    pbar.set_description(desc=f'loss: {loss.item()}')
-                    backward_pass(loss, policy, optim)
-                except Exception as e:
-                    print(f"Error in training: {e}")
-                    continue
+              
+                loss, losses = policy.forward_pass(batch, device)
+                if loss == None: continue
+        
+                wandb.log({'policy_loss':loss.item(), 'epoch': cur_epoch, **{k:v.item() for k,v in losses.items()}})
+                
+                pbar.set_description(desc=f'loss: {loss.item()}')
+                backward_pass(loss, policy, optim)
+        
 
             cur_epoch += 1
 
@@ -329,7 +302,6 @@ def prepare_data(config):
 
     return all_rollouts_train, all_rollouts_val
 
-import time
 def main(config):
     wandb.init(project="l2augment")
 
@@ -357,12 +329,13 @@ def main(config):
     dataset_config = config.get('dataset', {})
     train_dataset = CustomDataset(train_files, **dataset_config)
 
+    collate_function = collate_functions_dict[config.get('collate_function', 'default')]
     
     train_dataloader = DataLoader(
         train_dataset, 
         batch_size=config['training']['batch_size'], 
         shuffle=True, 
-        collate_fn=custom_collate_fn,
+        collate_fn=collate_function,
         num_workers=12,
         prefetch_factor=12   
     )
@@ -371,17 +344,9 @@ def main(config):
     policy = train_policy(policy, policy_optim, config, train_dataloader)
     save_policy(policy, config)
 
-
     print(f'Finished')
 
-# # import subprocess
-# import subprocess
-# def get_jobs():
-#     # run squeue | grep rjf | grep job | awk '{print $1}' | wc -l
-#     cmd = "squeue | grep rjf | grep job | awk '{print $1}' | wc -l"
-#     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
-#     (output, err) = p.communicate()
-    
+
 
 
 

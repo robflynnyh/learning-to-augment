@@ -17,6 +17,8 @@ import pickle
 from typing import List, Dict, Any
 from madgrad import MADGRAD
 import wandb
+from einops import rearrange
+
 
 logger = logging.getLogger('train')
 logger.setLevel(logging.INFO)
@@ -215,8 +217,6 @@ def custom_collate_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.T
         'counts': counts,
         'lengths': lengths
     }
-
-from einops import rearrange
 
 
 

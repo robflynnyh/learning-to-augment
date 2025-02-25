@@ -1,0 +1,64 @@
+checkpointing:
+  asr_model: "/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt"
+  #"/mnt/parscratch/users/acp21rjf/spotify/checkpoints_seq_scheduler_rb/n_seq_sched_4096_rp_1/step_105360.pt" 
+  #"/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_4096_rp_1/step_105360.pt"
+
+training:
+  device: 'cuda'
+  random_seed: 1234
+  batch_size: 84
+  epochs: 100
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/cfm/model.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/cfm/tmp_model.pt
+
+validation:
+  dataset: 'tedlium'
+  split: 'dev'
+  use_cer: true
+  augmentation_config:
+    repeats: 10
+    use_random: false
+
+evaluation:
+  dataset: 'tedlium'
+  split: 'test'
+  use_cer: true
+  augmentation_config:
+    repeats: 10
+    use_random: false
+
+dataset:
+  load_audio: true
+  clamp_min: null
+  clamp_max: null
+
+
+collate_function: 1dmask_and_audio
+
+policy:
+  lr: 1e-4
+  class: ConditionalFrequencyMaskingRanker
+  config:
+    loss_type: 'mse'
+    latent_dim: 256
+    mel_bins: 80
+    vae_config: 
+      input_dim: 80
+      hidden_dim: 128
+      latent_dim: 256
+      layers: 6
+      min_input_size: 256
+    vae_state_dict_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ssvae/model.pt
+
+generation:
+  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_2e1/"
+  optim_args:
+    lr: 2e-1
+  augmentation_config:
+    repeats: 100
+    use_random: false
+
+
+
+  
+#this_american_life_566_audio_307200.pt

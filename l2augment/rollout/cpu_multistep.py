@@ -145,7 +145,7 @@ def cpu_rollout(
     
 
     total_steps = len(training_keys)
-    masks = None
+    masks = []
     if max_steps != None and max_steps < len(training_keys): total_steps = max_steps
     if shuffle: random.shuffle(training_keys)
     for i, key in tqdm(enumerate(training_keys), total=total_steps):
@@ -154,7 +154,8 @@ def cpu_rollout(
         audio_chunk = training_data[key].clone().to(device)
         with torch.no_grad():
             augmented_audio_sample, mask = policy.augment(audio_chunk, **augmentation_config)
-            if isinstance(masks, list): masks.append(mask)
+            if isinstance(masks, list): 
+                masks.append(mask)
        
 
         with torch.no_grad():

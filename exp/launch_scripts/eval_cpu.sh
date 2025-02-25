@@ -8,4 +8,9 @@ source activate /mnt/parscratch/users/acp21rjf/conda/main
 
 cd ../
 
-python train_freq_mask.py --config ./configs/conditional_freq_mask_train.yaml
+CONFIG_FILE=$1
+
+
+python eval.py --config $CONFIG_FILE
+
+#./configs/conditional_freq_mask.yaml
