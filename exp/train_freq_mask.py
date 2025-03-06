@@ -181,14 +181,18 @@ def train_policy(
         prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
 
         cur_epoch = 0
-        max_tolerance = 4
+        max_tolerance = 2
         remaining_tolerance = max_tolerance
         running = True
 
         while running:
             
             policy = policy.eval()
-            val_cer = run_eval(config = get_eval_config(config), policy_net=policy)
+            
+            if cur_epoch == 0 and config.get('validation', {}).get('default', None) is not None:
+                val_cer = config['validation']['default']
+            else: 
+                val_cer = run_eval(config = get_eval_config(config), policy_net=policy)
 
             
             wandb.log({'val_cer':val_cer, 'epoch': cur_epoch})

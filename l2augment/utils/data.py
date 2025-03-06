@@ -11,6 +11,10 @@ def open_stm(path:str) -> List[str]:
         lines = f.read().split('\n')
     return lines
 
+def open_txt(path:str) -> str:
+    with open(path, 'r') as f:
+        return f.read().strip()
+
 
 def segment_spectrogram(spec, frames_per_second, utterances):
     for utt in utterances:
@@ -18,7 +22,7 @@ def segment_spectrogram(spec, frames_per_second, utterances):
         start_frame = int(round(start * frames_per_second))
         end_frame = int(round(end * frames_per_second))
         utt['spectrogram'] = spec[:, :, start_frame:end_frame].clone()
-    return utterances
+    return utterances   
 
 
 
@@ -259,11 +263,58 @@ def tedlium3_data():
         return return_data
     return get_text_and_audio
 
+
+def rev16_data():
+    default_base_path = '/mnt/parscratch/users/acp21rjf/rev_benchmark'
+    #TEST_IDS = '/mnt/parscratch/users/acp21rjf/rev_benchmark/test.txt'
+
+    def fetch_data(data_path:str, ids:str):
+        with open(ids, 'r') as f:
+            IDS = f.read().strip().split(" ")
+            IDS = [el.strip() for el in IDS if el.strip() != '']
+
+        audio_files = [{
+            'id': el,
+            'path': os.path.join(data_path, "audio", el+".mp3"),
+        } for el in IDS]
+
+        text_files = [{
+            'id': el,
+            'text': open_txt(os.path.join(data_path, "transcripts", el+".txt"))
+        } for el in IDS]
+
+
+        return audio_files, text_files
+
+    def preprocess_transcript(text:str): return text.lower()
+    def process_text_and_audio_fn(rec_dict): return processing_chain(rec_dict['audio']), preprocess_transcript(rec_dict['text'])
+
+    def get_text_and_audio(split, base_path=None, **kwargs):
+        assert split in ['test'], 'Split must be test'
+        data_path = base_path or default_base_path
+        test_ids = os.path.join(data_path, 'test.txt')
+        
+        audio_files, text_files = fetch_data(data_path = data_path, ids = test_ids)
+        return_data = []
+        for rec in range(len(audio_files)):
+            return_data.append({
+                'text': text_files[rec]['text'], 
+                'audio': audio_files[rec]['path'], 
+                "process_fn": process_text_and_audio_fn,
+                "id": text_files[rec]['id'],
+            })
+        return_data = sorted(return_data, key=lambda x: x['id'])
+        return return_data
+    
+    return get_text_and_audio
+
+
 dataset_functions = {
     "earnings22": earnings22_data(),
     "this_american_life": this_american_life_data(),
     "tedlium3_segmented_data": tedlium3_segmented_data(),
-    "tedlium": tedlium3_data()
+    "tedlium": tedlium3_data(),
+    "rev16": rev16_data()
 }
 
 

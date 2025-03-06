@@ -20,9 +20,10 @@ validation:
     use_random: false
 
 evaluation:
-  dataset: 'tedlium'
+  dataset: 'this_american_life'
   split: 'test'
-  use_cer: true
+  use_cer: false
+  epochs: 0
   augmentation_config:
     repeats: 10
     use_random: false

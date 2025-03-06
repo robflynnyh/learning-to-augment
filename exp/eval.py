@@ -80,19 +80,18 @@ def main(config, policy_net=None):
     if policy_net is None:
         policy_net = load_rl_models(config)
         load_policy(policy_net, config)
-
-    original_wer = None # find_existing_run_wer(directory=config['generation']['save_dir'], id=config['index'])
    
     rollout_fn = partial(cpu_rollout, 
                          load_asr_model_fn = partial_load_asr_model_fn, 
                          tokenizer = tokenizer, 
                          verbose = False, 
-                         original_wer=original_wer,
+                         original_wer=None
     )
     
 
     dataset = config.get('evaluation', {}).get('dataset', 'earnings22')
     split = config.get('evaluation', {}).get('split', 'test')
+    epochs = config.get('evaluation', {}).get('epochs', 1)
     data = dataset_functions[dataset](split)
     
     indexes = config.get('indexes', [-1])
@@ -104,7 +103,7 @@ def main(config, policy_net=None):
         cur_data = data[index]
         print('---', cur_data['id'], '---')
         audio_spec, gold_text = cur_data['process_fn'](cur_data)
-
+    
     
 
         rollout_output = rollout_fn(
@@ -112,30 +111,34 @@ def main(config, policy_net=None):
             audio = audio_spec,
             text = gold_text,
             augmentation_config = config.get('evaluation', {}).get('augmentation_config', {}),
+            epochs = epochs
         )
 
         print(rollout_output['original_cer'], rollout_output['updated_cer'])
 
         u_hyps.append(rollout_output['hypothesis'])
-        if rollout_output['original_hypothesis'] is not None: o_hyps.append(rollout_output['original_hypothesis']) 
+        o_hyps.append(rollout_output['original_hypothesis']) 
         refs.append(rollout_output['reference'])
 
 
     cer = config.get('evaluation', {}).get('use_cer', False)
     eval_type = 'WER' if not cer else 'CER'
-    if len(o_hyps) == len(refs):
-        original_wer = word_error_rate_detail(hypotheses=o_hyps, references=refs, use_cer=cer)[0]
-        print(f"Original {eval_type}: {original_wer}")
+
+    original_wer = word_error_rate_detail(hypotheses=o_hyps, references=refs, use_cer=cer)[0]
+    print(f"Original {eval_type}: {original_wer}")
 
     wer = word_error_rate_detail(hypotheses=u_hyps, references=refs, use_cer=cer)[0]
     
     print(f"Updated {eval_type}: {wer}")
 
-    # if save_path: # debug
-    #     save_dictionary(
-    #         rollout_output, 
-    #         filename=join(save_path, r_id)
-    #     )
+    save_path = config.get('evaluation', {}).get('save_path', "")
+    if save_path != "":
+        id = config.get('evaluation', {}).get('id', "0") 
+        results = f"ID: {id} - Dataset: {dataset} - Split: {split} - Epochs: {epochs} - Original_WER: {original_wer} - Updated_WER: {wer}"
+        print(results)
+        raise NotImplementedError
+
+
     return wer
 
 

@@ -154,9 +154,9 @@ def main(config):
                 #print(reward)
 
             print(path)
-            #print(torch.cat([torch.load(path)['reward'], torch.stack(rewards)]))
+            print(torch.cat([torch.load(path)['reward'], torch.stack(rewards)]))
             if config['save']:
-                if os.path.exists(path) and config['buffer_size'] > 0:
+                if os.path.exists(path) and config['buffer_size'] != 0:
                     prev_data = torch.load(path)
 
                     prev_reward = prev_data['reward']

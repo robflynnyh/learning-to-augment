@@ -243,7 +243,7 @@ class VAEBase(base):
     
 
 class VariationalAutoEncoder(VAEBase):
-    def __init__(self, input_dim=80, hidden_dim=128, latent_dim=16, layers=6, kld_weight=0.00025):
+    def __init__(self, input_dim=80, hidden_dim=256, latent_dim=16, layers=5, kld_weight=0.01   ):
         super().__init__()
         self.d_model = hidden_dim
         self.input_dim = input_dim
@@ -303,7 +303,7 @@ class VariationalAutoEncoder(VAEBase):
     
 
 class SingleStateVariationalAutoEncoder(VAEBase):
-    def __init__(self, input_dim=80, hidden_dim=128, latent_dim=256, layers=6, kld_weight=0.000002, min_input_size=128):
+    def __init__(self, input_dim=80, hidden_dim=128, latent_dim=256, layers=6, kld_weight=0.000002, min_input_size=256):
         super().__init__()
         self.d_model = hidden_dim
         self.input_dim = input_dim

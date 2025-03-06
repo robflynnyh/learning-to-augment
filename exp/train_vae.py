@@ -2,7 +2,7 @@ import argparse
 import torch
 from omegaconf.omegaconf import OmegaConf
 
-from l2augment.modelling.models import SingleStateVariationalAutoEncoder as VariationalAutoEncoder
+from l2augment.modelling.models import VariationalAutoEncoder
 
 from tqdm import tqdm
 import logging

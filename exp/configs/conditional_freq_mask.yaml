@@ -7,11 +7,12 @@ training:
   device: 'cuda'
   random_seed: 1234
   batch_size: 84
-  epochs: 100
+  epochs: 3
   model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/cfm/model.pt
   tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/cfm/tmp_model.pt
 
 validation:
+  default: 0.0415
   dataset: 'tedlium'
   split: 'dev'
   use_cer: true
@@ -22,15 +23,15 @@ validation:
 evaluation:
   dataset: 'tedlium'
   split: 'test'
-  use_cer: true
+  use_cer: false
   augmentation_config:
     repeats: 10
     use_random: false
 
 dataset:
   load_audio: true
-  clamp_min: null
-  clamp_max: null
+  clamp_min: -50
+  clamp_max: 50
 
 
 collate_function: 1dmask_and_audio
@@ -55,7 +56,7 @@ generation:
   optim_args:
     lr: 2e-1
   augmentation_config:
-    repeats: 100
+    repeats: 20
     use_random: false
 
 
