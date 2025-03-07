@@ -1,10 +1,13 @@
 import re
 import os
+from os.path import join
 import json
-from lcasr.utils.audio_tools import processing_chain, total_seconds
+from lcasr.utils.audio_tools import processing_chain, total_seconds, to_spectogram, total_frames
 from lcasr.eval.utils import zero_out_spectogram
 import pickle
 from typing import List
+import torch, torchaudio
+from typing import Tuple
 
 def open_stm(path:str) -> List[str]:
     with open(path, 'r') as f:
@@ -15,6 +18,9 @@ def open_txt(path:str) -> str:
     with open(path, 'r') as f:
         return f.read().strip()
 
+def convert_str_to_seconds(time_str:str) -> float: # in format: HH:MM:SS convert to seconds
+    hours, minutes, seconds = time_str.split(':')
+    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
 
 def segment_spectrogram(spec, frames_per_second, utterances):
     for utt in utterances:
@@ -24,6 +30,10 @@ def segment_spectrogram(spec, frames_per_second, utterances):
         utt['spectrogram'] = spec[:, :, start_frame:end_frame].clone()
     return utterances   
 
+def trim_spec(spec:torch.Tensor, start_w:float, end_w:float): # spec: (B, F, T)
+    '''Trim the spectrogram to the start of the first word and the end of the last word.'''
+    start_frame, end_frame = list(map(total_frames, [start_w, end_w]))
+    return spec[:, :, start_frame:end_frame]
 
 
 def prepare_chunks(spec, seq_len, overlap):
@@ -308,13 +318,113 @@ def rev16_data():
     
     return get_text_and_audio
 
+def chime6_data():
+
+    default_basedir = "/mnt/parscratch/users/acp21rjf/chime6/"
+    TEST_AUDIO = 'audio/eval'
+    DEV_AUDIO = 'audio/dev'
+    TEST_TEXT = 'transcriptions/eval'
+    DEV_TEXT = 'transcriptions/dev'
+    
+    def get_data_paths(base_dir:str = default_basedir):
+        return {
+            'test': {
+                'audio': join(base_dir, TEST_AUDIO),
+                'text': join(base_dir, TEST_TEXT)
+            },
+            'dev': {
+                'audio': join(base_dir, DEV_AUDIO),
+                'text': join(base_dir, DEV_TEXT)
+            }
+        }
+
+
+
+    def combine_and_load_audio(audio_files:list, stime:float, etime:float) -> torch.Tensor:
+        '''Here we take all the channels for the first microphone array (U01) and combine them via averaging the spectrograms and normalizing the result'''
+        # load all audio files
+        audios = []
+        for audio_file in audio_files:
+            audio, _ = torchaudio.load(audio_file)
+            audio = audio.mean(dim=0)
+            audios.append(audio)
+        max_len = max([audio.shape[-1] for audio in audios])
+        # pad from the right
+        audios = [torch.nn.functional.pad(audio, (0, max_len - audio.shape[-1]))[None] for audio in audios]
+    
+        specs = [to_spectogram(waveform=audio, global_normalisation=False) for audio in audios]
+        # get duration in seconds    
+        specs = [trim_spec(spec, stime, etime) for spec in specs]
+        spec = torch.stack(specs, dim=0).mean(dim=0)
+        # renormalize
+        spec = (spec - spec.mean(-1, keepdim=True)) / spec.std(-1, keepdim=True)
+
+        return spec
+
+    def fetch_data(data:dict = get_data_paths()['test']) -> Tuple[list, list]:
+        # get text
+        text_files = {}
+        start_times = {}
+        end_times = {}
+        for filename in os.listdir(data['text']):
+            if filename.endswith('.json'):
+                with open(os.path.join(data['text'], filename), 'r') as f:
+                    j_data, Sname = json.load(f), filename.replace('.json', '')
+                    text_files[Sname] =  " ".join([el['words'] for el in j_data])
+                    stime, etime = list(map(convert_str_to_seconds, [j_data[0]['start_time'], j_data[-1]['end_time']]))
+                    start_times[Sname] = stime
+                    end_times[Sname] = etime
+        
+        # get audio
+        audio_file_names = [el for el in os.listdir(data['audio']) if el.endswith('.wav')]
+        #audio_file_names = [el for el in audio_file_names if re.match('S\d+_U01.CH1.wav',el)] #\d+.wav', el)]
+        audio_file_names = [el for el in audio_file_names if re.match('S\d+_U01.CH\d+.wav', el)]
+
+        # get unique scene names
+        scene_names = list(set([el.split('_')[0] for el in audio_file_names]))
+        audio_files = {k:[] for k in scene_names}
+        for filename in audio_file_names:
+            scene_name = filename.split('_')[0]
+            audio_files[scene_name].append(os.path.join(data['audio'], filename))
+
+        # check keys match for audio and text
+        assert set(audio_files.keys()) == set(text_files.keys()), 'Keys do not match'
+            
+        return audio_files, text_files, start_times, end_times
+
+    def process_text_and_audio_fn(rec_dict): 
+        return combine_and_load_audio(rec_dict['audio'], rec_dict['stimes'], rec_dict['etimes']), rec_dict['text'].lower()
+
+    def get_text_and_audio(split, base_path=None, **kwargs):
+        assert split in ['test', 'dev'], f'Split must be either test or dev (got {split})'
+        base_path = base_path or default_basedir
+        data_path = get_data_paths(base_dir=base_path)[split]
+        audio_files, text_files, stimes, etimes = fetch_data(data=data_path)
+        return_data = []
+        
+        for rec in list(audio_files.keys()):
+            return_data.append({
+                'id': rec,
+                'text': text_files[rec], 
+                'audio': audio_files[rec], 
+                'stimes': stimes[rec],
+                'etimes': etimes[rec],
+                "process_fn": process_text_and_audio_fn
+            })
+
+        return return_data
+
+    
+    return get_text_and_audio
+
 
 dataset_functions = {
     "earnings22": earnings22_data(),
     "this_american_life": this_american_life_data(),
     "tedlium3_segmented_data": tedlium3_segmented_data(),
     "tedlium": tedlium3_data(),
-    "rev16": rev16_data()
+    "rev16": rev16_data(),
+    "chime6": chime6_data()
 }
 
 

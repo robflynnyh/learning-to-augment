@@ -127,6 +127,10 @@ class Policy(base):
 
     def augment(self, audio):
         raise NotImplementedError
+    
+class NoAugmentationPolicy(Policy):
+    def augment(self, audio, *args, **kwargs):
+        return audio, torch.zeros_like(audio)
 
 class FrequencyMaskingRanker(Policy):
     def __init__(self, zero_masking=True) -> None:
@@ -555,5 +559,6 @@ policy_dict['FrequencyMaskingRanker'] = FrequencyMaskingRanker
 policy_dict['UnconditionalFrequencyMaskingRanker'] = UnconditionalFrequencyMaskingRanker
 policy_dict['ConditionalFrequencyMaskingRanker'] = ConditionalFrequencyMaskingRanker
 
+policy_dict['NoAugmentation'] = NoAugmentationPolicy
 policy_dict['AdditivePolicy'] = AdditivePolicy
 policy_dict['default'] = AdditivePolicy

@@ -82,8 +82,6 @@ def cpu_rollout(
     overlap = round(seq_len*overlap)
     audio = audio.to(dtype=dtype) #temporary
     audio_n = audio.shape[-1]
-
-    augmentation = SpecAugment(n_time_masks=0, n_freq_masks=6, freq_mask_param=34, zero_masking=True, time_mask_param=0)
     
     text = normalizer(text)
     
@@ -148,7 +146,7 @@ def cpu_rollout(
   
     for _ in range(epochs):
         total_steps = len(training_keys)
-        masks = []
+        masks = None
         if max_steps != None and max_steps < len(training_keys): total_steps = max_steps
         if shuffle: random.shuffle(training_keys)
         for i, key in tqdm(enumerate(training_keys), total=total_steps):

@@ -8,8 +8,8 @@ training:
   random_seed: 1234
   batch_size: 84
   epochs: 100
-  # model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss/model.pt
-  # tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss/tmp_model.pt
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss/model.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss/tmp_model.pt
 
 validation:
   dataset: 'tedlium'
@@ -35,7 +35,7 @@ dataset:
 
 policy:
   lr: 1e-4
-  class: NoAugmentation
+  class: UnconditionalFrequencyMaskingRanker
 
 generation:
   save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_2e1/"

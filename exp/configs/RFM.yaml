@@ -25,8 +25,8 @@ evaluation:
   use_cer: false
   epochs: 1
   augmentation_config:
-    repeats: 10
-    use_random: false
+    repeats: 1
+    use_random: true
 
 dataset:
   load_audio: false
@@ -35,7 +35,7 @@ dataset:
 
 policy:
   lr: 1e-4
-  class: NoAugmentation
+  class: FrequencyMaskingRanker
 
 generation:
   save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_2e1/"

@@ -48,7 +48,9 @@ def find_existing_run_wer(directory, id):
     return None
 
 def load_policy(model, config, path=None):
-    save_path = config['training']['model_save_path'] if path == None else path
+    save_path = config.get('training', {}).get('model_save_path', None) if path == None else path
+    if save_path == None:
+        return 
     try:
         # Load the checkpoint
         checkpoint = torch.load(save_path, map_location='cpu')
@@ -92,6 +94,7 @@ def main(config, policy_net=None):
     dataset = config.get('evaluation', {}).get('dataset', 'earnings22')
     split = config.get('evaluation', {}).get('split', 'test')
     epochs = config.get('evaluation', {}).get('epochs', 1)
+    optim_args = config.get('evaluation', {}).get('optim_args', {"lr":8e-6})
     data = dataset_functions[dataset](split)
     
     indexes = config.get('indexes', [-1])
@@ -111,7 +114,8 @@ def main(config, policy_net=None):
             audio = audio_spec,
             text = gold_text,
             augmentation_config = config.get('evaluation', {}).get('augmentation_config', {}),
-            epochs = epochs
+            epochs = epochs,
+            optim_args = optim_args
         )
 
         print(rollout_output['original_cer'], rollout_output['updated_cer'])

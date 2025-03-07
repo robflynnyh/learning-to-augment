@@ -1,0 +1,10 @@
+method: bayes
+metric:
+  name: wer
+  goal: minimize
+parameters:
+  epochs:
+    min: 1
+    max: 8
+  lr:
+    values: [8e-6, 1e-6, 1e-5, 5e-6, 5e-5, 8e-7]
