@@ -1,0 +1,1 @@
+ID: 0 - Dataset: tedlium - Split: test - Epochs: 5 - Original_WER: 0.08541555909976963 - Updated_WER: 0.07492468545100124

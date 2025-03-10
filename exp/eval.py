@@ -139,8 +139,9 @@ def main(config, policy_net=None):
     if save_path != "":
         id = config.get('evaluation', {}).get('id', "0") 
         results = f"ID: {id} - Dataset: {dataset} - Split: {split} - Epochs: {epochs} - Original_WER: {original_wer} - Updated_WER: {wer}"
-        print(results)
-        raise NotImplementedError
+        with open(save_path, 'a') as file:
+            file.write(results)
+            file.write('\n')
 
 
     return wer

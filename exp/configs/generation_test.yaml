@@ -1,0 +1,14 @@
+checkpointing:
+  asr_model: "/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt"
+
+policy:
+  class: UnconditionalFrequencyMaskingRanker
+
+generation:
+  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_test/"
+  optim_args:
+    lr: 2e-1
+
+
+  
+#this_american_life_566_audio_307200.pt

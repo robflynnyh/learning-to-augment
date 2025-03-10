@@ -32,6 +32,7 @@ def cpu_rollout(
         audio_a:Tensor = None,
         audio_b:Tensor = None,
         augmented_target = False,
+        return_wer = False,
         **kwargs
     ):
 
@@ -104,15 +105,27 @@ def cpu_rollout(
     
     #print(teacher_output_posteriors.shape, teacher_logits_at_t.shape, teacher_logits.shape)
 
-    prev_cer = word_error_rate_detail(hypotheses=[normalize(out_original_predictions)], references=[normalize(teacher_targets)], use_cer=True)[0] * 100
-    updated_cer = word_error_rate_detail(hypotheses=[normalize(updated_predictions)], references=[normalize(teacher_targets)], use_cer=True)[0] * 100
+    prev = word_error_rate_detail(hypotheses=[normalize(out_original_predictions)], references=[normalize(teacher_targets)], use_cer=True)[0] * 100
+    updated = word_error_rate_detail(hypotheses=[normalize(updated_predictions)], references=[normalize(teacher_targets)], use_cer=True)[0] * 100
     # prev_ctc_loss = ctc_loss_fn(out_original_posteriors, teacher_logits, torch.LongTensor([N] * 1), torch.LongTensor([teacher_logits.shape[0]] * 1)) / total_tokens_in_loss
     # updated_ctc_loss = ctc_loss_fn(updated_logits, teacher_logits, torch.LongTensor([N] * 1), torch.LongTensor([teacher_logits.shape[0]] * 1)) / total_tokens_in_loss
 
-    diff = prev_cer - updated_cer
+    diff = prev - updated
     print(diff)
+
+    prev, updated = torch.tensor(prev), torch.tensor(updated)
+
+    if return_wer:
+        prev_wer = word_error_rate_detail(hypotheses=[normalize(out_original_predictions)], references=[normalize(teacher_targets)], use_cer=False)[0] * 100
+        updated_wer = word_error_rate_detail(hypotheses=[normalize(updated_predictions)], references=[normalize(teacher_targets)], use_cer=False)[0] * 100
+        diff = prev_wer - updated_wer
+        prev_wer, updated_wer = torch.tensor(prev_wer), torch.tensor(updated_wer)
+
+        prev = torch.cat([prev, prev_wer])
+        updated = torch.cat([updated, updated_wer])
+
     
-    return torch.tensor(prev_cer), torch.tensor(updated_cer), masks
+    return prev, updated, masks
         
        
 

@@ -100,8 +100,12 @@ def main(config):
 
 
         save_path = config['generation']['save_dir']
+        assert os.path.exists(save_path), f"Save path {save_path} does not exist"
         split = {'train':'train', 'val':'dev', 'dev':'dev'}[config['split']]
         save_path = os.path.join(save_path, config['split'])
+
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
         
     
         data = dataset_functions['tedlium3_segmented_data'](config['split'])

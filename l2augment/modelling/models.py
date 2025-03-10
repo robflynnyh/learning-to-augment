@@ -124,6 +124,7 @@ def augmentation_function(audio, repeats=50):
 class Policy(base):
     def __init__(self) -> None:
         super().__init__()
+        if type(self) == Policy: raise Exception('Policy class is not meant to be instantiated directly. Use a subclass instead!')
 
     def augment(self, audio):
         raise NotImplementedError
@@ -228,7 +229,7 @@ class VAEBase(base):
     def reparameterize(self, mu, logvar, eps=None):
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std) if eps is None else eps
-        return mu + eps * std
+        return mu + eps * std, eps
     
     def forward_pass(self, batch, device, **kwargs):
         audio = batch['audio'].to(device)
@@ -282,15 +283,12 @@ class VariationalAutoEncoder(VAEBase):
         )
         self.output = nn.Conv1d(hidden_dim, input_dim, kernel_size=1, stride=1)
 
-
-
-    def forward(self, x, lengths=None, eps=None):
+    def encode(self, x, lengths=None, eps=None):
         in_length = x.size(-1)
         x = self.encoder(x)
-
         mu = self.mu(x)
         logvar = self.logvar(x)
-        z = self.reparameterize(mu, logvar, eps)
+        z, eps = self.reparameterize(mu, logvar, eps)
 
         if lengths is not None:
             out_length = x.size(-1)
@@ -299,6 +297,15 @@ class VariationalAutoEncoder(VAEBase):
             z = torch.masked_fill(z, ~mask.unsqueeze(1), 0)
             mu = torch.masked_fill(mu, ~mask.unsqueeze(1), 0)
             logvar = torch.masked_fill(logvar, ~mask.unsqueeze(1), 0)
+
+        return z, mu, logvar, eps
+
+
+
+    def forward(self, x, lengths, eps=None):
+        in_length = x.size(-1)
+        
+        z, mu, logvar, eps = self.encode(x, lengths, eps)
 
         x = self.decoder(z)
         x = torch.nn.functional.interpolate(x, size=in_length, mode='linear', align_corners=False)
@@ -382,7 +389,7 @@ class SingleStateVariationalAutoEncoder(VAEBase):
 
         mu = self.mu(x)
         logvar = self.logvar(x)
-        z = self.reparameterize(mu, logvar, eps)
+        z,_ = self.reparameterize(mu, logvar, eps)
 
         out_length = x.size(-1)
         downsampled_lengths = (lengths * out_length + in_length - 1) // in_length
@@ -465,6 +472,50 @@ class ConditionalFrequencyMaskingRanker(TrainableFrequencyMaskingRanker):
         z = torch.cat((z_audio, z_mask), dim=-1)
         return self.predict(z)
 
+
+class GenerativePolicy(Policy):
+    def __init__(            
+            self,
+            mel_bins=80,
+            output_dim=1,
+            hidden_dim=256,
+            vae_config:Dict={},
+            vae_state_dict_path:str=None,
+        ) -> None:
+        super().__init__()
+
+        self.vae = VariationalAutoEncoder(**vae_config)
+
+        if vae_state_dict_path is not None:
+            vae_state_dict = torch.load(vae_state_dict_path, map_location='cpu')['model_state_dict']
+            self.vae.load_state_dict(vae_state_dict)
+            print(f'Loaded VAE state dict from {vae_state_dict_path}')
+
+        self.output = nn.Conv1d(hidden_dim, output_dim, kernel_size=1, stride=1)
+        self.hidden_dim = hidden_dim
+        self.mel_bins = mel_bins
+        self.output_dim = output_dim
+
+    def forward(self, x, lengths, eps=None):
+        in_length = x.size(-1)
+        
+        with torch.no_grad():
+            z, mu, logvar, eps = self.vae.encode(x, lengths, eps)
+
+        x = self.vae.decoder(z)
+        x = torch.nn.functional.interpolate(x, size=in_length, mode='linear', align_corners=False)
+        x = self.output(x)
+        return x, eps
+    
+
+class ConditionalMaskingPolicy(GenerativePolicy):
+    @torch.no_grad()
+    def augment(self, audio, eps=None, lengths=None):
+        predictions, eps = self(audio, lengths, eps)
+        probs = predictions.sigmoid() # 0 = mask, 1 = no mask
+        mask = torch.bernoulli(probs)
+        audio = audio * mask
+        return audio, mask, probs, eps 
 
 
 
