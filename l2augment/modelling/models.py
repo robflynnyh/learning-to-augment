@@ -91,35 +91,6 @@ class DepthWiseSeparableConv1d(base):
         return self.pointwise(self.depthwise(x))
 
 
-def augmentation_function(audio, repeats=50):
-    b, c, t = audio.shape
-
-    audio_spec = audio.repeat(repeats, 1, 1)
-    
-    #random.seed(42)
-    #torch.manual_seed(42)
-    noise = torch.rand_like(audio_spec) * torch.rand_like(audio_spec)*2
-    mask_spec = noise
-    audio_spec = audio_spec + mask_spec
-
-    # masks_spec = specaugmentation(torch.ones_like(audio_spec))
-    # audio_spec = audio_spec * masks_spec + (1 - masks_spec) * audio_spec.mean().unsqueeze(0).unsqueeze(0)
-        #print(masks.sum()/masks.numel(), 'soecmask')
-   
-    # audio_cutout, masks_cutout = cutout(
-    #     rearrange(audio_cutout.clone(), 'b c t -> 1 c (b t)'),
-    #     seq_len=t, 
-    #     num_rectangles=160, 
-    #     max_width=600, 
-    #     max_height=50
-    # )
-    
-    # audio_cutout = rearrange(audio_cutout, '1 c (b t) -> b c t', b=b*repeats)
-    # masks_cutout = rearrange(masks_cutout, '1 c (b t) -> b c t', b=b*repeats)
-    # audio = torch.cat((audio_spec, audio_cutout), dim=0)
-    # masks = torch.cat((masks_spec, masks_cutout), dim=0)
-    # return audio, masks
-
 
 class Policy(base):
     def __init__(self) -> None:
@@ -283,14 +254,20 @@ class VariationalAutoEncoder(VAEBase):
         )
         self.output = nn.Conv1d(hidden_dim, input_dim, kernel_size=1, stride=1)
 
-    def encode(self, x, lengths=None, eps=None):
+    def encode(self, x, lengths=None, eps=None, counts=None):
         in_length = x.size(-1)
         x = self.encoder(x)
         mu = self.mu(x)
         logvar = self.logvar(x)
+
+        if counts is not None: # when we want to produce multiple samples from the same input
+            mu = torch.repeat_interleave(mu, counts, dim=0)
+            logvar = torch.repeat_interleave(logvar, counts, dim=0)
+
         z, eps = self.reparameterize(mu, logvar, eps)
 
         if lengths is not None:
+            if counts is not None: lengths = torch.repeat_interleave(lengths, counts, dim=0)
             out_length = x.size(-1)
             downsampled_lengths = (lengths * out_length + in_length - 1) // in_length
             mask = torch.arange(out_length).unsqueeze(0).to(downsampled_lengths.device) < downsampled_lengths.unsqueeze(-1)
@@ -302,10 +279,10 @@ class VariationalAutoEncoder(VAEBase):
 
 
 
-    def forward(self, x, lengths, eps=None):
+    def forward(self, x, lengths, eps=None, counts=None):
         in_length = x.size(-1)
         
-        z, mu, logvar, eps = self.encode(x, lengths, eps)
+        z, mu, logvar, eps = self.encode(x, lengths, eps, counts)
 
         x = self.decoder(z)
         x = torch.nn.functional.interpolate(x, size=in_length, mode='linear', align_corners=False)
@@ -477,10 +454,11 @@ class GenerativePolicy(Policy):
     def __init__(            
             self,
             mel_bins=80,
-            output_dim=1,
+            output_dim=80,
             hidden_dim=256,
             vae_config:Dict={},
             vae_state_dict_path:str=None,
+            min_input_size=160
         ) -> None:
         super().__init__()
 
@@ -495,16 +473,26 @@ class GenerativePolicy(Policy):
         self.hidden_dim = hidden_dim
         self.mel_bins = mel_bins
         self.output_dim = output_dim
+        self.min_input_size = min_input_size
+        self.eps_clip = 0.2 # default value for PPO
 
-    def forward(self, x, lengths, eps=None):
-        in_length = x.size(-1)
+    def forward(self, x, lengths, eps=None, counts=None):
+        if x.size(-1) < self.min_input_size:
+            pad = self.min_input_size - x.size(-1)
+            x = torch.cat((x, torch.zeros(x.size(0), x.size(1), pad).to(x.device)), dim=-1)
+         
+        else: pad = 0
         
+        in_length = x.size(-1)
+
         with torch.no_grad():
-            z, mu, logvar, eps = self.vae.encode(x, lengths, eps)
+            z, mu, logvar, eps = self.vae.encode(x, lengths, eps, counts)
 
         x = self.vae.decoder(z)
         x = torch.nn.functional.interpolate(x, size=in_length, mode='linear', align_corners=False)
+        if pad > 0: x = x[:,:,:-pad]
         x = self.output(x)
+   
         return x, eps
     
 
@@ -515,8 +503,43 @@ class ConditionalMaskingPolicy(GenerativePolicy):
         probs = predictions.sigmoid() # 0 = mask, 1 = no mask
         mask = torch.bernoulli(probs)
         audio = audio * mask
-        return audio, mask, probs, eps 
 
+        return audio, mask, {'probs':probs, 'eps':eps}
+    
+    def forward_pass(self, batch, device, **kwargs):
+        audio = batch['audio'].to(dtype=torch.float32, device=device)
+        lengths = batch['lengths'].to(device)
+        #ds_lengths = batch['ds_lengths'].to(device)
+        masks = batch['masks'].to(device, dtype=torch.long).squeeze(1)
+        rewards = batch['rewards'].to(device)
+        old_probs = batch['probs'].to(dtype=torch.float32, device=device).squeeze(1)
+        eps = batch['eps'].to(dtype=torch.float32, device=device).squeeze(1)
+        counts = batch['counts'].to(device)
+        
+        out, _ = self(audio, lengths, eps=eps, counts=counts)
+        probs = out.sigmoid()
+        
+        p_of_mask = probs * masks + (1 - probs) * (1 - masks)
+        log_p_of_mask = torch.log(p_of_mask + 1e-8)
+
+
+        old_p_of_mask = old_probs * masks + (1 - old_probs) * (1 - masks)
+        old_log_p_of_mask = torch.log(old_p_of_mask + 1e-8)
+        
+        ratios = torch.exp(log_p_of_mask - old_log_p_of_mask)
+
+        surr1 = ratios * rewards[:,None,None]
+        surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * rewards[:,None,None]
+
+        loss = -torch.min(surr1, surr2) 
+
+        lengths = lengths.repeat_interleave(counts, dim=0)
+        pad_mask = torch.arange(audio.size(-1)).to(lengths.device) >= lengths[:, None]
+        loss = torch.masked_fill(loss, pad_mask.unsqueeze(1), 0)
+
+        loss = loss.sum() / (~pad_mask).sum()
+      
+        return loss, {'loss':loss}
 
 
 
@@ -612,4 +635,5 @@ policy_dict['ConditionalFrequencyMaskingRanker'] = ConditionalFrequencyMaskingRa
 
 policy_dict['NoAugmentation'] = NoAugmentationPolicy
 policy_dict['AdditivePolicy'] = AdditivePolicy
+policy_dict['ConditionalMaskingPolicy'] = ConditionalMaskingPolicy
 policy_dict['default'] = AdditivePolicy

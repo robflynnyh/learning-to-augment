@@ -8,8 +8,8 @@ training:
   random_seed: 1234
   batch_size: 84
   epochs: 100
-  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_cer/model.pt
-  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_cer/tmp_model.pt
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer/model.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer/tmp_model.pt
 
 validation:
   dataset: 'tedlium'
@@ -36,6 +36,8 @@ dataset:
   load_audio: false
   clamp_min: null
   clamp_max: null
+  cer_weight: 0.0
+  wer_weight: 1.0
 
 policy:
   lr: 1e-4

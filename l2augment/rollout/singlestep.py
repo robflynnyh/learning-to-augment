@@ -13,43 +13,8 @@ from functools import partial
 from einops import repeat, rearrange
 import math
 from tqdm import tqdm
-import functools
-import numpy as np
 
-
-def seed_all(seed):
-    """A decorator to temporarily set the seed for random, numpy, and torch."""
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            # Save current states
-            random_state = random.getstate()
-            np_state = np.random.get_state()
-            torch_state = torch.random.get_rng_state()
-
-            try:
-                # Set seeds
-                random.seed(seed)
-                np.random.seed(seed)
-                torch.manual_seed(seed)
-                if torch.cuda.is_available():
-                    torch.cuda.manual_seed_all(seed)
-
-                # Execute function
-                return func(*args, **kwargs)
-
-            finally:
-                # Restore original states
-                random.setstate(random_state)
-                np.random.set_state(np_state)
-                torch.random.set_rng_state(torch_state)
-
-        return wrapper
-    return decorator
-
-
-
-DEFAULT_OPTIMIZER_CLASS = MADGRAD
+DEFAULT_OPTIMIZER_CLASS = torch.optim.SGD
 
 def apply_ctc_loss_fn(ctc_loss_fn, pseudo_targets, a_lengths, target_lengths, total_tokens_in_loss, noisy_predictions):
   return ctc_loss_fn(noisy_predictions.transpose(0, 1), pseudo_targets, a_lengths, target_lengths) / total_tokens_in_loss
@@ -74,26 +39,9 @@ def prepare_chunks(spec, seq_len, overlap):
         training_data[i] = audio_chunk
     return training_data, list(training_data.keys())
 
-def broadcast_multiply(tensor1, tensor2):
-    """
-    Multiply a tensor of size B with a tensor of size (B, ...) 
-    where the remaining dimensions can vary.
-    
-    Args:
-    - tensor1 (torch.Tensor): Tensor of size B
-    - tensor2 (torch.Tensor): Tensor of size (B, ...)
-    
-    Returns:
-    torch.Tensor: Result of broadcasting multiplication
-    """
-    # Reshape tensor1 to have additional singleton dimensions for broadcasting
-    # This ensures tensor1 can be multiplied with tensor2
-    broadcast_tensor1 = tensor1.view(tensor1.size(0), *([1] * (tensor2.ndim - 1)))
-    # Multiply with broadcasting
-    return broadcast_tensor1 * tensor2
 
-@seed_all(123456)
-def cpu_rollout(
+
+def rollout(
         policy:Module,
         load_asr_model_fn:Callable,
         tokenizer,
@@ -111,8 +59,11 @@ def cpu_rollout(
     ):
 
     dtype = torch.float32 #temporary
-    
 
+    assert epochs in [0, 1], "Only 0 or 1 epochs are supported for single-step TTT"
+    assert max_steps == None, "max_steps is not supported for single-step TTT"
+    
+    torch.manual_seed(0)
     torch.use_deterministic_algorithms(True, warn_only=True)
 
     overlap = round(seq_len*overlap)
@@ -144,7 +95,6 @@ def cpu_rollout(
     asr_model = asr_model.to(device)
     policy = policy.to(device)
     
-    #original_wer = 0.283
     original_hypothesis = None
     if original_wer is None:
         for key in tqdm(training_keys):
@@ -193,20 +143,22 @@ def cpu_rollout(
                 b,c,t = audio_chunk.shape
                 if 1==2: #t > seq_len//2:
                     a, b, c, d = audio_chunk.chunk(4, dim=-1)
-                    aug_a, mask_a = policy.augment(a, **augmentation_config)[:2]
-                    aug_b, mask_b = policy.augment(b, **augmentation_config)[:2]
-                    aug_c, mask_c = policy.augment(c, **augmentation_config)[:2]
-                    aug_d, mask_d = policy.augment(d, **augmentation_config)[:2]
+                    aug_a, mask_a = policy.augment(a, **augmentation_config)
+                    aug_b, mask_b = policy.augment(b, **augmentation_config)
+                    aug_c, mask_c = policy.augment(c, **augmentation_config)
+                    aug_d, mask_d = policy.augment(d, **augmentation_config)
                     mask = torch.cat([mask_a, mask_b, mask_c, mask_d], dim=-1)
                     augmented_audio_sample = torch.cat([aug_a, aug_b, aug_c, aug_d], dim=-1)
                 else:
-                    augmented_audio_sample, mask = policy.augment(audio_chunk, **augmentation_config)[:2]
+                    augmented_audio_sample, mask = policy.augment(audio_chunk, **augmentation_config)
                 if isinstance(masks, list): 
                     masks.append(mask)
         
 
             with torch.no_grad():
                 out_teacher = asr_model(audio_signal = audio_chunk)
+
+
             out_noised = asr_model(audio_signal = augmented_audio_sample)['final_posteriors']
 
             teacher_output_posteriors = out_teacher['final_posteriors'].squeeze(0)
@@ -215,27 +167,33 @@ def cpu_rollout(
             N, B = out_noised.shape[1], out_noised.shape[0]
             total_tokens_in_loss = N * B
             loss = ctc_loss_fn(out_noised.transpose(0, 1), pseudo_targets, torch.LongTensor([N] * out_noised.shape[0]), torch.LongTensor([pseudo_targets.shape[1]] * pseudo_targets.shape[0])) / total_tokens_in_loss
-            optimizer.zero_grad()
-            loss.backward()
+            
+            grads = torch.autograd.grad(loss, asr_model.parameters(), create_graph=False)
 
-            if kwargs.get("clip", False): torch.nn.utils.clip_grad_norm_(asr_model.parameters(), kwargs["clip"]) 
+            current_params = dict(asr_model.named_parameters())
+            updated_params = {}
+            for (name, param), grad in zip(current_params.items(), grads):
+                updated_params[name] = param - optim_args['lr'] * grad
 
-            optimizer.step()
-
-        all_logits, logit_count = torch.zeros((1, audio_n//4 + seq_len, tokenizer.vocab_size() + 1)), torch.zeros((1, audio_n//4 + seq_len, tokenizer.vocab_size() + 1))
-        if masks != None: torch.save(masks, 'noise.pt')
-    
-    if epochs > 0:
-        for key in tqdm(training_keys):
-            audio_chunk = training_data[key].clone()
+            
             with torch.no_grad():
-                out = asr_model(audio_signal = audio_chunk.to(device))
-            logits = out['final_posteriors'][0].cpu()
+                updated_prediction = torch.func.functional_call(
+                    module = asr_model,
+                    parameter_and_buffer_dicts = updated_params,
+                    args = (audio_chunk,),
+                )
+            logits = updated_prediction['final_posteriors'][0].cpu()
             logits = torch.exp(logits) # convert to prob
             ds_len = logits.shape[-2]
             ratio = audio_chunk.shape[-1] / ds_len
             overlap_ds = int(overlap / ratio)
             model_outputs[key] = {'logits': logits, 'ds_len': ds_len, 'overlap_ds': overlap_ds}
+                
+
+        all_logits, logit_count = torch.zeros((1, audio_n//4 + seq_len, tokenizer.vocab_size() + 1)), torch.zeros((1, audio_n//4 + seq_len, tokenizer.vocab_size() + 1))
+        if masks != None: torch.save(masks, 'noise.pt')
+    
+    if epochs > 0:
 
         logit_position = 0
         for i in sorted(list(model_outputs.keys())):

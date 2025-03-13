@@ -8,11 +8,11 @@ training:
   random_seed: 1234
   batch_size: 84
   epochs: 100
-  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss/model.pt
-  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss/tmp_model.pt
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer/model.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer/tmp_model.pt
 
-evaluation:
-  dataset: 'earnings22'
+evaluation: 
+  dataset: 'tedlium'
   split: 'test'
   use_cer: false
   epochs: 5
@@ -21,6 +21,7 @@ evaluation:
     use_random: false
   optim_args:
     lr: 5e-6
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/UFMR/multiepoch/tedlium.txt
 
 policy:
   lr: 1e-4

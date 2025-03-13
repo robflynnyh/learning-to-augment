@@ -1,0 +1,33 @@
+checkpointing:
+  asr_model: "/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt"
+
+training:
+  device: 'cuda'
+  random_seed: 1234
+  batch_size: 42 #84
+  epochs: 1
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/cm/test/model.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/cm/test/tmp_model.pt
+
+policy:
+  class: ConditionalMaskingPolicy 
+  config:
+    hidden_dim: 256
+    mel_bins: 80
+    output_dim: 80
+    vae_config: 
+      input_dim: 80
+      hidden_dim: 256
+      latent_dim: 16
+      layers: 5
+    vae_state_dict_path: /mnt/parscratch/users/acp21rjf/l2augment_model/vae/model.pt
+
+generation:
+  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_CM/"
+  return_wer: true
+  optim_args:
+    lr: 1e-1
+
+
+  
+#this_american_life_566_audio_307200.pt

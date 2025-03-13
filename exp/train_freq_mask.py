@@ -3,7 +3,8 @@ import torch
 from omegaconf.omegaconf import OmegaConf
 
 from l2augment.modelling.models import Policy
-from l2augment.utils.helpers import load_rl_models
+from l2augment.utils.helpers import load_rl_models, make_color, backward_pass, load_model as load_policy, save_model as save_policy, lmap
+from functools import partial
 
 from l2augment.utils.collate_functions import collate_functions_dict
 
@@ -28,34 +29,10 @@ formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
+load_policy = partial(load_policy, log_command=logger.info)
+save_policy = partial(save_policy, log_command=logger.info)
 
-AUDIO_CHUNK_SIZE_DEFAULT = 4096
-AUDIO_CHUNK_OVERLAP_DEFAULT = int(0.875*AUDIO_CHUNK_SIZE_DEFAULT)
 
-
-def save_dictionary(dictionary, filename):
-    with open(filename, 'wb') as file:
-        pickle.dump(dictionary, file)
-
-def load_dictionary(path):
-    with open(path, 'rb') as file:
-        return pickle.load(file)
-
-def make_color(text, color):
-    colors = { # use neon colors
-        'green': '\033[38;5;46m',
-        'red': '\033[38;5;196m',
-        'blue': '\033[38;5;27m',
-        'yellow': '\033[38;5;226m',
-        'purple': '\033[38;5;129m',
-        'cyan': '\033[38;5;45m',
-        'white': '\033[38;5;231m',
-        'orange': '\033[38;5;208m',
-        'pink': '\033[38;5;198m',
-        'black': '\033[38;5;0m',
-    }
-    assert color in colors, f"Color {color} not found. Choose from {list(colors.keys())}"
-    return f"{colors[color]}{text}\033[0m"
     
 class CustomDataset(Dataset):
     def __init__(
@@ -70,6 +47,8 @@ class CustomDataset(Dataset):
             randomize_order=False, # debug
             decrease_measurement='absolute', # percentage or absolute
             load_audio=True,
+            cer_weight=0.0,
+            wer_weight=1.0,
         ):
         self.data = sorted(files)
     
@@ -82,10 +61,41 @@ class CustomDataset(Dataset):
         self.decrease_measurement = decrease_measurement
         self.divide_by_100 = divide_by_100
         self.load_audio = load_audio
+        self.cer_weight = cer_weight
+        self.wer_weight = wer_weight
 
     def __len__(self):
         # Return the total number of samples
         return len(self.data)
+    
+    def standardize_pipeline(self, rewards):
+        rewards_mean = rewards.mean(0, keepdim=True)
+
+        if self.zero_mean:
+            rewards = rewards - rewards_mean
+        if self.divide_by_100:
+            rewards = rewards / 100
+            
+        if self.clamp_min is not None:
+            rewards = rewards.clamp(min=self.clamp_min)
+        if self.clamp_max is not None:
+            rewards = rewards.clamp(max=self.clamp_max)
+
+        if self.standardize_std:
+            if rewards.shape[0] > 1 or rewards_std == 0:
+                rewards_std = rewards.std(0, keepdim=True) # center mean then clamp then calculate std before standardizing
+                rewards = rewards / (rewards_std + 1e-6)
+        if self.scale:
+            # min -1, max 1 but avoid 0 division
+            rewards_min = rewards.min(dim=0, keepdim=True).values
+            rewards_max = rewards.max(dim=0, keepdim=True).values
+            if rewards_min == rewards_max:
+                rewards = torch.zeros_like(rewards)
+            else:
+                rewards = 2*(rewards - rewards_min)/(rewards_max - rewards_min) - 1
+
+        return rewards
+
     
     def __getitem__(self, idx):
         try:
@@ -94,9 +104,21 @@ class CustomDataset(Dataset):
 
             audio = rollout['audio'] if self.load_audio else None
             masks = rollout['mask'] # kept in float8 for memory
-            decreases = rollout['reward']          
+            decreases = rollout['reward']   
+
+            misc = {}
+            if 'probs' in rollout:
+                misc['probs'] = rollout['probs']
+            if 'eps' in rollout:
+                misc['eps'] = rollout['eps']
+
+
+            if decreases.ndim == 3: has_wer = True
+            else: has_wer = False   
 
             before, after = decreases.chunk(2, dim=-1)
+
+
             if self.decrease_measurement == 'absolute':
                 rewards = before - after
             elif self.decrease_measurement == 'percentage':
@@ -104,67 +126,32 @@ class CustomDataset(Dataset):
             else:
                 raise ValueError(f"Unknown decrease measurement: {self.decrease_measurement} should be 'percentage' or 'absolute'")
             rewards = rewards.squeeze(-1)
-        
 
             # replace any nan values with 0 
             rewards[torch.isnan(rewards)] = 0 # can happen due to empty reference and hypothesis
 
-            # notnegative = torch.zeros_like(rewards)
-            # notnegative[rewards >= 0] = 1
+            if has_wer:
+                cer, wer = rewards.unbind(-1)
+                cer, wer = lmap(self.standardize_pipeline, [cer, wer])
+                rewards = cer*self.cer_weight + wer*self.wer_weight
+            else:
+                rewards = self.standardize_pipeline(rewards)
 
-            #rank_rewards = torch.argsort(torch.argsort(rewards, dim=0, descending=True), dim=0, descending=False)
-            
-            rewards_mean = rewards.mean(0, keepdim=True)
-
-            if self.zero_mean:
-                rewards = rewards - rewards_mean
-            if self.divide_by_100:
-                rewards = rewards / 100
-                
-            if self.clamp_min is not None:
-                rewards = rewards.clamp(min=self.clamp_min)
-            if self.clamp_max is not None:
-                rewards = rewards.clamp(max=self.clamp_max)
-        
-
-            if self.standardize_std:
-                if rewards.shape[0] > 1 or rewards_std == 0:
-                    rewards_std = rewards.std(0, keepdim=True) # center mean then clamp then calculate std before standardizing
-                    rewards = rewards / (rewards_std + 1e-6)
-            if self.scale:
-                # min -1, max 1 but avoid 0 division
-                rewards_min = rewards.min(dim=0, keepdim=True).values
-                rewards_max = rewards.max(dim=0, keepdim=True).values
-                if rewards_min == rewards_max:
-                    rewards = torch.zeros_like(rewards)
-                else:
-                    rewards = 2*(rewards - rewards_min)/(rewards_max - rewards_min) - 1
-                #rewards = (rewards + 1) / 2
-
-            # z = torch.zeros_like(rewards)
-            # z[rewards > 0] = 1
-            # rewards = z
-            
-            all_rewards = rewards#torch.cat([rewards, notnegative, rank_rewards], dim=-1)
+            all_rewards = rewards
 
             return {
                 'reward': all_rewards, # (repeats)
                 'masks':masks, # (masks, 1, C, T)
-                **({'audio':audio} if self.load_audio else {})
+                **({'audio':audio} if self.load_audio else {}),
+                **misc
             }
         except Exception as e:
-            print(f"Error loading data: {e}")
+            logger.info(f"Error loading data: {e}")
             return None
 
     
-
-def backward_pass(loss,     policy, optim):
-    optim.zero_grad()
-    loss.backward()
-    torch.nn.utils.clip_grad_norm_(policy.parameters(),  1.0) 
-    optim.step()
-
 def get_eval_config(config):
+    """creates a config for running the evaluation script using the validation config in the training script"""
     return {'evaluation': config['validation'], 'checkpointing': config['checkpointing']}
 
 def train_policy(
@@ -196,7 +183,7 @@ def train_policy(
 
             
             wandb.log({'val_cer':val_cer, 'epoch': cur_epoch})
-            print(f'val_cer: {val_cer}')
+            logger.info(f'val_cer: {val_cer}')
 
             if (val_cer > prev_val_cer) or torch.isnan(torch.tensor(val_cer)): remaining_tolerance -= 1
             else:
@@ -206,17 +193,17 @@ def train_policy(
 
             if remaining_tolerance == 0:
                 policy.load_state_dict(prev_state_dict)
-                print(f'Validation loss increased. Reverting to previous state')
+                logger.info(f'Validation loss increased. Reverting to previous state')
                 break
 
             if cur_epoch >= config['training']['epochs']:
-                print(f'Reached max epochs: {cur_epoch}/{config["training"]["epochs"]}')
+                logger.info(f'Reached max epochs: {cur_epoch}/{config["training"]["epochs"]}')
                 break
 
 
             policy = policy.train()
             pbar = tqdm(dataloader)
-            for batch in pbar:
+            for i, batch in enumerate(pbar):
                 if batch == None: continue
               
                 loss, losses = policy.forward_pass(batch, device)
@@ -226,7 +213,8 @@ def train_policy(
                 
                 pbar.set_description(desc=f'loss: {loss.item()}')
                 backward_pass(loss, policy, optim)
-        
+
+                #if i > 100: break - debug
 
             cur_epoch += 1
 
@@ -234,77 +222,15 @@ def train_policy(
                 save_policy(policy, config, save_path=config['training']['tmp_model_save_path'])
 
         return policy
-        
-def save_policy(model, config, save_path=None):
-    save_path = config['training']['model_save_path'] if save_path is None else save_path
-
-    isnan = False
-    for name, param in model.state_dict().items():
-        if torch.isnan(param).any():
-            isnan = True
-    if isnan == False:
-        torch.save({
-            'model_state_dict': model.state_dict(),
-            'config': config
-        }, save_path)
-        
-        logger.info(f"Model saved successfully to {save_path}")
-    else:
-        logger.info(f"Model not saved due to NaN in weights!")
-
-
-def load_policy(model, config):
-    save_path = config['training']['model_save_path']
-    try:
-        # Load the checkpoint
-        checkpoint = torch.load(save_path, map_location='cpu')
-        # Load the model state dictionary
-        model.load_state_dict(checkpoint['model_state_dict'])    
-        print(make_color(f"Model successfully loaded from {save_path}", 'red'))
-        return True
-    except FileNotFoundError:
-        return False
-    except Exception as e:
-        print(f"Error loading model: {e}")
-        raise
-
-def save_value(model, config):
-    save_path = config['value']['save_path']
-    isnan = False
-    for name, param in model.state_dict().items():
-        if torch.isnan(param).any():
-            isnan = True
-    if isnan == False:
-        torch.save({
-            'model_state_dict': model.state_dict(),
-            'config': config
-        }, save_path)
-        
-        logger.info(f"Model saved successfully to {save_path}")
-    else:
-        logger.info(f"Model not saved due to NaN in weights!")
-
-
-def load_asr_model_fn(asr_model, state_dict):
-    asr_model.load_state_dict(state_dict)
-    asr_model.flash_attn = False
-    return asr_model
-
-def prepare_data(config):
-    rollout_directory_train = os.path.join(config['generation']['save_dir'], 'train')
-    rollout_directory_val = os.path.join(config['generation']['save_dir'], 'dev')
-   
-
-    all_rollouts_train = os.listdir(rollout_directory_train)
-    all_rollouts_val = os.listdir(rollout_directory_val)
-
-    all_rollouts_train = [el for el in all_rollouts_train if el.endswith('.pt')]
-    all_rollouts_val = [el for el in all_rollouts_val if el.endswith('.pt')]
     
-    all_rollouts_train = [os.path.join(rollout_directory_train, el) for el in all_rollouts_train]
-    all_rollouts_val = [os.path.join(rollout_directory_val, el) for el in all_rollouts_val]
+def prepare_data(config, split='train'):
+    rollout_directory = os.path.join(config['generation']['save_dir'], split)
 
-    return all_rollouts_train, all_rollouts_val
+    all_rollouts = os.listdir(rollout_directory)
+    all_rollouts = [el for el in all_rollouts if el.endswith('.pt')]
+    all_rollouts = [os.path.join(rollout_directory, el) for el in all_rollouts]
+
+    return all_rollouts
 
 def main(config):
     wandb.init(project="l2augment")
@@ -322,13 +248,11 @@ def main(config):
 
     total_params = sum(p.numel() for p in policy.parameters() if p.requires_grad)
     total_params_in_million = total_params / 1_000_000
-    print(make_color(f"Total trainable parameters (policy): {total_params_in_million:.2f} million", 'green'))
+    logger.info(make_color(f"Total trainable parameters (policy): {total_params_in_million:.2f} million", 'green'))
 
     policy_optim = MADGRAD(policy.parameters(), lr=config['policy']['lr'])
 
-
-
-    train_files, _ = prepare_data(config)
+    train_files = prepare_data(config, split='train')
 
     dataset_config = config.get('dataset', {})
     train_dataset = CustomDataset(train_files, **dataset_config)
@@ -340,15 +264,15 @@ def main(config):
         batch_size=config['training']['batch_size'], 
         shuffle=True, 
         collate_fn=collate_function,
-        num_workers=12,
-        prefetch_factor=12   
+        num_workers=config['training'].get('num_workers', 12),
+        prefetch_factor=config['training'].get('prefetch_factor', 6),
     )
 
 
     policy = train_policy(policy, policy_optim, config, train_dataloader)
     save_policy(policy, config)
 
-    print(f'Finished')
+    logger.info(f'Finished')
 
 
 

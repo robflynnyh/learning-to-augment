@@ -1,0 +1,1 @@
+ID: 0 - Dataset: this_american_life - Split: test - Epochs: 5 - Original_WER: 0.16568833102141625 - Updated_WER: 0.15966324954043598

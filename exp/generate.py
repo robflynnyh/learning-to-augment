@@ -5,7 +5,7 @@ from omegaconf.omegaconf import OmegaConf
 from lcasr.utils.audio_tools import load_tokenizer
 from lcasr.utils.audio_tools import processing_chain
 from lcasr.utils.general import load_model as load_asr_model, get_model_class
-
+from l2augment.utils.helpers import load_model as load_policy, load_asr_model_fn
 from l2augment.rollout import  cpu_rollout
 from l2augment.utils.helpers import load_rl_models
 from l2augment.utils.data import dataset_functions
@@ -16,15 +16,7 @@ import json
 import pickle
 import random
 
-AUDIO_CHUNK_SIZE_DEFAULT = 4096
-AUDIO_CHUNK_OVERLAP_DEFAULT = 0
 
-
-
-def load_asr_model_fn(asr_model, state_dict):
-    asr_model.load_state_dict(state_dict)
-    asr_model.flash_attn = False
-    return asr_model
 
 
 def save_dictionary(dictionary, filename):
@@ -51,7 +43,7 @@ def find_existing_run_wer(directory, id):
         return file['original_wer']
     return None
 
-def load_policy(model, config):
+def load_model(model, config):
     save_path = config.get('training',{}).get('model_save_path', None)
     if save_path == None: return
     try:
@@ -129,6 +121,7 @@ def main(config):
                                 tokenizer = tokenizer,
                                 text = text,
                                 optim_args = optim_args,
+                                return_wer = config['generation'].get('return_wer', False),
             )      
             path = join(save_path, f'{utt_id}.pt')
             repeats = config['repeats']
@@ -139,9 +132,20 @@ def main(config):
 
             rewards = []
             mask_list = []
+            other_outputs = {}
             for i in range(repeats):
                 audio_a = audio.clone()
-                audio_b, noise = policy_net.augment(audio_a, **augmentation_args)
+                outputs = policy_net.augment(audio_a, **augmentation_args)
+                audio_b, noise = outputs[0], outputs[1]
+                if len(outputs) > 2:
+                    misc = outputs[2]
+                    for k in misc:
+                        if k not in other_outputs:
+                            other_outputs[k] = []
+                        if misc[k].dtype in [torch.float16, torch.float32]:
+                            misc[k] = misc[k].to(torch.float8_e5m2) # save space
+                        other_outputs[k].append(misc[k])
+
                 noise = noise.to(torch.float8_e5m2)
                     
                 prev_cer, u_cer, _ = rollout_fn(
@@ -157,8 +161,17 @@ def main(config):
                 mask_list.append(noise.to(dtype=torch.float8_e5m2))
                 #print(reward)
 
+            rewards = torch.stack(rewards)
+            mask_list = torch.stack(mask_list)
+            for k in other_outputs:
+                other_outputs[k] = torch.stack(other_outputs[k])
+        
             print(path)
-            print(torch.cat([torch.load(path)['reward'], torch.stack(rewards)]))
+         
+            # if os.path.exists(path):
+            #     print(torch.cat([torch.load(path)['reward'], torch.stack(rewards)]))
+            # else:
+            print(rewards)
             if config['save']:
                 if os.path.exists(path) and config['buffer_size'] != 0:
                     prev_data = torch.load(path)
@@ -168,18 +181,27 @@ def main(config):
                     if config['buffer_size'] != -1:
                         prev_reward = prev_reward[-config['buffer_size']:]
                         prev_mask = prev_mask[-config['buffer_size']:]
-                    
+                        for k in other_outputs:
+                            if k in prev_data:
+                                prev_data[k] = prev_data[k][-config['buffer_size']:]
+
+                    for k in other_outputs:
+                        if k in prev_data:
+                            other_outputs[k] = torch.cat([prev_data[k], other_outputs[k]], dim=0)
+
                     
                     torch.save({
-                        'reward': torch.cat([prev_reward, torch.stack(rewards)]),
-                        'mask': torch.cat([prev_mask, torch.stack(mask_list)]),
+                        'reward': torch.cat([prev_reward, rewards]),
+                        'mask': torch.cat([prev_mask, mask_list]),
                         'audio': audio.to(torch.float16),
+                        **other_outputs
                     }, path)
                 else:
                     torch.save({
-                        'reward': torch.stack(rewards),
-                        'mask': torch.stack(mask_list),
+                        'reward': rewards,
+                        'mask': mask_list,
                         'audio': audio.to(torch.float16),
+                        **other_outputs
                     }, path)
       
   
@@ -192,7 +214,7 @@ if __name__ == "__main__":
     parser.add_argument('--steps', '-steps', type=int, default=5)
     parser.add_argument('--repeats', '-repeats', type=int, default=2)
     parser.add_argument('--split', '-split', type=str, default='train')
-    parser.add_argument('--buffer_size', '-buffer_size', type=int, default=-1)
+    parser.add_argument('--buffer_size', '-buffer_size', type=int, default=0)
     parser.add_argument('--dont_save', action='store_true')
     args = parser.parse_args()
     config = OmegaConf.load(args.config)

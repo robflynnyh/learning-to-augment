@@ -8,22 +8,20 @@ training:
   random_seed: 1234
   batch_size: 84
   epochs: 100
-  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss/model.pt
-  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss/tmp_model.pt
 
-evaluation: 
-  dataset: 'tedlium'
+evaluation:
+  dataset: 'earnings22'
   split: 'test'
   use_cer: false
-  epochs: 5
+  epochs: 1
   augmentation_config:
-    repeats: 15
-    use_random: false
+    repeats: 1
+    use_random: true
   optim_args:
     lr: 5e-6
-  save_path: /users/acp21rjf/learning-to-augment/exp/results/UFMR/tedlium.txt
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/RFM/e22.txt
 
 policy:
   lr: 1e-4
-  class: UnconditionalFrequencyMaskingRanker
+  class: FrequencyMaskingRanker
 

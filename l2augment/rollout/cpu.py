@@ -121,9 +121,9 @@ def cpu_rollout(
         diff = prev_wer - updated_wer
         prev_wer, updated_wer = torch.tensor(prev_wer), torch.tensor(updated_wer)
 
-        prev = torch.cat([prev, prev_wer])
-        updated = torch.cat([updated, updated_wer])
-
+        prev = torch.stack([prev, prev_wer])
+        updated = torch.stack([updated, updated_wer])
+        print(prev.shape, updated.shape)
     
     return prev, updated, masks
         

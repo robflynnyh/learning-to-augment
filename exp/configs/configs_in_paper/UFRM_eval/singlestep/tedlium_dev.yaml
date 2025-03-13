@@ -8,43 +8,23 @@ training:
   random_seed: 1234
   batch_size: 84
   epochs: 100
-  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_cer/model.pt
-  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_cer/tmp_model.pt
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss/model.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss/tmp_model.pt
 
-validation:
-  dataset: 'tedlium'
-  split: 'dev'
-  use_cer: true
-  augmentation_config:
-    repeats: 15
-    use_random: false
-  optim_args:
-    lr: 5e-6
-
-evaluation:
+evaluation: 
   dataset: 'tedlium'
   split: 'dev'
   use_cer: false
   epochs: 1
   augmentation_config:
-    repeats: 10
+    repeats: 15
     use_random: false
   optim_args:
-    lr: 5e-6
-
-dataset:
-  load_audio: false
-  clamp_min: null
-  clamp_max: null
+    lr: 2e-2
+  rollout_fn: singlestep
+  #save_path: /users/acp21rjf/learning-to-augment/exp/results/UFMR/tedlium.txt
 
 policy:
   lr: 1e-4
   class: UnconditionalFrequencyMaskingRanker
 
-generation:
-  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_test/"
-
-
-
-  
-#this_american_life_566_audio_307200.pt
