@@ -94,7 +94,7 @@ def main(config):
         save_path = config['generation']['save_dir']
         assert os.path.exists(save_path), f"Save path {save_path} does not exist"
         split = {'train':'train', 'val':'dev', 'dev':'dev'}[config['split']]
-        save_path = os.path.join(save_path, config['split'])
+        save_path = os.path.join(save_path, split)
 
         if not os.path.exists(save_path):
             os.makedirs(save_path)
@@ -128,7 +128,11 @@ def main(config):
           
             if config['save'] and not os.path.exists(path):
                 if repeats == 1: repeats = 2 # to ensure that we can get mean and std stats on first run!
-            
+            if config['skip_percentage'] != 0.0 and random.random() * 100 <= config['skip_percentage']:
+                print(f"Skipping {utt_id}")
+                if config['remove_skipped_paths'] and os.path.exists(path):
+                    os.remove(path)
+                continue
 
             rewards = []
             mask_list = []
@@ -142,8 +146,8 @@ def main(config):
                     for k in misc:
                         if k not in other_outputs:
                             other_outputs[k] = []
-                        if misc[k].dtype in [torch.float16, torch.float32]:
-                            misc[k] = misc[k].to(torch.float8_e5m2) # save space
+                        if misc[k].dtype in [torch.float32]:
+                            misc[k] = misc[k].to(torch.float16) # save space
                         other_outputs[k].append(misc[k])
 
                 noise = noise.to(torch.float8_e5m2)
@@ -216,6 +220,8 @@ if __name__ == "__main__":
     parser.add_argument('--split', '-split', type=str, default='train')
     parser.add_argument('--buffer_size', '-buffer_size', type=int, default=0)
     parser.add_argument('--dont_save', action='store_true')
+    parser.add_argument('--skip_percentage', '-skip_percentage', type=float, default=0.0)
+    parser.add_argument('--remove_skipped_paths', '-remove_skipped_paths', action='store_true')
     args = parser.parse_args()
     config = OmegaConf.load(args.config)
     config['index'] = args.index
@@ -224,6 +230,8 @@ if __name__ == "__main__":
     config['save'] = not args.dont_save
     config['split'] = args.split
     config['buffer_size'] = args.buffer_size
+    config['skip_percentage'] = args.skip_percentage
+    config['remove_skipped_paths'] = args.remove_skipped_paths
     main(config)
 
 

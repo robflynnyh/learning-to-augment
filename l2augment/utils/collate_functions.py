@@ -87,6 +87,8 @@ def vae_based_policy_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch
     lengths = []
     ds_lengths = []
 
+
+
     for i, item in enumerate(batch):
         if item == None: continue
         audio.append(item['audio'])
@@ -110,11 +112,11 @@ def vae_based_policy_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch
             if cur_len < max_length:
                 diff = max_length - cur_len
                 audio[i] = torch.cat([audio[i], torch.zeros(audio[i].shape[0], audio[i].shape[1], diff)], dim=-1)
-                masks[i] = torch.cat([masks[i], torch.zeros((masks[i].shape[0], masks[i].shape[1], masks[i].shape[2], diff), dtype=masks[i].dtype)], dim=-1)
-                probs[i] = torch.cat([probs[i], torch.zeros((probs[i].shape[0], probs[i].shape[1], probs[i].shape[2], diff), dtype=probs[i].dtype)], dim=-1)
             if cur_ds_len < max_ds_length:
                 diff = max_ds_length - cur_ds_len
                 eps[i] = torch.cat([eps[i], torch.zeros(eps[i].shape[0], eps[i].shape[1], eps[i].shape[2], diff)], dim=-1)
+                probs[i] = torch.cat([probs[i], torch.zeros((probs[i].shape[0], probs[i].shape[1], probs[i].shape[2], diff), dtype=probs[i].dtype)], dim=-1)
+                masks[i] = torch.cat([masks[i], torch.zeros((masks[i].shape[0], masks[i].shape[1], masks[i].shape[2], diff), dtype=masks[i].dtype)], dim=-1)
         
 
     audio = torch.cat(audio, dim=0)

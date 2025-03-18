@@ -13,13 +13,13 @@ evaluation:
   dataset: 'this_american_life'
   split: 'test'
   use_cer: false
-  epochs: 5
+  epochs: 1
   augmentation_config:
     repeats: 1
     use_random: true
   optim_args:
     lr: 5e-6
-  save_path: /users/acp21rjf/learning-to-augment/exp/results/RFM/TAL.txt
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/RFM/singleepoch/TAL.txt
 
 policy:
   lr: 1e-4

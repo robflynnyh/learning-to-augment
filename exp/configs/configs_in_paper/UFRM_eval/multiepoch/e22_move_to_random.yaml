@@ -8,20 +8,24 @@ training:
   random_seed: 1234
   batch_size: 84
   epochs: 100
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer/model.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer/tmp_model.pt
 
-evaluation: 
-  dataset: 'rev16'
+evaluation:
+  dataset: 'earnings22'
   split: 'test'
   use_cer: false
-  epochs: 1
+  epochs: 5
   augmentation_config:
-    repeats: 1
-    use_random: true
+    repeats: 15
+    use_random: false
   optim_args:
     lr: 5e-6
-  save_path: /users/acp21rjf/learning-to-augment/exp/results/RFM/singleepoch/rev16.txt
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/UFMR/multiepoch/m2re22.txt
 
 policy:
   lr: 1e-4
-  class: FrequencyMaskingRanker
+  class: UnconditionalFrequencyMaskingRanker
+  config:
+    epochs_until_random: 2
 

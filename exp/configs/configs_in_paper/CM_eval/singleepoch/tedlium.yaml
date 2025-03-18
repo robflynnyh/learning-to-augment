@@ -8,20 +8,27 @@ training:
   random_seed: 1234
   batch_size: 84
   epochs: 100
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/cm/test/model.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/cm/test/tmp_model.pt
 
 evaluation: 
-  dataset: 'rev16'
+  dataset: 'tedlium'
   split: 'test'
   use_cer: false
   epochs: 1
-  augmentation_config:
-    repeats: 1
-    use_random: true
   optim_args:
-    lr: 5e-6
-  save_path: /users/acp21rjf/learning-to-augment/exp/results/RFM/singleepoch/rev16.txt
+    lr: 1e-6
 
 policy:
-  lr: 1e-4
-  class: FrequencyMaskingRanker
+  class: ConditionalMaskingPolicy 
+  config:
+    hidden_dim: 256
+    mel_bins: 80
+    output_dim: 80
+    vae_config: 
+      input_dim: 80
+      hidden_dim: 256
+      latent_dim: 16
+      layers: 5
+    vae_state_dict_path: /mnt/parscratch/users/acp21rjf/l2augment_model/vae/model.pt
 

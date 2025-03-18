@@ -49,6 +49,7 @@ class CustomDataset(Dataset):
             load_audio=True,
             cer_weight=0.0,
             wer_weight=1.0,
+            set_minus_or_positive=False
         ):
         self.data = sorted(files)
     
@@ -63,12 +64,17 @@ class CustomDataset(Dataset):
         self.load_audio = load_audio
         self.cer_weight = cer_weight
         self.wer_weight = wer_weight
+        self.set_minus_or_positive = set_minus_or_positive
 
     def __len__(self):
         # Return the total number of samples
         return len(self.data)
     
     def standardize_pipeline(self, rewards):
+        if self.set_minus_or_positive:
+            rewards[rewards < 0] = -1
+            rewards[rewards > 0] = 1
+
         rewards_mean = rewards.mean(0, keepdim=True)
 
         if self.zero_mean:
@@ -234,6 +240,8 @@ def prepare_data(config, split='train'):
 
     return all_rollouts
 
+import shutil, subprocess, time
+
 def main(config):
     wandb.init(project="l2augment")
 
@@ -254,27 +262,56 @@ def main(config):
 
     policy_optim = MADGRAD(policy.parameters(), lr=config['policy']['lr'])
 
-    train_files = prepare_data(config, split='train')
+    for i in range(50):
 
-    dataset_config = config.get('dataset', {})
-    train_dataset = CustomDataset(train_files, **dataset_config)
+        generation_path = config['generation']['save_dir']
+        # delete folder
+        if os.path.exists(generation_path):
+            shutil.rmtree(generation_path)
+            os.mkdir(generation_path)
 
-    collate_function = collate_functions_dict[config.get('collate_function', 'default')]
-    
-    train_dataloader = DataLoader(
-        train_dataset, 
-        batch_size=config['training']['batch_size'], 
-        shuffle=True, 
-        collate_fn=collate_function,
-        num_workers=config['training'].get('num_workers', 12),
-        prefetch_factor=config['training'].get('prefetch_factor', 6),
-    )
+        launch_path = "job.sh"
+        # change directory to ./launch_scripts
+        os.chdir('./launch_scripts')
+        result = subprocess.run(['sbatch', launch_path], capture_output=True, text=True)
+        logger.info(f"Launched job: {result.stdout}")
+        assert result.returncode == 0, f"Error launching job: {result.stderr}"
+        os.chdir('..')
+        check_job_cmd = "squeue | grep rjf | grep job.sh | wc -l"
+        # loop until zero jobs are running
+        jobs_finished = False
+        while not jobs_finished:
+            result = subprocess.run(check_job_cmd, shell=True, capture_output=True, text=True)
+            assert result.returncode == 0, f"Error checking job: {result.stderr}"
+            if int(result.stdout) == 0: 
+                jobs_finished = True
+            else:
+                logger.info(f"Waiting for jobs to finish: {int(result.stdout)}")
+                # wait 10 seconds before checking again
+                time.sleep(10)
+        
+
+        train_files = prepare_data(config, split='train')
+
+        dataset_config = config.get('dataset', {})
+        train_dataset = CustomDataset(train_files, **dataset_config)
+
+        collate_function = collate_functions_dict[config.get('collate_function', 'default')]
+        
+        train_dataloader = DataLoader(
+            train_dataset, 
+            batch_size=config['training']['batch_size'], 
+            shuffle=True, 
+            collate_fn=collate_function,
+            num_workers=config['training'].get('num_workers', 12),
+            prefetch_factor=config['training'].get('prefetch_factor', 6),
+        )
 
 
-    policy = train_policy(policy, policy_optim, config, train_dataloader)
-    save_policy(policy, config)
+        policy = train_policy(policy, policy_optim, config, train_dataloader)
+        save_policy(policy, config)
 
-    logger.info(f'Finished')
+        logger.info(f'Finished')
 
 
 

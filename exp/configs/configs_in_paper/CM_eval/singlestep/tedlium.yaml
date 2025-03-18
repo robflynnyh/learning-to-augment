@@ -6,43 +6,27 @@ checkpointing:
 training:
   device: 'cuda'
   random_seed: 1234
-  batch_size: 42
-  epochs: 1
+  batch_size: 84
+  epochs: 100
   model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/cm/test/model.pt
   tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/cm/test/tmp_model.pt
-  #max_steps: 1250
 
-validation:
-  default: 0.04050829821002512
-  dataset: 'tedlium'
-  split: 'dev'
-  use_cer: true
-  optim_args:
-    lr: 3e-6
-
-evaluation:
+evaluation: 
   dataset: 'tedlium'
   split: 'dev'
   use_cer: false
   epochs: 1
   optim_args:
-    lr: 3e-6
-
-dataset:
-  load_audio: true
-  clamp_min: null
-  clamp_max: null
-  cer_weight: 0.0
-  wer_weight: 1.0 
-  set_minus_or_positive: true
+    lr: 2e-2
+  rollout_fn: singlestep
+  #save_path: /users/acp21rjf/learning-to-augment/exp/results/UFMR/tedlium.txt
 
 policy:
-  lr: 1e-4
   class: ConditionalMaskingPolicy 
   config:
-    hidden_dim: 16
+    hidden_dim: 256
     mel_bins: 80
-    output_dim: 1
+    output_dim: 80
     vae_config: 
       input_dim: 80
       hidden_dim: 256
@@ -50,14 +34,3 @@ policy:
       layers: 5
     vae_state_dict_path: /mnt/parscratch/users/acp21rjf/l2augment_model/vae/model.pt
 
-generation:
-  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_CM/"
-  return_wer: true
-  optim_args:
-    lr: 4e-2
-
-collate_function: vae_based_policy
-
-
-  
-#this_american_life_566_audio_307200.pt

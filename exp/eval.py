@@ -104,7 +104,7 @@ def main(config, policy_net=None):
     print(f"Updated {eval_type}: {wer}")
 
     save_path = config.get('evaluation', {}).get('save_path', "")
-    if save_path != "":
+    if save_path != "" and config.get('save', True):
         id = config.get('evaluation', {}).get('id', "0") 
         results = f"ID: {id} - Dataset: {dataset} - Split: {split} - Epochs: {epochs} - Original_WER: {original_wer} - Updated_WER: {wer}"
         with open(save_path, 'a') as file:
@@ -120,9 +120,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", "-config", type=str, required=True, help="Path to YAML config file")
     parser.add_argument('--indexes', '-indexes', type=int, nargs='+', help='Indexes of the data to evaluate', default=[-1]) # -1 means all
+    parser.add_argument('--dont_save', '-dont_save', action='store_true', help='Do not save the results')
     args = parser.parse_args()
     config = OmegaConf.load(args.config)
     config['indexes'] = args.indexes
+    config['save'] = not args.dont_save
     main(config)
 
 

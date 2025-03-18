@@ -105,10 +105,11 @@ class NoAugmentationPolicy(Policy):
         return audio, torch.zeros_like(audio)
 
 class FrequencyMaskingRanker(Policy):
-    def __init__(self, zero_masking=True) -> None:
+    def __init__(self, zero_masking=True, epochs_until_random=-1) -> None:
         super().__init__()
         self.masker = SpecAugment(n_time_masks=0, n_freq_masks=6, freq_mask_param=34, zero_masking=True)
         self.zero_masking = zero_masking
+        self.epochs_until_random = epochs_until_random
 
 
     def apply_mask(self, audio, mask):
@@ -118,9 +119,12 @@ class FrequencyMaskingRanker(Policy):
             audio = audio * mask
         return audio
         
-    def augment(self, audio, use_random=False, repeats=1):
+    def augment(self, audio, use_random=False, repeats=1, *args, **kwargs):
         assert audio.dim() == 3, 'audio must be 3D tensor'
         
+        epoch = kwargs.get('epoch', 0)
+        if self.epochs_until_random != -1 and epoch >= self.epochs_until_random: use_random = True
+
         if use_random:
             mask_spec = self.masker(torch.ones_like(audio))
             
@@ -136,10 +140,6 @@ class FrequencyMaskingRanker(Policy):
         raise NotImplementedError # must be implemented in subclass
         
 class TrainableFrequencyMaskingRanker(FrequencyMaskingRanker):
-    def __init__(self, zero_masking=True) -> None:
-        super().__init__(zero_masking)
-        if type(self) == TrainableFrequencyMaskingRanker: raise Exception('TrainableFrequencyMaskingRanker class is not meant to be instantiated directly. Use a subclass like FrequencyMaskingRanker or UnconditionalFrequencyMaskingRanker')
-
     def forward_pass(self, batch, device, **kwargs):
         network_inputs = {}
         network_inputs['mask'] = batch['masks'].to(device, dtype=torch.float32).squeeze(1) # B, 1, C -> B, C
@@ -162,8 +162,8 @@ class TrainableFrequencyMaskingRanker(FrequencyMaskingRanker):
         return loss, {'loss':loss}
 
 class UnconditionalFrequencyMaskingRanker(TrainableFrequencyMaskingRanker):
-    def __init__(self, zero_masking=True, loss_type='mse') -> None:
-        super().__init__(zero_masking)
+    def __init__(self, zero_masking=True, loss_type='mse', epochs_until_random=-1) -> None:
+        super().__init__(zero_masking, epochs_until_random)
         assert loss_type in ['mse', 'mult']
         self.loss_type = loss_type
         self.network = nn.Sequential(
@@ -455,10 +455,12 @@ class GenerativePolicy(Policy):
             self,
             mel_bins=80,
             output_dim=80,
+            latent_dim=16,
             hidden_dim=256,
             vae_config:Dict={},
             vae_state_dict_path:str=None,
-            min_input_size=160
+            min_input_size=160,
+            eps_clip=0.2
         ) -> None:
         super().__init__()
 
@@ -469,12 +471,24 @@ class GenerativePolicy(Policy):
             self.vae.load_state_dict(vae_state_dict)
             print(f'Loaded VAE state dict from {vae_state_dict_path}')
 
-        self.output = nn.Conv1d(hidden_dim, output_dim, kernel_size=1, stride=1)
+        #self.output = nn.Conv1d(hidden_dim, output_dim, kernel_size=1, stride=1)
+        #self.output = GatedConv1d(input_dim=hidden_dim, output_dim=output_dim, expansion_factor=12, kernel_size=(5, 1), stride=(1,1), padding=(2,0))
+        
+        self.output = nn.Sequential(
+            nn.Conv1d(latent_dim, hidden_dim, kernel_size=1, stride=1),
+            GatedConv1d(input_dim=hidden_dim, output_dim=hidden_dim, expansion_factor=2, kernel_size=(5, 1), stride=(1,1), padding=('same',0)),
+            nn.BatchNorm1d(hidden_dim),
+            GatedConv1d(input_dim=hidden_dim, output_dim=hidden_dim, expansion_factor=2, kernel_size=(3, 1), stride=(1,1), padding=('same',0)),
+            nn.BatchNorm1d(hidden_dim),
+            nn.Conv1d(hidden_dim, output_dim, kernel_size=1, stride=1)
+        )
+
+        
         self.hidden_dim = hidden_dim
         self.mel_bins = mel_bins
         self.output_dim = output_dim
         self.min_input_size = min_input_size
-        self.eps_clip = 0.2 # default value for PPO
+        self.eps_clip = eps_clip
 
     def forward(self, x, lengths, eps=None, counts=None):
         if x.size(-1) < self.min_input_size:
@@ -488,27 +502,33 @@ class GenerativePolicy(Policy):
         with torch.no_grad():
             z, mu, logvar, eps = self.vae.encode(x, lengths, eps, counts)
 
-        x = self.vae.decoder(z)
-        x = torch.nn.functional.interpolate(x, size=in_length, mode='linear', align_corners=False)
-        if pad > 0: x = x[:,:,:-pad]
-        x = self.output(x)
+        x = self.output(z)        
+
+        # x = self.vae.decoder(z)
+        # x = torch.nn.functional.interpolate(x, size=in_length, mode='linear', align_corners=False)
+        # if pad > 0: x = x[:,:,:-pad]
+        # x = self.output(x)
    
-        return x, eps
+        return x, eps, in_length, pad
     
 
 class ConditionalMaskingPolicy(GenerativePolicy):
     @torch.no_grad()
-    def augment(self, audio, eps=None, lengths=None):
-        predictions, eps = self(audio, lengths, eps)
+    def augment(self, audio, eps=None, lengths=None, *args, **kwargs):
+        predictions, eps, in_length, pad = self(audio, lengths, eps)
         probs = predictions.sigmoid() # 0 = mask, 1 = no mask
         mask = torch.bernoulli(probs)
-        audio = audio * mask
+        upsampled_mask = torch.nn.functional.interpolate(mask, size=in_length, mode='nearest-exact')
+        if pad > 0: upsampled_mask = upsampled_mask[:,:,:-pad]
+    
+        audio = audio * upsampled_mask
 
-        return audio, mask, {'probs':probs, 'eps':eps}
+        return audio, mask, {'probs':probs, 'eps':eps, 'in_length':torch.tensor(in_length), 'pad':torch.tensor(pad)}
     
     def forward_pass(self, batch, device, **kwargs):
         audio = batch['audio'].to(dtype=torch.float32, device=device)
         lengths = batch['lengths'].to(device)
+        ds_lengths = batch['ds_lengths'].to(device)
         #ds_lengths = batch['ds_lengths'].to(device)
         masks = batch['masks'].to(device, dtype=torch.long).squeeze(1)
         rewards = batch['rewards'].to(device)
@@ -516,8 +536,10 @@ class ConditionalMaskingPolicy(GenerativePolicy):
         eps = batch['eps'].to(dtype=torch.float32, device=device).squeeze(1)
         counts = batch['counts'].to(device)
         
-        out, _ = self(audio, lengths, eps=eps, counts=counts)
+        out, _, _, _ = self(audio, lengths, eps=eps, counts=counts)
         probs = out.sigmoid()
+   
+        entropy = torch.distributions.Bernoulli(probs).entropy().sum()
         
         p_of_mask = probs * masks + (1 - probs) * (1 - masks)
         log_p_of_mask = torch.log(p_of_mask + 1e-8)
@@ -533,13 +555,17 @@ class ConditionalMaskingPolicy(GenerativePolicy):
 
         loss = -torch.min(surr1, surr2) 
 
-        lengths = lengths.repeat_interleave(counts, dim=0)
-        pad_mask = torch.arange(audio.size(-1)).to(lengths.device) >= lengths[:, None]
+
+        ds_lengths = ds_lengths.repeat_interleave(counts, dim=0)
+        pad_mask = torch.arange(masks.size(-1)).to(ds_lengths.device) >= ds_lengths[:, None]
         loss = torch.masked_fill(loss, pad_mask.unsqueeze(1), 0)
 
-        loss = loss.sum() / (~pad_mask).sum()
+        loss = loss.sum() / ((~pad_mask).sum() * self.output_dim)
+        entropy = entropy / ((~pad_mask).sum() * self.output_dim)
+
+        total_loss = loss - 0.0 * entropy
       
-        return loss, {'loss':loss}
+        return total_loss, {'loss':loss, 'entropy':entropy, 'total_loss':total_loss}
 
 
 
@@ -600,7 +626,6 @@ class AdditivePolicy(Policy):
             b, c, t = audio.shape
             pred = (torch.zeros(b, t, self.input_dim, self.output_dim) + 1/self.output_dim).to(audio.device)
         
-
         b = pred.shape[0]
         pred = rearrange(pred, 'b t c p-> (b t c) p')
 

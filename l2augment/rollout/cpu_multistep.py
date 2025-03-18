@@ -180,7 +180,7 @@ def cpu_rollout(
     
 
   
-    for _ in range(epochs):
+    for epoch in range(epochs):
         total_steps = len(training_keys)
         masks = None
         if max_steps != None and max_steps < len(training_keys): total_steps = max_steps
@@ -200,6 +200,7 @@ def cpu_rollout(
                     mask = torch.cat([mask_a, mask_b, mask_c, mask_d], dim=-1)
                     augmented_audio_sample = torch.cat([aug_a, aug_b, aug_c, aug_d], dim=-1)
                 else:
+                    augmentation_config['epoch'] = epoch
                     augmented_audio_sample, mask = policy.augment(audio_chunk, **augmentation_config)[:2]
                 if isinstance(masks, list): 
                     masks.append(mask)

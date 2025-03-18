@@ -1,12 +1,14 @@
 #!/bin/bash
-#SBATCH --time=96:00:00
-#SBATCH --mem=150GB
+#SBATCH --time=90:00:00
+#SBATCH --mem=70GB
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1   
 #SBATCH --qos=gpu
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=16
 
 module load Anaconda3/2022.10
 source activate /mnt/parscratch/users/acp21rjf/conda/main
 
-python train.py --config ./configs/example.yaml
+cd ../
+
+python train_freq_mask_loop.py --config ./configs/configs_in_paper/CM_train/CM.yaml

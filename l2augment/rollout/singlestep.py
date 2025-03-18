@@ -143,14 +143,14 @@ def rollout(
                 b,c,t = audio_chunk.shape
                 if 1==2: #t > seq_len//2:
                     a, b, c, d = audio_chunk.chunk(4, dim=-1)
-                    aug_a, mask_a = policy.augment(a, **augmentation_config)
-                    aug_b, mask_b = policy.augment(b, **augmentation_config)
-                    aug_c, mask_c = policy.augment(c, **augmentation_config)
-                    aug_d, mask_d = policy.augment(d, **augmentation_config)
+                    aug_a, mask_a = policy.augment(a, **augmentation_config)[:2]
+                    aug_b, mask_b = policy.augment(b, **augmentation_config)[:2]
+                    aug_c, mask_c = policy.augment(c, **augmentation_config)[:2]
+                    aug_d, mask_d = policy.augment(d, **augmentation_config)[:2]
                     mask = torch.cat([mask_a, mask_b, mask_c, mask_d], dim=-1)
                     augmented_audio_sample = torch.cat([aug_a, aug_b, aug_c, aug_d], dim=-1)
                 else:
-                    augmented_audio_sample, mask = policy.augment(audio_chunk, **augmentation_config)
+                    augmented_audio_sample, mask = policy.augment(audio_chunk, **augmentation_config)[:2]
                 if isinstance(masks, list): 
                     masks.append(mask)
         
