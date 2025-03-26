@@ -74,8 +74,11 @@ def cpu_rollout(
     
     out_b = asr_model(audio_signal = audio_b)['final_posteriors']
 
-    out_original_posteriors = out_original['final_posteriors'].squeeze(0)
-    out_original_predictions = decoder(out_original_posteriors)
+    out_original_posteriors = out_original['final_posteriors']
+    teacher_targets = text.lower()
+    enc_teacher_targets = torch.LongTensor(tokenizer.encode(teacher_targets))[None]
+    out_original_loss = ctc_loss_fn(out_original_posteriors.transpose(0, 1), enc_teacher_targets, torch.LongTensor([out_original_posteriors.shape[1]] * out_original_posteriors.shape[0]), torch.LongTensor([enc_teacher_targets.shape[1]] * enc_teacher_targets.shape[0])) / (out_original_posteriors.shape[0] * out_original_posteriors.shape[1])
+   
     
 
     pseudo_targets = decoder(out_a.squeeze(0)) 
@@ -99,35 +102,13 @@ def cpu_rollout(
 
     with torch.no_grad():
         out_updated = asr_model(audio_signal = audio)
-    updated_logits = out_updated['final_posteriors'].squeeze(0) # BNC -> NC
-    updated_predictions = decoder(updated_logits)
-
-    teacher_targets = text
-   
+    updated_logits = out_updated['final_posteriors'] #.squeeze(0) # BNC -> NC
     
-    #print(teacher_output_posteriors.shape, teacher_logits_at_t.shape, teacher_logits.shape)
-
-    prev = word_error_rate_detail(hypotheses=[normalize(out_original_predictions)], references=[normalize(teacher_targets)], use_cer=True)[0] * 100
-    updated = word_error_rate_detail(hypotheses=[normalize(updated_predictions)], references=[normalize(teacher_targets)], use_cer=True)[0] * 100
-    # prev_ctc_loss = ctc_loss_fn(out_original_posteriors, teacher_logits, torch.LongTensor([N] * 1), torch.LongTensor([teacher_logits.shape[0]] * 1)) / total_tokens_in_loss
-    # updated_ctc_loss = ctc_loss_fn(updated_logits, teacher_logits, torch.LongTensor([N] * 1), torch.LongTensor([teacher_logits.shape[0]] * 1)) / total_tokens_in_loss
-
-    diff = prev - updated
-    print(diff) if verbose else None
-
-    prev, updated = torch.tensor(prev), torch.tensor(updated)
-
-    if return_wer:
-        prev_wer = word_error_rate_detail(hypotheses=[normalize(out_original_predictions)], references=[normalize(teacher_targets)], use_cer=False)[0] * 100
-        updated_wer = word_error_rate_detail(hypotheses=[normalize(updated_predictions)], references=[normalize(teacher_targets)], use_cer=False)[0] * 100
-        diff = prev_wer - updated_wer
-        prev_wer, updated_wer = torch.tensor(prev_wer), torch.tensor(updated_wer)
-
-        prev = torch.stack([prev, prev_wer])
-        updated = torch.stack([updated, updated_wer])
-        print(prev.shape, updated.shape) if verbose else None
     
-    return prev, updated, masks
+    updated_loss = ctc_loss_fn(updated_logits.transpose(0, 1), enc_teacher_targets, torch.LongTensor([out_original_posteriors.shape[1]] * out_original_posteriors.shape[0]), torch.LongTensor([enc_teacher_targets.shape[1]] * enc_teacher_targets.shape[0])) / (out_original_posteriors.shape[0] * out_original_posteriors.shape[1])
+
+        
+    return out_original_loss, updated_loss, masks
         
        
 

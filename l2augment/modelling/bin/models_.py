@@ -94,12 +94,13 @@ class DepthWiseSeparableConv1d(base):
         return self.pointwise(self.depthwise(x))
 
 
+
 class Policy(base):
     def __init__(self) -> None:
         super().__init__()
         if type(self) == Policy: raise Exception('Policy class is not meant to be instantiated directly. Use a subclass instead!')
 
-    def augment(self, audio, *args, **kwargs):
+    def augment(self, audio):
         raise NotImplementedError
     
 class NoAugmentationPolicy(Policy):
@@ -140,59 +141,6 @@ class FrequencyMaskingRanker(Policy):
         
     def learnt_augmentation(self, audio, repeats=1):
         raise NotImplementedError # must be implemented in subclass
-
-class MixedMaskingRanker(Policy):
-    def __init__(self, zero_masking=True, epochs_until_random=-1) -> None:
-        super().__init__()
-        self.zero_masking = zero_masking
-        self.epochs_until_random = epochs_until_random
-
-    @staticmethod
-    def get_mask(audio):
-        x = torch.ones_like(audio)
-        min_p = random.random()/2
-        time_masker = SpecAugment(n_time_masks=12, n_freq_masks=0, freq_mask_param=0, zero_masking=True, min_p=min_p)
-        freq_masks = random.randint(5,7)
-        freq_mask_param = random.randint(24, 44)
-        freq_masker = SpecAugment(n_time_masks=0, n_freq_masks=freq_masks, freq_mask_param=freq_mask_param, zero_masking=True)
-        method = random.randint(0,2)
-        if method == 0:
-            x = time_masker(x)
-        elif method == 1:
-            x = freq_masker(x)
-        else:
-            x = time_masker(x)
-            x = freq_masker(x)
-        return x
-
-    def apply_mask(self, audio, mask):
-        if not self.zero_masking:
-            audio = audio * mask + (1 - mask) * audio.mean(dim=(1,2), keepdim=True)
-        else:
-            audio = audio * mask
-        return audio
-        
-    def augment(self, audio, use_random=False, repeats=1, *args, **kwargs):
-        assert audio.dim() == 3, 'audio must be 3D tensor'
-        
-        epoch = kwargs.get('epoch', 0)
-        if self.epochs_until_random != -1 and epoch >= self.epochs_until_random: use_random = True
-
-        if use_random:
-            mask_spec = self.get_mask(audio)
-            
-            audio = self.apply_mask(audio, mask_spec)
-            
-            assert mask_spec.shape[1] == 80, 'mask_spec must have 80 channels'
-
-            return audio, mask_spec
-        else: 
-            return self.learnt_augmentation(audio, repeats=repeats)
-        
-    def learnt_augmentation(self, audio, repeats=1):
-        raise NotImplementedError # must be implemented in subclass
-
-
         
 class TrainableFrequencyMaskingRanker(FrequencyMaskingRanker):
     def forward_pass(self, batch, device, **kwargs):
@@ -274,7 +222,7 @@ class VAEBase(base):
     
 
 class VariationalAutoEncoder(VAEBase):
-    def __init__(self, input_dim=80, hidden_dim=256, latent_dim=16, layers=5, kld_weight=0.01):
+    def __init__(self, input_dim=80, hidden_dim=256, latent_dim=16, layers=5, kld_weight=0.01   ):
         super().__init__()
         self.d_model = hidden_dim
         self.input_dim = input_dim
@@ -321,276 +269,28 @@ class VariationalAutoEncoder(VAEBase):
 
         z, eps = self.reparameterize(mu, logvar, eps)
 
-        downsampled_lengths = None
         if lengths is not None:
             if counts is not None: lengths = torch.repeat_interleave(lengths, counts, dim=0)
             out_length = x.size(-1)
             downsampled_lengths = (lengths * out_length + in_length - 1) // in_length
             mask = torch.arange(out_length).unsqueeze(0).to(downsampled_lengths.device) < downsampled_lengths.unsqueeze(-1)
-            
             z = torch.masked_fill(z, ~mask.unsqueeze(1), 0)
             mu = torch.masked_fill(mu, ~mask.unsqueeze(1), 0)
             logvar = torch.masked_fill(logvar, ~mask.unsqueeze(1), 0)
 
-        return z, mu, logvar, eps, downsampled_lengths
+        return z, mu, logvar, eps
 
 
 
     def forward(self, x, lengths, eps=None, counts=None):
         in_length = x.size(-1)
         
-        z, mu, logvar, eps, _ = self.encode(x, lengths, eps, counts)
+        z, mu, logvar, eps = self.encode(x, lengths, eps, counts)
 
         x = self.decoder(z)
         x = torch.nn.functional.interpolate(x, size=in_length, mode='linear', align_corners=False)
         x = self.output(x)
         return x, mu, logvar
-    
-class VariableLengthResidual(nn.Module):
-    def __init__(self, module, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.module = module
-
-    def forward(self, x):
-        original_length = x.size(-1)
-        residual = x
-        x = self.module(x)
-        new_length = x.size(-1)
-        if new_length != original_length:
-            residual = torch.nn.functional.interpolate(residual, size=new_length, mode='linear', align_corners=False)
-        return x + residual
-
-class ConvolutionBlock(nn.Module):
-    def __init__(
-            self,
-            kernel_size:int,
-            stride:int,
-            transposed:bool=False,
-            hidden_dim:int=256,
-            ) -> None:
-        super().__init__()
-
-        self.transposed = transposed
-        DepthwiseConv = nn.ConvTranspose1d if transposed else nn.Conv1d
-        self.network = nn.Sequential(
-            Rearrange('b c t -> b t c'),
-            nn.LayerNorm(hidden_dim),
-            Rearrange('b t c -> b c t'),
-            nn.Conv1d(hidden_dim, hidden_dim * 2, kernel_size=1, stride=1),
-            nn.GLU(dim=1),
-            DepthwiseConv(hidden_dim, hidden_dim, kernel_size=kernel_size, stride=stride, padding=1, groups=hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.SiLU(),
-            nn.Conv1d(hidden_dim, hidden_dim, kernel_size=1, stride=1),
-        )
-
-    def forward(self, x):
-        return self.network(x)
-    
-class GRULayer(nn.Module):
-    def __init__(self, dim=256, layers=2):
-        super().__init__()
-        self.ln = nn.LayerNorm(dim)
-        self.gru = nn.GRU(dim, dim, num_layers=layers, batch_first=True, bidirectional=False)
-
-    def forward(self, x, lengths):
-        # x: B, C, T
-        x = rearrange(x, 'b c t -> b t c')
-        x = self.ln(x)
-        x = torch.nn.utils.rnn.pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=False)
-        x, _ = self.gru(x)
-        x, _ = torch.nn.utils.rnn.pad_packed_sequence(x, batch_first=True)
-        x = rearrange(x, 'b t c -> b c t')
-        return x
-
-class PlaceholderVQ(nn.Module):
-    '''Use this as an identity op in place of VQ when you don't want to use VQ'''
-    def forward(self, x, lens=None):
-        return x, None, torch.tensor(0.0, device=x.device, dtype=x.dtype) # vq_x, indices, vq_commit_loss
-
-from vector_quantize_pytorch import VectorQuantize
-class VQVariationalAutoEncoder(VAEBase):
-    def __init__(
-            self, 
-            input_dim=80, 
-            hidden_dim=256, 
-            latent_dim=16, 
-            layers=5, 
-            codebook_size=256, 
-            commitment_weight=0.0,
-            use_vq=True,
-            norm_type='gn'
-        ):
-        super().__init__()
-        self.d_model = hidden_dim
-        self.input_dim = input_dim
-        self.layers = layers
-        self.latent_dim = latent_dim
-        self.use_vq = use_vq
-        self.norm_type = norm_type
-
-        assert norm_type in ['gn', 'bn'], 'norm_type must be either "gn" or "bn"'
-        
-        self.VQ = VectorQuantize(
-            dim = latent_dim, 
-            codebook_size=codebook_size, 
-            decay=0.99, 
-            commitment_weight=commitment_weight,
-            kmeans_init = True,   # set to True
-            kmeans_iters = 10,
-            threshold_ema_dead_code = 1.0,
-            use_cosine_sim = True,
-            rotation_trick = True,
-        ) if use_vq else PlaceholderVQ()
-        
-        self.encoder = nn.Sequential(
-            nn.Conv1d(input_dim, hidden_dim, kernel_size=1, stride=1),
-            *[  
-                VariableLengthResidual(
-                    nn.Sequential(
-                        nn.GroupNorm(hidden_dim//32, hidden_dim) if norm_type == 'gn' else nn.BatchNorm1d(hidden_dim),
-                        nn.Conv1d(hidden_dim, hidden_dim, kernel_size=1, stride=1, padding='same'),
-                        nn.SiLU(),
-                        nn.Conv1d(hidden_dim, hidden_dim, kernel_size=7, stride=2, padding=1, groups=hidden_dim),
-                    )
-                ) 
-                for _ in range(layers)
-            ],
-            nn.Conv1d(hidden_dim, hidden_dim, kernel_size=1, stride=1),
-        )
-        self.mu = nn.Conv1d(hidden_dim, latent_dim, kernel_size=1, stride=1)
-        
-        self.rnn_in = GRULayer(hidden_dim, layers=1)
-        self.rnn_out = GRULayer(hidden_dim, layers=1)
-        
-        self.latent_to_hidden = nn.Conv1d(latent_dim, hidden_dim, kernel_size=1, stride=1)
-        self.decoder = nn.Sequential(
-            *[
-                VariableLengthResidual(
-                    nn.Sequential(
-                        nn.GroupNorm(hidden_dim//32, hidden_dim) if norm_type == 'gn' else nn.BatchNorm1d(hidden_dim),
-                        nn.Conv1d(hidden_dim, hidden_dim, kernel_size=1, stride=1, padding='same'),
-                        nn.SiLU(),
-                        nn.ConvTranspose1d(hidden_dim, hidden_dim, kernel_size=7, stride=2, padding=1, groups=hidden_dim),
-                    )
-                ) 
-                for _ in range(layers)
-            ],
-        )
-        self.output = nn.Sequential(
-            nn.GroupNorm(hidden_dim//32, hidden_dim) if norm_type == 'gn' else nn.BatchNorm1d(hidden_dim),
-            nn.Conv1d(hidden_dim, hidden_dim*2, kernel_size=3, stride=1, padding='same'),
-            nn.GLU(dim=1),
-            nn.Conv1d(hidden_dim, input_dim, kernel_size=1)
-        )
-
-    def encode(self, x, lengths=None, counts=None):
-        in_length = x.size(-1)
-        x = self.encoder(x)
-        
-        if lengths is not None:
-            downsampled_lengths = (lengths * x.size(-1) + in_length - 1) // in_length
-        else: downsampled_lengths = None
-
-        x = self.rnn_in(x, downsampled_lengths) + x
-
-        z = self.mu(x)
-
-        z, indices, closs = self.VQ(z.transpose(-1, -2), lens=downsampled_lengths)
-        z = z.transpose(-1, -2)  
-
-
-        if counts is not None: # when we want to produce multiple samples from the same input
-            z = torch.repeat_interleave(z, counts, dim=0)
-
-        if lengths is not None:
-            if counts is not None: lengths = torch.repeat_interleave(lengths, counts, dim=0)
-            out_length = x.size(-1)
-            downsampled_lengths = (lengths * out_length + in_length - 1) // in_length
-            mask = torch.arange(out_length).unsqueeze(0).to(downsampled_lengths.device) < downsampled_lengths.unsqueeze(-1)
-            
-            z = torch.masked_fill(z, ~mask.unsqueeze(1), 0)
-
-        return z, indices, closs, downsampled_lengths
-
-
-    def forward(self, x, lengths, counts=None):
-        in_length = x.size(-1)
-        
-        z, _, closs, down_lengths = self.encode(x, lengths, counts)
-        
-        x = self.latent_to_hidden(z)
-        x = self.rnn_out(x, down_lengths) + x
-        x = self.decoder(x)
-        x = torch.nn.functional.interpolate(x, size=in_length, mode='linear', align_corners=False)
-        x = self.output(x)
-        return x, z, closs
-    
-    def forward_pass(self, batch, device, **kwargs):
-        audio = batch['audio'].to(device).to(torch.float32).squeeze(1)
-        lengths = batch['lengths'].to(device)
-
-        audio_pred, zvq, closs = self(audio, lengths)
-        
-        if kwargs.get('wandb', False) and random.random() < 0.05:
-            with torch.no_grad():
-                mask0 = audio[0]
-                sample = audio_pred[0]
-                vis = plt.imshow(sample[..., :lengths[0].item()].detach().cpu().numpy(), aspect='auto', origin='lower', interpolation='nearest', cmap='magma', vmin=-1, vmax=1)
-                wandb.log({'generated':vis})
-                plt.close()
-                vis = plt.imshow(mask0[..., :lengths[0].item()].detach().cpu().numpy(), aspect='auto', origin='lower', interpolation='nearest', cmap='magma', vmin=-1, vmax=1)
-                wandb.log({'target':vis})
-                plt.close()
-
-        loss = nn.functional.mse_loss(audio_pred, audio, reduction='none')
-    
-        pad_mask = torch.arange(audio.size(-1)).to(lengths.device) < lengths[:, None]
-        if lengths.min() != lengths.max():
-            loss = torch.masked_fill(loss, ~pad_mask.unsqueeze(1), 0)
-
-        loss = loss.sum() / (pad_mask.sum() * audio.size(1))
-        
-        total_loss = loss + closs
-        
-
-        return total_loss, {'loss':loss, 'commit_loss':closs}, audio_pred
-
-class BinaryVariationalAutoEncoder(VQVariationalAutoEncoder):
-    def forward_pass(self, batch, device, **kwargs):
-        masks = batch['masks'].to(device).to(torch.float32).squeeze(1)
-        print(masks.shape)
-        lengths = batch['lengths'].to(device)
-
-        masks_out, zvq, closs = self(masks, lengths)
-        masks_out_probs = torch.sigmoid(masks_out)
-        
-        if kwargs.get('wandb', False) and random.random() < 0.05:
-            with torch.no_grad():
-                mask0 = masks[0]
-                sample = torch.bernoulli(masks_out_probs[0]) if random.random() < 0.5 else torch.round(masks_out_probs[0], decimals=0)
-                vis = plt.imshow(sample[..., :lengths[0].item()].detach().cpu().numpy(), aspect='auto', cmap='gray')
-                wandb.log({'generated':vis})
-                plt.close()
-                vis = plt.imshow(mask0[..., :lengths[0].item()].detach().cpu().numpy(), aspect='auto', cmap='gray')
-                wandb.log({'target':vis})
-                plt.close()
-
-        prob_of_masks = masks_out_probs * masks + (1 - masks_out_probs) * (1 - masks)
-
-        log_prob_of_masks = torch.log(prob_of_masks + 1e-8)
-
-        pad_mask = torch.arange(masks.size(-1)).to(lengths.device) < lengths[:, None]
-        if lengths.min() != lengths.max():
-            log_prob_of_masks = torch.masked_fill(log_prob_of_masks, ~pad_mask.unsqueeze(1), 0)
-
-        loss = -torch.sum(log_prob_of_masks) 
-        loss = loss / (pad_mask.sum() * masks.size(1))
-        
-        total_loss = loss + closs
-        
-
-        return total_loss, {'loss':loss, 'commit_loss':closs}, masks_out_probs
     
 
 class SingleStateVariationalAutoEncoder(VAEBase):
@@ -861,197 +561,199 @@ class ConditionalMaskingPolicy(GenerativePolicy):
       
         return total_loss, {'loss':loss, 'entropy':entropy, 'total_loss':total_loss}
     
+def ddpm_schedules(beta1, beta2, T):
+    """
+    Returns pre-computed schedules for DDPM sampling, training process.
+    """
+    assert beta1 < beta2 < 1.0, "beta1 and beta2 must be in (0, 1)"
 
+    beta_t = (beta2 - beta1) * torch.arange(0, T + 1, dtype=torch.float32) / T + beta1
+    sqrt_beta_t = torch.sqrt(beta_t)
+    alpha_t = 1 - beta_t
+    log_alpha_t = torch.log(alpha_t)
+    alphabar_t = torch.cumsum(log_alpha_t, dim=0).exp()
 
-class timestep_encoder(nn.Module):
-    def __init__(self, hidden_dim):
-        super().__init__()
-        self.network = nn.Linear(1, hidden_dim // 2)
+    sqrtab = torch.sqrt(alphabar_t)
+    oneover_sqrta = 1 / torch.sqrt(alpha_t)
 
-    def forward(self, t):
-        proj = self.network(t)
-        t = torch.cat((torch.sin(proj), torch.cos(proj)), dim=-1)
-        return t
+    sqrtmab = torch.sqrt(1 - alphabar_t)
+    mab_over_sqrtmab_inv = (1 - alpha_t) / sqrtmab
 
+    return {
+        "alpha_t": alpha_t,  # \alpha_t
+        "oneover_sqrta": oneover_sqrta,  # 1/\sqrt{\alpha_t}
+        "sqrt_beta_t": sqrt_beta_t,  # \sqrt{\beta_t}
+        "alphabar_t": alphabar_t,  # \bar{\alpha_t}
+        "sqrtab": sqrtab,  # \sqrt{\bar{\alpha_t}}
+        "sqrtmab": sqrtmab,  # \sqrt{1-\bar{\alpha_t}}
+        "mab_over_sqrtmab": mab_over_sqrtmab_inv,  # (1-\alpha_t)/\sqrt{1-\bar{\alpha_t}}
+    }
 
-class MHA(nn.Module):
-    def __init__(self, dim, heads=8):
-        super().__init__()
-        self.ln = nn.LayerNorm(dim)
-        self.mha = nn.MultiheadAttention(dim, heads)
-        self.proj = nn.Conv1d(dim, dim, kernel_size=1, stride=1)
-        self.out_mlp = nn.Sequential(
-            nn.LayerNorm(dim),
-            SwiGlu(input_dim=dim, output_dim=dim, expansion_factor=1)
-        )
+import numpy as np
+class DDPM(nn.Module):
+    def __init__(self, nn_model, betas, n_T, device, drop_prob=0.1):
+        super(DDPM, self).__init__()
+        self.nn_model = nn_model.to(device)
+
+        # register_buffer allows accessing dictionary produced by ddpm_schedules
+        # e.g. can access self.sqrtab later
+        for k, v in ddpm_schedules(betas[0], betas[1], n_T).items():
+            self.register_buffer(k, v)
+
+        self.n_T = n_T
+        self.device = device
+        self.drop_prob = drop_prob
+        self.loss_mse = nn.MSELoss()
+
+    def forward(self, x, c):
+        """
+        this method is used in training, so samples t and noise randomly
+        """
+
+        _ts = torch.randint(1, self.n_T+1, (x.shape[0],)).to(self.device)  # t ~ Uniform(0, n_T)
+        noise = torch.randn_like(x)  # eps ~ N(0, 1)
+
+        x_t = (
+            self.sqrtab[_ts, None, None, None] * x
+            + self.sqrtmab[_ts, None, None, None] * noise
+        )  # This is the x_t, which is sqrt(alphabar) x_0 + sqrt(1-alphabar) * eps
+        # We should predict the "error term" from this x_t. Loss is what we return.
+
+        # dropout context with some probability
+        context_mask = torch.bernoulli(torch.zeros_like(c)+self.drop_prob).to(self.device)
+        
+        # return MSE between added noise, and our predicted noise
+        return self.loss_mse(noise, self.nn_model(x_t, c, _ts / self.n_T, context_mask))
+
+    def sample(self, n_sample, size, device, guide_w = 0.0):
+        # we follow the guidance sampling scheme described in 'Classifier-Free Diffusion Guidance'
+        # to make the fwd passes efficient, we concat two versions of the dataset,
+        # one with context_mask=0 and the other context_mask=1
+        # we then mix the outputs with the guidance scale, w
+        # where w>0 means more guidance
+
+        x_i = torch.randn(n_sample, *size).to(device)  # x_T ~ N(0, 1), sample initial noise
+        c_i = torch.arange(0,10).to(device) # context for us just cycles throught the mnist labels
+        c_i = c_i.repeat(int(n_sample/c_i.shape[0]))
+
+        # don't drop context at test time
+        context_mask = torch.zeros_like(c_i).to(device)
+
+        # double the batch
+        c_i = c_i.repeat(2)
+        context_mask = context_mask.repeat(2)
+        context_mask[n_sample:] = 1. # makes second half of batch context free
+
+        x_i_store = [] # keep track of generated steps in case want to plot something 
+        print()
+        for i in range(self.n_T, 0, -1):
+            print(f'sampling timestep {i}',end='\r')
+            t_is = torch.tensor([i / self.n_T]).to(device)
+            t_is = t_is.repeat(n_sample,1,1,1)
+
+            # double batch
+            x_i = x_i.repeat(2,1,1,1)
+            t_is = t_is.repeat(2,1,1,1)
+
+            z = torch.randn(n_sample, *size).to(device) if i > 1 else 0
+
+            # split predictions and compute weighting
+            eps = self.nn_model(x_i, c_i, t_is, context_mask)
+            eps1 = eps[:n_sample]
+            eps2 = eps[n_sample:]
+            eps = (1+guide_w)*eps1 - guide_w*eps2
+            x_i = x_i[:n_sample]
+            x_i = (
+                self.oneover_sqrta[i] * (x_i - eps * self.mab_over_sqrtmab[i])
+                + self.sqrt_beta_t[i] * z
+            )
+            if i%20==0 or i==self.n_T or i<8:
+                x_i_store.append(x_i.detach().cpu().numpy())
+        
+        x_i_store = np.array(x_i_store)
+        return x_i, x_i_store
+
+class MHABlock(nn.Module):
+    def __init__(self, d_model, n_heads, dropout=0.0):
+        super(MHABlock, self).__init__()
+        self.attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
 
     def forward(self, x):
-        residual = x
-        x = self.ln(x.transpose(-1, -2))
-        x = rearrange(x, 'b t c -> t b c')
-        x = self.mha(x, x, x)[0]
-        x = rearrange(x, 't b c -> b c t')
-        x = self.proj(x)
-        x = x + residual
-        residual = x
-        x = self.out_mlp(x.transpose(-1, -2)).transpose(-1, -2)
-        x = x + residual
-        return x
+        return self.attn(x, x, x)[0]
 
-class DTConditionalMaskingPolicy(Policy): 
+class DTConditionalMaskingPolicy(ConditionalMaskingPolicy): 
     def __init__(            
             self,
             mel_bins=80,
             output_dim=80,
             latent_dim=32,
             hidden_dim=256,
-            audio_vae_config:Dict={},
-            audio_vae_state_dict_path:str=None,
-            mask_vae_config:Dict={},
-            mask_vae_state_dict_path:str=None,
+            vae_config:Dict={},
+            vae_state_dict_path:str=None,
             min_input_size=160,
+            eps_clip=0.2,
             default_conditioning_reward=1.0,
-            **kwargs
+            betas=(1e-4, 0.01), 
         ) -> None:
-        super().__init__()
+        super().__init__(mel_bins, output_dim, hidden_dim, vae_config, vae_state_dict_path, min_input_size, eps_clip)
         self.default_conditioning_reward = default_conditioning_reward
+        self.freeze_encoder = True
 
-        self.audio_enc = VariationalAutoEncoder(**audio_vae_config)
-        if audio_vae_state_dict_path is not None:
-            audio_vae_state_dict = torch.load(audio_vae_state_dict_path, map_location='cpu')['model_state_dict']
-            #audio_vae_state_dict = {k.replace('vae.', 'audio_enc.'):v for k,v in audio_vae_state_dict.items()} 
-            self.audio_enc.load_state_dict(audio_vae_state_dict)
-            print(f'Loaded VAE state dict from {audio_vae_state_dict_path}')
+        self.vae = None
 
-        self.mask_enc = BinaryVariationalAutoEncoder(**mask_vae_config)
-        if mask_vae_state_dict_path is not None:
-            mask_vae_state_dict = torch.load(mask_vae_state_dict_path, map_location='cpu')['model_state_dict']
-            self.mask_enc.load_state_dict(mask_vae_state_dict)
-            print(f'Loaded VAE state dict from {mask_vae_state_dict_path}')
+        self.encode = (
+                nn.Sequential(
+                    nn.Conv1d(80 + latent_dim*2, hidden_dim, kernel_size=1, stride=1),
+                    *[
+                        ResidualBlock(nn.Sequential(
+                            nn.Conv1d(hidden_dim, hidden_dim, kernel_size=13, stride=1, padding="same"),
+                            nn.BatchNorm1d(hidden_dim),
+                            nn.GELU(),
+                        ))   for _ in range(3)
+                    ],
+                    Rearrange('b c t -> b t c'),
+                    nn.Linear(hidden_dim,hidden_dim),
+                    nn.LayerNorm(hidden_dim),
+                    nn.Linear(hidden_dim,output_dim),
+                    Rearrange('b t c -> b c t')
+        ))
 
-        self.codebook_size = self.mask_enc.VQ.codebook_size
-        self.embeddings = nn.Embedding(self.codebook_size + 1, hidden_dim, padding_idx=self.codebook_size)
-        self.score_enc = timestep_encoder(hidden_dim=hidden_dim)
+        self.score_embed = nn.Conv1d(1, latent_dim, kernel_size=1, stride=1)
+        self.time_embed = nn.Conv1d(1, latent_dim, kernel_size=1, stride=1)
 
-        self.encoder = nn.GRU(
-            input_size=audio_vae_config['latent_dim'],
-            hidden_size=hidden_dim,
-            num_layers=3,
-            batch_first=True,
-        )
-        self.decoder = nn.GRU(
-            input_size=hidden_dim,
-            hidden_size=hidden_dim,
-            num_layers=3,
-            batch_first=True,
-        )
-        self.prediction = nn.Sequential(
-            nn.LayerNorm(hidden_dim),
-            nn.Linear(hidden_dim, self.codebook_size + 1)
-        )
+        vae = VariationalAutoEncoder(**vae_config)
 
-        
+        self.n_T = 10
+        # register_buffer allows accessing dictionary produced by ddpm_schedules
+        # e.g. can access self.sqrtab later
+        for k, v in ddpm_schedules(betas[0], betas[1], self.n_T).items():
+            self.register_buffer(k, v)
 
-    @torch.no_grad()
-    def encode_audio(self, audio, lengths, eps=None, counts=None):
-        z, _, _, _, downsampled_lengths = self.audio_enc.encode(audio, lengths, eps, counts)
-        return z, downsampled_lengths
+
+
+        self.mask_encoder = vae.encoder
+        self.mask_to_latent = nn.Conv1d(hidden_dim, latent_dim, kernel_size=1, stride=1)
+
     
-    @torch.no_grad()
-    def encode_mask(self, mask, lengths):
-        _, idx, _ = self.mask_enc.encode(mask, lengths)
-        idx[idx == -1] = self.codebook_size
-        return idx
-    
-    def encode(self, audio_emb, lengths):
-        packed_emb = torch.nn.utils.rnn.pack_padded_sequence(input=audio_emb.transpose(-1, -2), lengths=lengths.cpu(), batch_first=True, enforce_sorted=False)
-        _, h_n = self.encoder(packed_emb)
-        return h_n
-    
-    def decode(self, h_n, mask_emb, lengths):
-        packed_emb = torch.nn.utils.rnn.pack_padded_sequence(input=mask_emb, lengths=lengths.cpu(), batch_first=True, enforce_sorted=False)
-        x, _ = self.decoder(packed_emb, h_n)
-        x, _ = torch.nn.utils.rnn.pad_packed_sequence(x, batch_first=True)
-        x = self.prediction(x)
+
+    def forward(self, condition):
+        x = self.encode(condition)
         return x
     
-    
     @torch.no_grad()
-    def generate(self, audio_hn, sample=True, target_output_length=None, target_prediction_steps=None):
-        score_emb = self.score_enc(torch.tensor([self.default_conditioning_reward])[:, None].float().to(audio_hn.device)).unsqueeze(1)
-        outputs = []
-        h_n = audio_hn
-        seq = score_emb
-
-        total_steps = 80 if target_prediction_steps is None else target_prediction_steps
-
-        for step in range(total_steps):
-            z, h_n = self.decoder(seq, h_n)
-            pred = self.prediction(z)
-            
-            if target_prediction_steps is not None:
-                pred[..., self.codebook_size] = -torch.finfo(pred.dtype).max # prevent EOS token from being selected
-
-            probs = pred.softmax(-1)
-            if sample:
-                idx = torch.multinomial(probs.squeeze(1), 1)
-            else: idx = probs.argmax(-1)
-            outputs.append(idx.squeeze().item())
-            if idx.item() == self.codebook_size: break
-            seq = self.embeddings(idx)
-            
-        outputs = [el for el in outputs if el != self.codebook_size]
-        if len(outputs) == 0: return False
-        print(outputs)
-        outputs = torch.tensor(outputs, device=audio_hn.device)
-       
-        mask_latent = self.mask_enc.VQ.codebook[outputs][None].transpose(-1, -2)
-
-        mask_h = self.mask_enc.decoder(mask_latent)
-
-        if target_output_length is not None:
-            mask_h = torch.nn.functional.interpolate(mask_h, size=target_output_length, mode='linear', align_corners=False)
-
-
-        mask_pred = self.mask_enc.output(mask_h).sigmoid()
-        mask_pred = torch.round(mask_pred, decimals=0).to(dtype=torch.long)
-
-        return mask_pred
-
-    @torch.no_grad()
-    def augment(self, audio, *args, **kwargs):
-        assert audio.size(0) == 1, 'only batch size 1 is supported atm'
-        mode = self.training
-        self.eval()
-
-        lengths = torch.tensor([audio.size(-1)]).to(audio.device)
-        audio_latent, downsampled_lengths = self.encode_audio(audio, lengths=lengths)
-        h_n = self.encode(audio_latent, downsampled_lengths)
-        mask_pred = self.generate(
-            audio_hn=h_n,
-            sample=True,
-            target_output_length=lengths[0].item(),
-            target_prediction_steps=downsampled_lengths[0].item()
-        )
-        audio = audio * mask_pred
-
-        if mode: self.train()
+    def step(self, x_t: Tensor, t_start: Tensor, t_end: Tensor, scores: Tensor) -> Tensor:
+        t_start = t_start.view(1, 1, 1).expand(x_t.shape[0], 1, 1)
         
-        return audio, mask_pred
+        t_start_emb = self.time_embed(t_start).repeat(1, 1, x_t.size(-1))
+        start_condition = torch.cat((x_t, scores, t_start_emb), dim=1)
 
+        last_t = t_start + (t_end - t_start) / 2
+        last_t_emb = self.time_embed(last_t).repeat(1, 1, x_t.size(-1))
+        first_out = self(start_condition)
+        x_t2 = x_t + first_out * (t_end - t_start) / 2
+        last_condition = torch.cat((x_t2, scores, last_t_emb), dim=1)
 
-
-    def forward(self, audio_emb, downsampled_lengths, mask_emb, rewards, counts=None):
-        h_n = self.encode(audio_emb, downsampled_lengths)
-        if counts is not None: 
-            h_n = torch.repeat_interleave(h_n, counts, dim=1)
-            downsampled_lengths = downsampled_lengths.repeat_interleave(counts, dim=0)
-        score_emb = self.score_enc(rewards[:, None].float()).unsqueeze(1)
-        mask_emb = torch.cat((score_emb, mask_emb), dim=1)
-        downsampled_lengths = downsampled_lengths + 1
-        predictions = self.decode(h_n, mask_emb, downsampled_lengths)
-        misc = {'h_n':h_n, 'mask_emb':mask_emb}
-        return predictions, downsampled_lengths, misc
+        return x_t + (t_end - t_start) * self(last_condition)
 
 
     def forward_pass(self, batch, device, **kwargs):
@@ -1062,40 +764,53 @@ class DTConditionalMaskingPolicy(Policy):
         eps = batch['eps'].to(dtype=torch.float32, device=device).squeeze(1) if 'eps' in batch else None
         counts = batch['counts'].to(device)
 
+        total_batch = counts.sum()
 
-        audio_latent, downsampled_lengths = self.encode_audio(audio, lengths=lengths, counts=None)
-        mask_idx = self.encode_mask(masks, lengths.repeat_interleave(counts, dim=0))
-        mask_emb = self.embeddings(mask_idx)
 
-        predictions, downsampled_lengths, misc = self(audio_latent, downsampled_lengths, mask_emb, rewards, counts=counts)
+        x1 = masks  
+        x0 = torch.randn_like(x1) # eps ~ N(0, 1)
+        timestep = torch.rand(x1.size(0), 1, 1).to(device)
+    
+        x_t = (1 - timestep) * x0 + timestep * x1
+        dx_t = x1 - x0
+
         
-        mask_idx = torch.cat((mask_idx, torch.full((mask_idx.size(0), 1), -100, dtype=torch.long, device=device)), dim=-1)
-        # set last index to codebook size using downsampling lengths
+        scores = rearrange(rewards, 'b -> b 1 1')
+        scores = self.score_embed(scores).repeat(1, 1, x_t.size(-1))
+        
+        timestep = self.time_embed(timestep).repeat(1, 1, x_t.size(-1))
+        condition = torch.cat((x_t, scores, timestep), dim=1)
+        
+        out = self(condition)
 
-        last_idx = torch.arange(mask_idx.size(0)).to(device)
-        mask_idx[last_idx, downsampled_lengths - 1] = self.codebook_size
-        lengths_mask = torch.arange(mask_idx.size(-1)).to(device) >= downsampled_lengths[:, None]
+        
+        
+        loss = nn.functional.mse_loss(out, dx_t, reduction='none')
+    
 
-        ce_loss = nn.functional.cross_entropy(
-            input = predictions.transpose(-1, -2),
-            target= mask_idx,
-            ignore_index=-100,
-            reduction='none'
-        )
-        ce_loss = ce_loss.masked_fill(lengths_mask, 0)
-        ce_loss = ce_loss.sum() / ((~lengths_mask).sum())
+        if kwargs.get('wandb', False) and random.random() < 0.1:
+            x = torch.randn_like(audio[:1])
+            n_steps = 8
+            time_steps = torch.linspace(0, 1.0, n_steps + 1)
+            scores = torch.ones(1, 1, 1).to(device)
+            scores = self.score_embed(scores).repeat(1, 1, x.size(-1))
+            for i in range(n_steps):
+                x = self.step(x, time_steps[i], time_steps[i + 1], scores)
+            vis = plt.imshow(x[0].detach().cpu().numpy(), aspect='auto', cmap='gray')
+            wandb.log({'generated':vis})
+            plt.close()
+            
 
-        if kwargs.get('wandb', False) and random.random() < 0.05:
-            h_n = misc['h_n'][:, 0, None]
-            mask_pred = self.generate(h_n, sample=True, target_prediction_steps=(downsampled_lengths[0] - 1).item(), target_output_length=lengths[0].item())
-            if mask_pred is not False:
-                vis = plt.imshow(mask_pred[0].detach().cpu().numpy(), aspect='auto', cmap='gray')
-                wandb.log({'generated':vis})
-                plt.close()
+        lengths = lengths.repeat_interleave(counts, dim=0)
+        pad_mask = torch.arange(masks.size(-1)).to(lengths.device) >= lengths[:, None]
 
+        loss = torch.masked_fill(loss, pad_mask.unsqueeze(1), 0)
 
+        loss = loss.sum() / ((~pad_mask).sum() * self.output_dim)
+
+        total_loss = loss
       
-        return ce_loss, {'loss':ce_loss, 'total_loss':ce_loss}
+        return total_loss, {'loss':loss, 'total_loss':total_loss}
 
 
 
@@ -1185,12 +900,9 @@ class AdditivePolicy(Policy):
     
 
 policy_dict['FrequencyMaskingRanker'] = FrequencyMaskingRanker
-policy_dict['MixedMaskingRanker'] = MixedMaskingRanker
 policy_dict['UnconditionalFrequencyMaskingRanker'] = UnconditionalFrequencyMaskingRanker
 policy_dict['ConditionalFrequencyMaskingRanker'] = ConditionalFrequencyMaskingRanker
 
-policy_dict['VQVAE'] = VQVariationalAutoEncoder
-policy_dict['BVAE'] = BinaryVariationalAutoEncoder
 policy_dict['NoAugmentation'] = NoAugmentationPolicy
 policy_dict['AdditivePolicy'] = AdditivePolicy
 policy_dict['ConditionalMaskingPolicy'] = ConditionalMaskingPolicy

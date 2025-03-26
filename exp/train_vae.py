@@ -4,6 +4,7 @@ from omegaconf.omegaconf import OmegaConf
 
 from l2augment.modelling.models import VariationalAutoEncoder
 
+from l2augment.utils.helpers import load_rl_models
 from tqdm import tqdm
 import logging
 import os
@@ -16,6 +17,7 @@ from typing import List, Dict, Any
 from madgrad import MADGRAD
 import matplotlib.pyplot as plt
 import wandb
+from functools import partial
 
 logger = logging.getLogger('train')
 logger.setLevel(logging.INFO)
@@ -58,9 +60,10 @@ class CustomDataset(Dataset):
     def __init__(
             self, 
             files, 
+            return_type='masks',
         ):
         self.data = sorted(files)
-
+        self.return_type = return_type
 
     def __len__(self):
         # Return the total number of samples
@@ -71,23 +74,27 @@ class CustomDataset(Dataset):
             file = self.data[idx]
             rollout = torch.load(file, weights_only=True)
 
-            audio = rollout['audio']       
+            audio = rollout['audio']
+            masks = rollout['mask'] 
+            #masks = masks.unsqueeze(-1).repeat(1, 1, 1, audio.shape[-1])      
 
-            return {
-                'audio': audio,
-            }
+            if self.return_type == 'masks': return {'masks': masks}
+            elif self.return_type == 'audio': return {'audio': audio}
+            elif self.return_type == 'all': return {'audio': audio, 'masks': masks}
+            else: raise ValueError(f"Invalid return type: {self.return_type}")
+            
         except Exception as e:
             print(f"Error loading data: {e}")
             return None
     
-def custom_collate_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:    
+def custom_collate_fn(batch: List[Dict[str, torch.Tensor]], key='masks') -> Dict[str, torch.Tensor]:    
     audio = []
     lengths = []
 
     for i, item in enumerate(batch):
         if item == None: continue
-        audio.append(item['audio'])
-        lengths.append(item['audio'].shape[-1])
+        audio.append(item[key].to(torch.long) if key == 'masks' else item[key].to(torch.float32))
+        lengths.extend([item[key].shape[-1]]*item[key].shape[0])
 
     lengths = torch.tensor(lengths)
     if lengths.min() != lengths.max():
@@ -96,12 +103,15 @@ def custom_collate_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.T
             cur_len = audio[i].shape[-1]
             if cur_len != lengths.max():
                 diff = max_length - cur_len
-                audio[i] = torch.cat([audio[i], torch.zeros(audio[i].shape[0], audio[i].shape[1], diff)], dim=-1)
+                if audio[i].dim() == 4:
+                    audio[i] = torch.cat([audio[i], torch.zeros(audio[i].shape[0], audio[i].shape[1], audio[i].shape[2], diff, dtype=audio[i].dtype)], dim=-1)
+                else:
+                    audio[i] = torch.cat([audio[i], torch.zeros(audio[i].shape[0], audio[i].shape[1], diff, dtype=audio[i].dtype)], dim=-1)
 
     audio = torch.cat(audio)
     
     return {
-        'audio': audio,
+        key: audio,
         'lengths': lengths
     }
 
@@ -133,44 +143,46 @@ def train_vae(
         max_tolerance = 4
         remaining_tolerance = max_tolerance
         running = True
+        max_steps = config['training'].get('max_steps', -1)
 
         while running:
             
-            vae = vae.eval()
-            val_loss_sum = 0
-            val_count = 0
-            
-            all_val_losses = None
+            if val_dataloader is not None:
+                vae = vae.eval()
+                val_loss_sum = 0
+                val_count = 0
+                
+                all_val_losses = None
 
-            pbar = tqdm(val_dataloader)
-            for batch in pbar:
-                with torch.no_grad():
-                    loss, all_losses, _ = vae.forward_pass(batch, device)
-                    if loss == None: continue
-                    val_loss_sum += loss.item()
-                    val_count += 1
-                    if all_val_losses is None:
-                        all_val_losses = {k:v.item() for k,v in all_losses.items()}
-                    else:
-                        for k,v in all_losses.items():
-                            all_val_losses[k] += v.item()
-                    pbar.set_description(desc=f'val_loss: {loss.item()}')
+                pbar = tqdm(val_dataloader)
+                for batch in pbar:
+                    with torch.no_grad():
+                        loss, all_losses, _ = vae.forward_pass(batch, device)
+                        if loss == None: continue
+                        val_loss_sum += loss.item()
+                        val_count += 1
+                        if all_val_losses is None:
+                            all_val_losses = {k:v.item() for k,v in all_losses.items()}
+                        else:
+                            for k,v in all_losses.items():
+                                all_val_losses[k] += v.item()
+                        pbar.set_description(desc=f'val_loss: {loss.item()}')
 
-            val_loss = val_loss_sum / val_count
-            wandb.log({'val_loss':val_loss, 'epoch': cur_epoch, **{k:v/val_count for k,v in all_val_losses.items()}})
-            print(f'Validation loss: {val_loss}')
+                val_loss = val_loss_sum / val_count
+                wandb.log({'val_loss':val_loss, 'epoch': cur_epoch, **{k:v/val_count for k,v in all_val_losses.items()}})
+                print(f'Validation loss: {val_loss}')
 
-            if (val_loss > prev_val_loss) or torch.isnan(torch.tensor(val_loss)): remaining_tolerance -= 1
-            else:
-                prev_val_loss = val_loss
-                prev_state_dict = {k:v.clone() for k,v in vae.state_dict().items()}
-                remaining_tolerance = max_tolerance
+                if (val_loss > prev_val_loss) or torch.isnan(torch.tensor(val_loss)): remaining_tolerance -= 1
+                else:
+                    prev_val_loss = val_loss
+                    prev_state_dict = {k:v.clone() for k,v in vae.state_dict().items()}
+                    remaining_tolerance = max_tolerance
 
 
-            if remaining_tolerance == 0:
-                vae.load_state_dict(prev_state_dict)
-                print(f'Validation loss increased. Reverting to previous state')
-                break
+                if remaining_tolerance == 0:
+                    vae.load_state_dict(prev_state_dict)
+                    print(f'Validation loss increased. Reverting to previous state')
+                    break
 
             if cur_epoch >= config['training']['epochs']:
                 print(f'Reached max epochs: {cur_epoch}/{config["training"]["epochs"]}')
@@ -179,27 +191,21 @@ def train_vae(
 
             vae = vae.train()
             pbar = tqdm(dataloader)
-            for batch in pbar:
+            for i, batch in enumerate(pbar):
                 if batch == None: continue
                 try:  
                     
-                    loss, losses, prediction = vae.forward_pass(batch, device)
+                    loss, losses, prediction = vae.forward_pass(batch, device, wandb=wandb)
                     if loss == None: continue
-
-                    if random.random() < 0.025:
-                        length = batch['lengths'][0].item()
-                        plt.imshow(prediction[0,:,:length].detach().cpu().numpy(), aspect='auto', origin='lower', interpolation='nearest', cmap='magma', vmin=-1, vmax=1)
-                        wandb.log({'prediction': plt})
-                        plt.close()
-                        plt.imshow(batch['audio'][0,:,:length].detach().cpu().numpy(), aspect='auto', origin='lower', interpolation='nearest', cmap='magma', vmin=-1, vmax=1)
-                        wandb.log({'original': plt})
-                        plt.close()
-
 
                     wandb.log({'policy_loss':loss.item(), 'epoch': cur_epoch, **{k:v.item() for k,v in losses.items()}})
                     
                     pbar.set_description(desc=f'loss: {loss.item()}')
                     backward_pass(loss, vae, optim)
+
+                    if max_steps != -1 and i >= max_steps:
+                        break
+
                 except Exception as e:
                     print(f"Error in training: {e}")
                     continue
@@ -286,8 +292,7 @@ import time
 def main(config):
     wandb.init(project="l2augment")
 
-    vae_config = config.get('vae', {})
-    vae = VariationalAutoEncoder(**vae_config.get('model', {}))
+    vae = load_rl_models(config=config) 
     vae_path = config['training']['model_save_path']
     
     if os.path.exists(vae_path):
@@ -303,9 +308,11 @@ def main(config):
     total_params_in_million = total_params / 1_000_000
     print(make_color(f"Total trainable parameters (vae): {total_params_in_million:.2f} million", 'green'))
 
-    vae_optim = MADGRAD(vae.parameters(), lr=config.get('vae',{}).get('lr', 9e-4))
+    vae_optim = MADGRAD(vae.parameters(), lr=config.get('policy',{}).get('lr', 3e-4))
 
     train_files, val_files = prepare_data(config)
+
+    collate_key = config.get('collate_key', 'masks')
 
     dataset_config = config.get('dataset', {})
     train_dataset = CustomDataset(train_files, **dataset_config)
@@ -315,7 +322,7 @@ def main(config):
         train_dataset, 
         batch_size=config['training']['batch_size'], 
         shuffle=True, 
-        collate_fn=custom_collate_fn,
+        collate_fn=partial(custom_collate_fn, key=collate_key),
         num_workers=4,
         prefetch_factor=6   
     )
@@ -324,12 +331,11 @@ def main(config):
         val_dataset, 
         batch_size=config['training']['batch_size'], 
         shuffle=False, 
-        collate_fn=custom_collate_fn,
+        collate_fn=partial(custom_collate_fn, key=collate_key),
         num_workers=4,
         prefetch_factor=2
     )
 
-    
 
     vae = train_vae(vae, vae_optim, config, train_dataloader, val_dataloader)
     save_policy(vae, config)

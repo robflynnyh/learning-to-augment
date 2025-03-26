@@ -8,6 +8,145 @@ import pickle
 from typing import List
 import torch, torchaudio
 from typing import Tuple
+from torch.utils.data import Dataset
+from l2augment.utils.helpers import lmap
+
+
+
+class CustomDataset(Dataset):
+    def __init__(
+            self, 
+            files, 
+            zero_mean=True, 
+            standardize_std=True, 
+            divide_by_100=False,
+            scale=False, 
+            clamp_min=-5, 
+            clamp_max=5,
+            randomize_order=False, # debug
+            decrease_measurement='absolute', # percentage or absolute
+            load_audio=True,
+            cer_weight=0.0,
+            wer_weight=1.0,
+            set_minus_or_positive=False,
+            expand_mask_to_audio=False,
+            logger=print
+        ):
+        self.data = sorted(files)
+    
+        self.zero_mean = zero_mean
+        self.standardize_std = standardize_std
+        self.clamp_min = clamp_min
+        self.clamp_max = clamp_max
+        self.scale = scale
+        self.randomize_order = randomize_order
+        self.decrease_measurement = decrease_measurement
+        self.divide_by_100 = divide_by_100
+        self.load_audio = load_audio
+        self.cer_weight = cer_weight
+        self.wer_weight = wer_weight
+        self.set_minus_or_positive = set_minus_or_positive
+        self.expand_mask_to_audio = expand_mask_to_audio
+        self.logger = logger
+
+    def __len__(self):
+        # Return the total number of samples
+        return len(self.data)
+    
+    def standardize_pipeline(self, rewards):
+        if self.set_minus_or_positive:
+            rewards[rewards < 0] = -1
+            rewards[rewards > 0] = 1
+
+        rewards_mean = rewards.mean(0, keepdim=True)
+
+        if self.zero_mean:
+            rewards = rewards - rewards_mean
+        if self.divide_by_100:
+            rewards = rewards / 100
+            
+        if self.clamp_min is not None:
+            rewards = rewards.clamp(min=self.clamp_min)
+        if self.clamp_max is not None:
+            rewards = rewards.clamp(max=self.clamp_max)
+
+        if self.standardize_std:
+            if rewards.shape[0] > 1 or rewards_std == 0:
+                rewards_std = rewards.std(0, keepdim=True) # center mean then clamp then calculate std before standardizing
+                rewards = rewards / (rewards_std + 1e-6)
+        if self.scale:
+            # min -1, max 1 but avoid 0 division
+            rewards_min = rewards.min(dim=0, keepdim=True).values
+            rewards_max = rewards.max(dim=0, keepdim=True).values
+            if rewards_min == rewards_max:
+                rewards = torch.zeros_like(rewards)
+            else:
+                rewards = 2*(rewards - rewards_min)/(rewards_max - rewards_min) - 1
+
+        return rewards
+
+    
+    def __getitem__(self, idx):
+        try:
+            file = self.data[idx]
+            rollout = torch.load(file, weights_only=True)
+
+            audio = rollout['audio'] 
+            masks = rollout['mask'] # kept in float8 for memory
+
+            if self.expand_mask_to_audio: # when we have no time dim on mask and we want to expand it to the audio length
+                masks = masks.unsqueeze(-1).repeat(1, 1, 1, audio.shape[-1])
+
+            audio = audio if self.load_audio else None
+
+            decreases = rollout['reward']   
+
+            misc = {}
+            if 'probs' in rollout:
+                misc['probs'] = rollout['probs']
+            if 'eps' in rollout:
+                misc['eps'] = rollout['eps']
+
+
+            if decreases.ndim == 3: has_wer = True
+            else: has_wer = False   
+
+            before, after = decreases.chunk(2, dim=-1)
+
+
+            if self.decrease_measurement == 'absolute':
+                rewards = before - after
+            elif self.decrease_measurement == 'percentage':
+                rewards = ( (before - after) / before )*100
+            else:
+                raise ValueError(f"Unknown decrease measurement: {self.decrease_measurement} should be 'percentage' or 'absolute'")
+            rewards = rewards.squeeze(-1)
+
+            # replace any nan values with 0 
+            rewards[torch.isnan(rewards)] = 0 # can happen due to empty reference and hypothesis
+            
+            if has_wer:
+                cer, wer = rewards.unbind(-1)
+                total_reward = (cer*self.cer_weight + wer*self.wer_weight).sum()
+                cer, wer = lmap(self.standardize_pipeline, [cer, wer])
+                rewards = cer*self.cer_weight + wer*self.wer_weight
+            else:
+                total_reward = rewards.sum()
+                rewards = self.standardize_pipeline(rewards)
+
+            all_rewards = rewards
+
+            return {
+                'reward': all_rewards, # (repeats)
+                'total_reward': total_reward,
+                'masks':masks, # (masks, 1, C, T)
+                **({'audio':audio} if self.load_audio else {}),
+                **misc
+            }
+        except Exception as e:
+            self.logger(f"Error loading data: {e}")
+            return None
+
 
 def open_stm(path:str) -> List[str]:
     with open(path, 'r') as f:

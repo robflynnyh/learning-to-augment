@@ -11,4 +11,4 @@ source activate /mnt/parscratch/users/acp21rjf/conda/main
 
 cd ../
 
-python train_vae.py --config ./configs/configs_in_paper/binary_vae_train/BVAE_gpu.yaml
+python train_vae.py --config ./configs/configs_in_paper/audio_vae_train/VAE_gpu.yaml

@@ -1,0 +1,34 @@
+checkpointing:
+  asr_model: "/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt"
+  #asr_model: "/mnt/parscratch/users/acp21rjf/spotify/checkpoints_seq_scheduler_rb/n_seq_sched_2048_rp_1/step_105360.pt" 
+  #"/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_4096_rp_1/step_105360.pt"
+
+training:
+  device: 'cuda'
+  random_seed: 1234
+  batch_size: 256  
+  epochs: 200
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/autoenc_audio/model_gpu.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/autoenc_audio/tmp_model_gpu.pt
+
+
+policy:
+  lr: 1e-3
+  class: VQVAE
+  config:
+    latent_dim: 256 # same as default hdim
+    use_vq: false
+    norm_type: 'bn'
+
+dataset:
+  return_type: 'audio'
+
+collate_key: 'audio'
+
+generation:
+  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_mmr9e2/"
+
+
+
+  
+#this_american_life_566_audio_307200.pt

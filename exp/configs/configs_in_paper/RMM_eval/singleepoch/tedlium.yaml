@@ -1,0 +1,27 @@
+checkpointing:
+  asr_model: "/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt"
+  #asr_model: "/mnt/parscratch/users/acp21rjf/spotify/checkpoints_seq_scheduler_rb/n_seq_sched_2048_rp_1/step_105360.pt" 
+  #"/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_4096_rp_1/step_105360.pt"
+
+training:
+  device: 'cuda'
+  random_seed: 1234
+  batch_size: 84
+  epochs: 100
+
+evaluation: 
+  dataset: 'tedlium'
+  split: 'test'
+  use_cer: false
+  epochs: 1
+  augmentation_config:
+    repeats: 1
+    use_random: true
+  optim_args:
+    lr: 5e-6
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/RMM/singleepoch/tedlium.txt
+
+policy:
+  lr: 1e-4
+  class: MixedMaskingRanker
+

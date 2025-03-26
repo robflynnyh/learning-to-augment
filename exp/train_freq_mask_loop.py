@@ -135,18 +135,21 @@ class CustomDataset(Dataset):
 
             # replace any nan values with 0 
             rewards[torch.isnan(rewards)] = 0 # can happen due to empty reference and hypothesis
-
+            
             if has_wer:
                 cer, wer = rewards.unbind(-1)
+                total_reward = (cer*self.cer_weight + wer*self.wer_weight).sum()
                 cer, wer = lmap(self.standardize_pipeline, [cer, wer])
                 rewards = cer*self.cer_weight + wer*self.wer_weight
             else:
+                total_reward = rewards.sum()
                 rewards = self.standardize_pipeline(rewards)
 
             all_rewards = rewards
 
             return {
                 'reward': all_rewards, # (repeats)
+                'total_reward': total_reward,
                 'masks':masks, # (masks, 1, C, T)
                 **({'audio':audio} if self.load_audio else {}),
                 **misc
@@ -215,8 +218,12 @@ def train_policy(
               
                 loss, losses = policy.forward_pass(batch, device)
                 if loss == None: continue
-        
-                wandb.log({'policy_loss':loss.item(), 'epoch': cur_epoch, **{k:v.item() for k,v in losses.items()}})
+
+                log_misc = {}
+                if 'avg_reward' in batch:
+                    log_misc['avg_reward'] = batch['avg_reward']
+                    
+                wandb.log({'policy_loss':loss.item(), 'epoch': cur_epoch, **{k:v.item() for k,v in losses.items()}, **log_misc})
                 
                 pbar.set_description(desc=f'loss: {loss.item()}')
                 backward_pass(loss, policy, optim)
@@ -243,7 +250,7 @@ def prepare_data(config, split='train'):
 import shutil, subprocess, time
 
 def main(config):
-    wandb.init(project="l2augment")
+    wandb.init(project="l2augment", config=OmegaConf.to_container(config))
 
     policy = load_rl_models(config=config) 
     policy_path = config['training']['model_save_path']
