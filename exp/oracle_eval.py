@@ -8,7 +8,7 @@ from lcasr.utils.general import load_model as load_asr_model, get_model_class
 # from l2augment.modelling import load_model as load_rl_models
 from l2augment.utils.helpers import load_model as load_policy, load_asr_model_fn
 
-from l2augment.rollout.cpu_multistep_oracle import cpu_rollout as multistep_oracle_rollout
+from l2augment.rollout.cpu_multistep_oracle import cpu_rollout_presearch, cpu_rollout_search
 
 from l2augment.modelling.models import Policy
 from lcasr.utils.audio_tools import load_json
@@ -32,7 +32,16 @@ def main(config, policy_net=None):
     asr_model_config = asr_model_checkpoint['config']
     asr_model_state_dict = asr_model_checkpoint['model']
 
-    rollout_function = multistep_oracle_rollout
+    
+    if config.get('evaluation', {}).get('rollout_setting', 'search') == 'search':
+        rollout_function = cpu_rollout_search
+    elif config.get('evaluation', {}).get('rollout_setting', 'search') == 'presearch':
+        rollout_function = cpu_rollout_presearch
+    else:
+        raise ValueError("Invalid rollout setting")
+    
+    search_repeats = config.get('evaluation', {}).get('search_repeats', 4)
+
 
     partial_load_asr_model_fn = partial(
         load_asr_model_fn,
@@ -48,7 +57,10 @@ def main(config, policy_net=None):
                          load_asr_model_fn = partial_load_asr_model_fn, 
                          tokenizer = tokenizer, 
                          verbose = False, 
-                         original_wer=None
+                         original_wer=None,
+                         asr_model_config=asr_model_config,
+                         asr_model_class=asr_model_class,
+                         search_repeats=search_repeats
     )
     
 
@@ -80,9 +92,9 @@ def main(config, policy_net=None):
 
         print(rollout_output['original_cer'], rollout_output['updated_cer'])
 
-        u_hyps.append(rollout_output['hypothesis'])
-        o_hyps.append(rollout_output['original_hypothesis']) 
-        refs.append(rollout_output['reference'])
+        u_hyps.extend(rollout_output['hypothesis'])
+        o_hyps.extend(rollout_output['original_hypothesis']) 
+        refs.extend(rollout_output['reference'])
 
 
     cer = config.get('evaluation', {}).get('use_cer', False)
@@ -98,7 +110,7 @@ def main(config, policy_net=None):
     save_path = config.get('evaluation', {}).get('save_path', "")
     if save_path != "" and config.get('save', True):
         id = config.get('evaluation', {}).get('id', "0") 
-        results = f"ID: {id} - Dataset: {dataset} - Split: {split} - Epochs: {epochs} - Original_WER: {original_wer} - Updated_WER: {wer}"
+        results = f"ID: {id} - Dataset: {dataset} - Split: {split} - Epochs: {epochs} - Original_WER: {original_wer} - Updated_WER: {wer} - Repeats: {search_repeats} - Rollout Type: {rollout_function.__name__}"
         with open(save_path, 'a') as file:
             file.write(results)
             file.write('\n')

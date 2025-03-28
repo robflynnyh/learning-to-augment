@@ -157,7 +157,7 @@ def train_vae(
                 pbar = tqdm(val_dataloader)
                 for batch in pbar:
                     with torch.no_grad():
-                        loss, all_losses, _ = vae.forward_pass(batch, device)
+                        loss, all_losses = vae.forward_pass(batch, device)[:2]
                         if loss == None: continue
                         val_loss_sum += loss.item()
                         val_count += 1
@@ -195,7 +195,7 @@ def train_vae(
                 if batch == None: continue
                 try:  
                     
-                    loss, losses, prediction = vae.forward_pass(batch, device, wandb=wandb)
+                    loss, losses = vae.forward_pass(batch, device, wandb=wandb)[:2]
                     if loss == None: continue
 
                     wandb.log({'policy_loss':loss.item(), 'epoch': cur_epoch, **{k:v.item() for k,v in losses.items()}})
@@ -304,7 +304,7 @@ def main(config):
     vae = vae.to(device)
     
 
-    total_params = sum(p.numel() for p in vae.parameters() if p.requires_grad)
+    total_params = vae.total_parameters()
     total_params_in_million = total_params / 1_000_000
     print(make_color(f"Total trainable parameters (vae): {total_params_in_million:.2f} million", 'green'))
 

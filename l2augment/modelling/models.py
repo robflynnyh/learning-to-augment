@@ -17,6 +17,9 @@ policy_dict = {}
 class base(Module):
     def __init__(self) -> None:
         super().__init__()
+    
+    def total_parameters(self):
+        return sum(p.numel() for p in self.parameters())
 
 class SwiGlu(base):
     def __init__(
@@ -393,13 +396,13 @@ class GRULayer(nn.Module):
         self.ln = nn.LayerNorm(dim)
         self.gru = nn.GRU(dim, dim, num_layers=layers, batch_first=True, bidirectional=False)
 
-    def forward(self, x, lengths):
+    def forward(self, x, lengths=None):
         # x: B, C, T
         x = rearrange(x, 'b c t -> b t c')
         x = self.ln(x)
-        x = torch.nn.utils.rnn.pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=False)
+        if lengths is not None: x = torch.nn.utils.rnn.pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=False)
         x, _ = self.gru(x)
-        x, _ = torch.nn.utils.rnn.pad_packed_sequence(x, batch_first=True)
+        if lengths is not None: x, _ = torch.nn.utils.rnn.pad_packed_sequence(x, batch_first=True)
         x = rearrange(x, 'b t c -> b c t')
         return x
 
@@ -407,6 +410,22 @@ class PlaceholderVQ(nn.Module):
     '''Use this as an identity op in place of VQ when you don't want to use VQ'''
     def forward(self, x, lens=None):
         return x, None, torch.tensor(0.0, device=x.device, dtype=x.dtype) # vq_x, indices, vq_commit_loss
+
+
+def calc_length(lengths, all_paddings, kernel_size, stride, ceil_mode, repeat_num=1, one=1.0, min_val=2):
+    """ Calculates the output length of a Tensor passed through a convolution or max pooling layer"""
+    add_pad: float = all_paddings - kernel_size
+    one: float = one
+    for i in range(repeat_num):
+        lengths = torch.div(lengths.to(dtype=torch.float) + add_pad, stride) + one
+        if ceil_mode:
+            lengths = torch.ceil(lengths)
+        else:
+            lengths = torch.floor(lengths)
+
+    lengths = lengths.clamp(min=min_val)
+    return lengths.to(dtype=torch.int)
+
 
 from vector_quantize_pytorch import VectorQuantize
 class VQVariationalAutoEncoder(VAEBase):
@@ -484,6 +503,11 @@ class VQVariationalAutoEncoder(VAEBase):
             nn.Conv1d(hidden_dim, input_dim, kernel_size=1)
         )
 
+    def calc_downsampled_length(self, length):
+        length = torch.as_tensor(length)
+        length = calc_length(length, all_paddings=1, kernel_size=7, stride=2, ceil_mode=True, repeat_num=self.layers, one=1.0, min_val=2)
+        return length
+
     def encode(self, x, lengths=None, counts=None):
         in_length = x.size(-1)
         x = self.encoder(x)
@@ -497,6 +521,7 @@ class VQVariationalAutoEncoder(VAEBase):
         z = self.mu(x)
 
         z, indices, closs = self.VQ(z.transpose(-1, -2), lens=downsampled_lengths)
+    
         z = z.transpose(-1, -2)  
 
 
@@ -1096,6 +1121,211 @@ class DTConditionalMaskingPolicy(Policy):
 
       
         return ce_loss, {'loss':ce_loss, 'total_loss':ce_loss}
+    
+
+class UnconditionalMaskGenerator(Policy): 
+    def __init__(            
+            self,
+            hidden_dim=256,
+            mask_vae_config:Dict={},
+            mask_vae_state_dict_path:str=None,
+            **kwargs
+        ) -> None:
+        super().__init__()
+
+        self.mask_enc = BinaryVariationalAutoEncoder(**mask_vae_config)
+        if mask_vae_state_dict_path is not None:
+            mask_vae_state_dict = torch.load(mask_vae_state_dict_path, map_location='cpu')['model_state_dict']
+            self.mask_enc.load_state_dict(mask_vae_state_dict)
+            print(f'Loaded VAE state dict from {mask_vae_state_dict_path}')
+            self.mask_enc.eval()
+
+        self.codebook_size = self.mask_enc.VQ.codebook_size
+        self.embeddings = nn.Embedding(self.codebook_size + 1, hidden_dim, padding_idx=self.codebook_size)
+
+ 
+        self.decoder = nn.GRU(
+            input_size=hidden_dim,
+            hidden_size=hidden_dim,
+            num_layers=4,
+            batch_first=True,
+        )
+        self.prediction = nn.Sequential(
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, self.codebook_size + 1)
+        )
+
+    def total_parameters(self):
+        params_decoder =  sum(p.numel() for p in self.decoder.parameters())
+        params_prediction = sum(p.numel() for p in self.prediction.parameters())
+        params_embeddings = sum(p.numel() for p in self.embeddings.parameters())
+        total = params_decoder + params_prediction + params_embeddings
+        return total
+    
+    @torch.no_grad()
+    def encode_mask(self, mask, lengths):
+        z, idx, closs, _ = self.mask_enc.encode(mask, lengths)
+        downsampled_lengths = self.mask_enc.calc_downsampled_length(lengths)
+        idx[idx == -1] = self.codebook_size
+        return idx, downsampled_lengths, z
+        
+    def encode(self, audio_emb, lengths):
+        packed_emb = torch.nn.utils.rnn.pack_padded_sequence(input=audio_emb.transpose(-1, -2), lengths=lengths.cpu(), batch_first=True, enforce_sorted=False)
+        _, h_n = self.encoder(packed_emb)
+        return h_n
+    
+    def decode(self, mask_emb, lengths):
+        packed_emb = torch.nn.utils.rnn.pack_padded_sequence(input=mask_emb, lengths=lengths.cpu(), batch_first=True, enforce_sorted=False)
+        x, _ = self.decoder(packed_emb)
+        x, _ = torch.nn.utils.rnn.pad_packed_sequence(x, batch_first=True)
+        x = self.prediction(x)
+        return x
+    
+    
+    @torch.no_grad()
+    def generate(self, sample=True, target_output_length=None, target_prediction_steps=None, device='cpu'):
+        bos_emb = self.embeddings(torch.LongTensor([self.codebook_size]).to(device))
+        bos_emb = rearrange(bos_emb, '1 c -> 1 1 c') # b, t, c
+        outputs = []
+        seq = bos_emb
+        h_n = None
+        total_steps = 80 if target_prediction_steps is None else target_prediction_steps
+
+        mode = self.training
+        self.eval()
+
+        for step in range(total_steps):
+            z, h_n = self.decoder(seq, h_n)
+            pred = self.prediction(z)
+            
+            if target_prediction_steps is not None:
+                pred[..., self.codebook_size] = -torch.finfo(pred.dtype).max # prevent EOS token from being selected
+
+            probs = pred.softmax(-1)
+            if sample:
+                idx = torch.multinomial(probs.squeeze(1), 1)
+            else: idx = probs.argmax(-1)
+            outputs.append(idx.squeeze().item())
+            if idx.item() == self.codebook_size: break
+            seq = self.embeddings(idx)
+            
+        outputs = [el for el in outputs if el != self.codebook_size]
+        if len(outputs) == 0: return False
+        print(outputs)
+        outputs = torch.tensor(outputs, device=device)
+       
+        mask_latent = self.mask_enc.VQ.codebook[outputs][None].transpose(-1, -2)
+        mask_h = self.mask_enc.latent_to_hidden(mask_latent)
+        mask_h = self.mask_enc.rnn_out(mask_h) + mask_h
+        mask_h = self.mask_enc.decoder(mask_h)
+
+        if target_output_length is not None:
+            mask_h = torch.nn.functional.interpolate(mask_h, size=target_output_length, mode='linear', align_corners=False)
+
+        mask_pred = self.mask_enc.output(mask_h).sigmoid()
+        #mask_pred = torch.bernoulli(mask_pred).to(dtype=torch.long)
+        mask_pred = torch.round(mask_pred, decimals=0).to(dtype=torch.long)
+
+        if mode: 
+            self.train()
+            self.mask_enc.eval()
+
+        return mask_pred
+
+    @torch.no_grad()
+    def augment(self, audio, *args, **kwargs):
+        raise NotImplementedError
+        assert audio.size(0) == 1, 'only batch size 1 is supported atm'
+        mode = self.training
+        self.eval()
+
+        lengths = torch.tensor([audio.size(-1)]).to(audio.device)
+        audio_latent, downsampled_lengths = self.encode_audio(audio, lengths=lengths)
+        h_n = self.encode(audio_latent, downsampled_lengths)
+        mask_pred = self.generate(
+            audio_hn=h_n,
+            sample=True,
+            target_output_length=lengths[0].item(),
+            target_prediction_steps=downsampled_lengths[0].item()
+        )
+        audio = audio * mask_pred
+
+        if mode: self.train()
+        
+        return audio, mask_pred
+
+
+
+    def forward(self, mask_emb, downsampled_lengths, counts=None):
+        bos_emb = self.embeddings(torch.LongTensor([self.codebook_size]).to(mask_emb.device))
+        
+        bos_emb = repeat(bos_emb, '1 c -> b 1 c', b=mask_emb.size(0)) # b, t, c   
+        mask_emb = torch.cat((bos_emb, mask_emb), dim=1)
+        downsampled_lengths = downsampled_lengths + 1
+        predictions = self.decode(mask_emb, downsampled_lengths)
+        misc = {'mask_emb':mask_emb}
+        return predictions, downsampled_lengths, misc
+
+
+    def forward_pass(self, batch, device, **kwargs):
+        #audio = batch['audio'].to(dtype=torch.float32, device=device)
+        lengths = batch['lengths'].to(device)
+        masks = batch['masks'].to(device, dtype=torch.float32).squeeze(1)
+        #rewards = batch['rewards'].to(device)
+        #eps = batch['eps'].to(dtype=torch.float32, device=device).squeeze(1) if 'eps' in batch else None
+        #counts = batch['counts'].to(device)
+
+
+        self.mask_enc.eval()
+    
+        mask_idx, downsampled_lengths, mask_z = self.encode_mask(masks, lengths)#.repeat_interleave(counts, dim=0))
+        mask_emb = self.embeddings(mask_idx)
+
+        predictions, downsampled_lengths, misc = self(mask_emb, downsampled_lengths, counts=None)
+        
+        mask_idx = torch.cat((mask_idx, torch.full((mask_idx.size(0), 1), -100, dtype=torch.long, device=device)), dim=-1)
+        # set last index to codebook size using downsampling lengths
+
+        last_idx = torch.arange(mask_idx.size(0)).to(device)
+        mask_idx[last_idx, downsampled_lengths - 1] = self.codebook_size
+        lengths_mask = torch.arange(mask_idx.size(-1)).to(device) >= downsampled_lengths[:, None]
+
+        ce_loss = nn.functional.cross_entropy(
+            input = predictions.transpose(-1, -2),
+            target= mask_idx,
+            ignore_index=-100,
+            reduction='none'
+        )
+        ce_loss = ce_loss.masked_fill(lengths_mask, 0)
+        ce_loss = ce_loss.sum() / ((~lengths_mask).sum())
+
+        if kwargs.get('wandb', False) and random.random() < 0.025:
+            mask_pred = self.generate(sample=True, target_prediction_steps=downsampled_lengths[0].item(), target_output_length=lengths[0].item(), device=device)
+            if mask_pred is not False:
+                vis = plt.imshow(mask_pred[0].detach().cpu().numpy(), aspect='auto', cmap='gray')
+                wandb.log({'generated':vis})
+                plt.close()
+            vis = plt.imshow(masks[0, :, :lengths[0]].detach().cpu().numpy(), aspect='auto', cmap='gray')
+            wandb.log({'original':vis})
+            plt.close()
+
+            mask_h = self.mask_enc.latent_to_hidden(mask_z[0, None])
+            mask_h = self.mask_enc.rnn_out(mask_h) + mask_h
+            mask_h = self.mask_enc.decoder(mask_h)
+
+            mask_h = torch.nn.functional.interpolate(mask_h, size=lengths[0, None], mode='linear', align_corners=False)
+
+            mask_pred = self.mask_enc.output(mask_h).sigmoid()
+            mask_pred = torch.round(mask_pred, decimals=0).to(dtype=torch.long)
+            #mask_pred = torch.bernoulli(mask_pred).to(dtype=torch.long)
+            vis = plt.imshow(mask_pred[0].detach().cpu().numpy(), aspect='auto', cmap='gray')
+            wandb.log({'reconstructed original':vis})
+            plt.close()
+
+
+
+
+        return ce_loss, {'loss':ce_loss, 'total_loss':ce_loss}
 
 
 
@@ -1188,6 +1418,7 @@ policy_dict['FrequencyMaskingRanker'] = FrequencyMaskingRanker
 policy_dict['MixedMaskingRanker'] = MixedMaskingRanker
 policy_dict['UnconditionalFrequencyMaskingRanker'] = UnconditionalFrequencyMaskingRanker
 policy_dict['ConditionalFrequencyMaskingRanker'] = ConditionalFrequencyMaskingRanker
+policy_dict['UnconditionalMaskGenerator'] = UnconditionalMaskGenerator
 
 policy_dict['VQVAE'] = VQVariationalAutoEncoder
 policy_dict['BVAE'] = BinaryVariationalAutoEncoder

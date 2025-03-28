@@ -10,8 +10,10 @@ training:
   epochs: 100
 
 evaluation: 
+  rollout_setting: 'search'
+  search_repeats: 5
   dataset: 'tedlium'
-  split: 'dev'
+  split: 'test'
   use_cer: false
   epochs: 1
   augmentation_config:
@@ -19,7 +21,7 @@ evaluation:
     use_random: true
   optim_args:
     lr: 1e-6
-  save_path: /users/acp21rjf/learning-to-augment/exp/results/RFM/singleepoch/tedlium_dev.txt
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/RMM/oracle/tedlium.txt
 
 policy:
   lr: 1e-4

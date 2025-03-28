@@ -16,7 +16,8 @@ from tqdm import tqdm
 import functools
 import numpy as np
 from l2augment.rollout import cpu_rollout as singlestep_rollout
-
+from l2augment.utils.helpers import load_asr_model_fn as create_load_asr_model_fn
+from lcasr.utils.general import load_model as load_asr_model, get_model_class
 
 def seed_all(seed):
     """A decorator to temporarily set the seed for random, numpy, and torch."""
@@ -112,7 +113,7 @@ def apply_masker(x, method=None):
 
 
 @seed_all(123456)
-def cpu_rollout(
+def cpu_rollout_presearch(
         policy:Module,
         load_asr_model_fn:Callable,
         tokenizer,
@@ -125,6 +126,248 @@ def cpu_rollout(
         shuffle=True,
         augmentation_config:Dict[str, Any] = {},
         epochs = 1,
+        search_repeats = 5,
+        **kwargs
+    ):
+    
+    dtype = torch.float32 #temporary
+    torch.use_deterministic_algorithms(True, warn_only=True)
+
+    overlap = round(seq_len*overlap)
+    # audio = audio.to(dtype=dtype) #temporary
+    # audio_n = audio.shape[-1]
+    
+    # text = normalizer(text)
+    
+    asr_model = load_asr_model_fn()
+    asr_model = asr_model.to(dtype=dtype)
+    optimizer = kwargs.get("optimizer_class", DEFAULT_OPTIMIZER_CLASS)(asr_model.parameters(), **optim_args)
+    asr_model.eval()
+    decoder = GreedyCTCDecoder(tokenizer = tokenizer, blank_id = asr_model.decoder.num_classes-1)
+
+    ctc_loss_fn = torch.nn.CTCLoss(blank=asr_model.decoder.num_classes-1, reduction='sum')
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    asr_model = asr_model.to(device)
+    policy = policy.to(device)
+
+    #original_wer = 0.283
+    original_hypothesis = None
+    if original_wer is None:
+        hyps, refs = [], []
+        for utterance in utterances:
+            audio_chunk = utterance['spectrogram']
+            with torch.no_grad():
+                out = asr_model(audio_signal = audio_chunk.to(device))
+            logits = out['final_posteriors'][0].to('cpu')
+            out_text = decoder(logits)
+            out_text = normalizer(out_text)
+            hyps.append(out_text)
+            refs.append(normalizer(utterance['text']))
+
+        original_wer = word_error_rate_detail(hypotheses=hyps, references=refs, use_cer=False)[0]
+        original_hypothesis = hyps
+        print(f"Original WER: {original_wer}")
+
+
+    utterance_mask_pairs = {}
+    utterance_lr_pairs = {}
+
+    for i, utterance in enumerate(utterances):
+        print(f'Finding top-5 masks for utterance {i+1}/{len(utterances)}')
+        cur_audio = utterance['spectrogram'].to(dtype=dtype)
+        cur_text = utterance['text']
+        masks = []
+        rewards = []
+        
+        
+        for repeat in range(search_repeats):
+            audio_a = cur_audio.clone()
+            # outputs = policy.augment(audio_a, **augmentation_config)
+            # audio_b, mask = outputs[0], outputs[1]
+            #n_time_masks = random.randint(3, 10)
+            #masker = SpecAugment(n_time_masks=6, n_freq_masks=0, freq_mask_param=0, zero_masking=True, min_p=0.2)
+            mask = torch.ones_like(audio_a)
+            
+            mask = apply_masker(mask)
+            audio_b = mask * audio_a
+            # mask = torch.rand_like(audio_a)
+            # mask = torch.bernoulli(mask)
+            # audio_b = mask * audio_a
+
+            masks.append(mask)
+
+            prev_cer, u_cer, _ = singlestep_rollout(
+                policy = None,
+                audio = cur_audio,
+                audio_a = audio_a,
+                audio_b = audio_b,
+                load_asr_model_fn = load_asr_model_fn,
+                tokenizer = tokenizer,
+                text = cur_text,
+                optim_args = {"lr":9e-2},
+                return_wer = True,
+                verbose=False
+            )
+
+           
+            reward = prev_cer - u_cer
+            reward_wer = reward[-1]
+         
+            rewards.append(reward_wer)
+            print(reward_wer.item())
+            
+        # select the top-5 rewards
+        rewards = torch.stack(rewards)
+        top_rewards, top_indices = torch.topk(rewards, 5, dim=0)
+        top_masks = torch.stack([masks[i] for i in top_indices])
+        utterance_mask_pairs[i] = top_masks
+ 
+
+    asr_model = load_asr_model_fn()
+    asr_model = asr_model.to(dtype=dtype)
+    optimizer = kwargs.get("optimizer_class", DEFAULT_OPTIMIZER_CLASS)(asr_model.parameters(), **optim_args)
+    asr_model.eval()
+
+
+  
+    for epoch in range(epochs*8):
+        
+        utterance_ids = list(range(len(utterances)))
+        if shuffle: random.shuffle(utterance_ids)
+        for i, utt_id in enumerate(utterance_ids):
+            cur_utterance = utterances[utt_id]
+            cur_audio = cur_utterance['spectrogram'].to(device, dtype=dtype)
+            cur_text = cur_utterance['text']
+            top_masks = utterance_mask_pairs[utt_id]
+            
+            # select a random mask from the top-5 masks
+            selection = random.randint(0, top_masks.shape[0]-1)
+            cur_mask = top_masks[selection]
+            if cur_mask.ndim == 2: cur_mask = cur_mask.unsqueeze(-1)
+            augmented_audio_sample = cur_mask * cur_audio
+
+            #print(f'Current lr: {cur_lr.item()}')
+
+            with torch.no_grad():
+                out_teacher = asr_model(audio_signal = cur_audio)
+            out_noised = asr_model(audio_signal = augmented_audio_sample)['final_posteriors']
+
+            teacher_output_posteriors = out_teacher['final_posteriors'].squeeze(0)
+            pseudo_targets = decoder(teacher_output_posteriors) 
+            pseudo_targets = torch.LongTensor(tokenizer.encode(pseudo_targets))[None]
+            N, B = out_noised.shape[1], out_noised.shape[0]
+            total_tokens_in_loss = N * B
+            loss = ctc_loss_fn(out_noised.transpose(0, 1), pseudo_targets, torch.LongTensor([N] * out_noised.shape[0]), torch.LongTensor([pseudo_targets.shape[1]] * pseudo_targets.shape[0])) / total_tokens_in_loss
+            optimizer.zero_grad()
+            loss.backward()
+
+    
+
+            if kwargs.get("clip", False): torch.nn.utils.clip_grad_norm_(asr_model.parameters(), kwargs["clip"]) 
+
+            optimizer.step()
+
+    
+    if epochs > 0:
+        hyps, refs = [], []
+        for utterance in utterances:
+            audio_chunk = utterance['spectrogram']
+            with torch.no_grad():
+                out = asr_model(audio_signal = audio_chunk.to(device))
+            logits = out['final_posteriors'][0].to('cpu')
+            out_text = decoder(logits)
+            out_text = normalizer(out_text)
+            hyps.append(out_text)
+            refs.append(normalizer(utterance['text']))
+
+        new_wer = word_error_rate_detail(hypotheses=hyps, references=refs, use_cer=False)[0]
+    else:
+        new_wer = original_wer
+    # seeds = torch.stack(seeds, 0)
+    # masks = torch.stack(masks, 0).squeeze(-1)
+    print(original_wer, new_wer, '-')
+
+    return {
+        'original_cer': original_wer,
+        'updated_cer': new_wer,
+        'hypothesis': hyps,
+        'original_hypothesis': original_hypothesis,
+        'reference': refs
+
+    }
+
+
+def find_top_masks(
+        audio:Tensor,
+        text:str,
+        tokenizer,
+        load_asr_model_fn:Callable,
+        repeats=20,
+        other_audio=None,
+    ):
+    masks = []
+    rewards = []
+    for repeat in range(repeats):
+        audio_a = audio.clone()
+        # outputs = policy.augment(audio_a, **augmentation_config)
+        # audio_b, mask = outputs[0], outputs[1]
+        #n_time_masks = random.randint(3, 10)
+        #masker = SpecAugment(n_time_masks=6, n_freq_masks=0, freq_mask_param=0, zero_masking=True, min_p=0.2)
+        mask = torch.ones_like(audio_a)
+        method = random.randint(0,2)
+        mask = apply_masker(mask)
+        audio_b = mask * audio_a
+        # mask = torch.rand_like(audio_a)
+        # mask = torch.bernoulli(mask)
+        # audio_b = mask * audio_a
+        masks.append(mask)
+
+        prev_cer, u_cer, _ = singlestep_rollout(
+            policy = None,
+            audio = audio if other_audio is None else other_audio,
+            audio_a = audio_a,
+            audio_b = audio_b,
+            load_asr_model_fn = load_asr_model_fn,
+            tokenizer = tokenizer,
+            text = text,
+            optim_args = {"lr":4e-2},
+            return_wer = True,
+            verbose=False,
+            augmented_target=False if other_audio is None else True,
+        )
+
+        
+        reward = prev_cer - u_cer
+        reward_wer = reward[-1]
+        
+        rewards.append(reward_wer)
+        print(reward_wer.item())
+        
+    # select the top-5 rewards
+    rewards = torch.stack(rewards)
+    top_rewards, top_indices = torch.topk(rewards, 1, dim=0)
+    top_mask = masks[top_indices[0]]
+    return top_mask
+
+
+@seed_all(123456)
+def cpu_rollout_search(
+        policy:Module,
+        load_asr_model_fn:Callable,
+        tokenizer,
+        utterances:List[Dict[str, Any]],
+        asr_model_config:Dict[str, Any],
+        asr_model_class:Module,
+        seq_len:int=2048,
+        overlap=0.875,
+        optim_args:Dict[str, Any] = {"lr":8e-6},
+        original_wer = None,
+        max_steps = None,
+        shuffle=True,
+        augmentation_config:Dict[str, Any] = {},
+        epochs = 1,
+        search_repeats = 5,
         **kwargs
     ):
     
@@ -165,90 +408,48 @@ def cpu_rollout(
             refs.append(normalizer(utterance['text']))
 
         original_wer = word_error_rate_detail(hypotheses=hyps, references=refs, use_cer=False)[0]
-        original_hypothesis = out_text
+        original_hypothesis = hyps
         print(f"Original WER: {original_wer}")
 
 
-    utterance_mask_pairs = {}
-    utterance_lr_pairs = {}
 
-    for i, utterance in enumerate(utterances):
-        print(f'Finding top-5 masks for utterance {i+1}/{len(utterances)}')
-        cur_audio = utterance['spectrogram'].to(dtype=dtype)
-        cur_text = utterance['text']
-        masks = []
-        rewards = []
-        
-        lrs = []
-        
-        for repeat in range(25):
-            audio_a = cur_audio.clone()
-            # outputs = policy.augment(audio_a, **augmentation_config)
-            # audio_b, mask = outputs[0], outputs[1]
-            #n_time_masks = random.randint(3, 10)
-            #masker = SpecAugment(n_time_masks=6, n_freq_masks=0, freq_mask_param=0, zero_masking=True, min_p=0.2)
-            mask = torch.ones_like(audio_a)
-            method = random.randint(0,2)
-            mask = apply_masker(mask, method=0)
-            audio_b = mask * audio_a
-            # mask = torch.rand_like(audio_a)
-            # mask = torch.bernoulli(mask)
-            # audio_b = mask * audio_a
-            lr_mult = random.choice([1.0])
-
-            masks.append(mask)
-
-            prev_cer, u_cer, _ = singlestep_rollout(
-                policy = None,
-                audio = cur_audio,
-                audio_a = audio_a,
-                audio_b = audio_b,
-                load_asr_model_fn = load_asr_model_fn,
-                tokenizer = tokenizer,
-                text = cur_text,
-                optim_args = {"lr":9e-2},
-                return_wer = True,
-                verbose=False
-            )
-
-           
-            reward = prev_cer - u_cer
-            reward_wer = reward[-1]
-         
-            rewards.append(reward_wer)
-            print(reward_wer.item())
-            lrs.append(lr_mult)
-            
-        # select the top-5 rewards
-        rewards = torch.stack(rewards)
-        top_rewards, top_indices = torch.topk(rewards, 5, dim=0)
-        top_masks = torch.stack([masks[i] for i in top_indices])
-        top_lrs = torch.tensor([lrs[i] for i in top_indices])
-        utterance_mask_pairs[i] = top_masks
-        utterance_lr_pairs[i] = top_lrs
- 
-
-    asr_model = load_asr_model_fn()
-    asr_model = asr_model.to(dtype=dtype)
-    optimizer = kwargs.get("optimizer_class", DEFAULT_OPTIMIZER_CLASS)(asr_model.parameters(), **optim_args)
     asr_model.eval()
-
 
   
     for epoch in range(epochs*8):
         
         utterance_ids = list(range(len(utterances)))
+        #other_ids = list(range(len(utterances)))
         if shuffle: random.shuffle(utterance_ids)
+        #random.shuffle(other_ids)
         for i, utt_id in enumerate(utterance_ids):
+            print(f'Epoch {epoch+1}/{epochs*8} - Utterance {i+1}/{len(utterances)}')
             cur_utterance = utterances[utt_id]
             cur_audio = cur_utterance['spectrogram'].to(device, dtype=dtype)
             cur_text = cur_utterance['text']
-            top_masks = utterance_mask_pairs[utt_id]
             
-            # select a random mask from the top-5 masks
-            selection = random.randint(0, top_masks.shape[0]-1)
-            cur_mask = top_masks[selection]
-            cur_lr = utterance_lr_pairs[utt_id][selection]
+            #other_audio = utterances[other_ids[i]]['spectrogram'].to(device, dtype=dtype)
+            #other_text = utterances[other_ids[i]]['text']
+
+            prev_state_dict = asr_model.state_dict()
+            prev_optimizer_state_dict = optimizer.state_dict()
+
+            tmp_load_asr_model_fn = partial(
+                create_load_asr_model_fn,
+                load_asr_model(asr_model_config, tokenizer.vocab_size(), asr_model_class),
+                asr_model.state_dict(),
+            )
+
+            #print(asr_model.state_dict()['layers.5.attend.fn.qkv_proj.weight'])
+
+            cur_mask = find_top_masks(cur_audio, cur_text, tokenizer, repeats=search_repeats, load_asr_model_fn=tmp_load_asr_model_fn)
+            #cur_mask = apply_masker(torch.ones_like(cur_audio))
+
+            asr_model.load_state_dict(prev_state_dict)
+            optimizer.load_state_dict(prev_optimizer_state_dict)    
+
+            #print(asr_model.state_dict()['layers.5.attend.fn.qkv_proj.weight'])
+            
             if cur_mask.ndim == 2: cur_mask = cur_mask.unsqueeze(-1)
             augmented_audio_sample = cur_mask * cur_audio
 
@@ -267,9 +468,6 @@ def cpu_rollout(
             optimizer.zero_grad()
             loss.backward()
 
-            # change the learning rate
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = optim_args['lr']*cur_lr.item()
 
             if kwargs.get("clip", False): torch.nn.utils.clip_grad_norm_(asr_model.parameters(), kwargs["clip"]) 
 
@@ -298,12 +496,13 @@ def cpu_rollout(
     return {
         'original_cer': original_wer,
         'updated_cer': new_wer,
-        'hypothesis': out_text,
+        'hypothesis': hyps,
         'original_hypothesis': original_hypothesis,
+        'reference': refs
 
     }
 
- 
+
         
        
 
