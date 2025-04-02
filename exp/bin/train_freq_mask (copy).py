@@ -5,9 +5,9 @@ from omegaconf.omegaconf import OmegaConf
 from l2augment.modelling.models import Policy
 from l2augment.utils.helpers import load_rl_models, make_color, backward_pass, load_model as load_policy, save_model as save_policy, lmap
 from functools import partial
+from l2augment.utils.data import CustomDataset
 
 from l2augment.utils.collate_functions import collate_functions_dict
-from l2augment.utils.datasets import dataset_classes_dict
 
 from tqdm import tqdm
 import logging
@@ -42,7 +42,6 @@ def train_policy(
         optim:MADGRAD,
         config:Dict[str, Any],
         dataloader:DataLoader,
-        dev_dataloader:DataLoader
     ):  
         device = policy.device
 
@@ -57,34 +56,22 @@ def train_policy(
         running = True
         max_steps = config['training'].get('max_steps', -1)
 
-        val_losses = []
         while running:
             
             policy = policy.eval()
             
-            pbar = tqdm(dev_dataloader)
-            for i, batch in enumerate(pbar):
-                if batch == None: continue
-              
-                loss, losses = policy.forward_pass(batch, device)
-                if loss == None: continue
-                val_losses.append(loss.item())
-        
-                wandb.log({'policy_loss':loss.item(), 'epoch': cur_epoch, **{k:v.item() for k,v in losses.items()}})
-                
-                pbar.set_description(desc=f'loss: {loss.item()}')
-                backward_pass(loss, policy, optim)
-
-            avg_val_loss = sum(val_losses) / len(val_losses)
-
+            if cur_epoch == 0 and config.get('validation', {}).get('default', None) is not None:
+                val_cer = config['validation']['default']
+            else: 
+                val_cer = run_eval(config = get_eval_config(config), policy_net=policy)
 
             
-            wandb.log({'avg_val_loss':avg_val_loss, 'epoch': cur_epoch})
-            logger.info(f'avg_val_loss: {avg_val_loss}')
+            wandb.log({'val_cer':val_cer, 'epoch': cur_epoch})
+            logger.info(f'val_cer: {val_cer}')
 
-            if (avg_val_loss > prev_val_cer) or torch.isnan(torch.tensor(avg_val_loss)): remaining_tolerance -= 1
+            if (val_cer > prev_val_cer) or torch.isnan(torch.tensor(val_cer)): remaining_tolerance -= 1
             else:
-                prev_val_cer = avg_val_loss
+                prev_val_cer = val_cer
                 prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
                 remaining_tolerance = max_tolerance
 
@@ -144,20 +131,16 @@ def main(config):
     policy = policy.to(device)
     
 
-    total_params = policy.total_parameters()
+    total_params = sum(p.numel() for p in policy.parameters() if p.requires_grad)
     total_params_in_million = total_params / 1_000_000
     logger.info(make_color(f"Total trainable parameters (policy): {total_params_in_million:.2f} million", 'green'))
 
     policy_optim = MADGRAD(policy.parameters(), lr=config['policy']['lr'])
 
     train_files = prepare_data(config, split='train')
-    dev_files = prepare_data(config, split='dev')
 
     dataset_config = config.get('dataset', {})
-    
-    dataset_class = dataset_classes_dict[config.get('dataset_class', 'default')]
-    train_dataset = dataset_class(train_files, **dataset_config, logger=logger.info)
-    dev_dataset = dataset_class(dev_files, **dataset_config, logger=logger.info)
+    train_dataset = CustomDataset(train_files, **dataset_config, logger=logger.info)
 
     collate_function = collate_functions_dict[config.get('collate_function', 'default')]
     
@@ -170,18 +153,8 @@ def main(config):
         prefetch_factor=config['training'].get('prefetch_factor', 6),
     )
 
-    dev_dataloader = DataLoader(
-        dev_dataset, 
-        batch_size=config['training']['batch_size'], 
-        shuffle=False, 
-        collate_fn=collate_function,
-        num_workers=config['training'].get('num_workers', 12),
-        prefetch_factor=config['training'].get('prefetch_factor', 6),
-    )
 
-
-
-    policy = train_policy(policy, policy_optim, config, train_dataloader, dev_dataloader)
+    policy = train_policy(policy, policy_optim, config, train_dataloader)
     save_policy(policy, config)
 
     logger.info(f'Finished')

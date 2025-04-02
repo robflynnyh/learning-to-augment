@@ -1,19 +1,19 @@
 #!/bin/bash
-#SBATCH --time=04:00:00
+#SBATCH --time=48:00:00
 #SBATCH --cpus-per-task=16
 #SBATCH --array=0-50
 
 echo "Task id is $SLURM_ARRAY_TASK_ID"
 
 module load Anaconda3/2022.10
-source activate /mnt/parscratch/users/acp21rjf/conda/main/
+source activate /mnt/parscratch/users/acp21rjf/conda/main
 
 nproc
 taskset -cp $$
 
 cd ../
 
-python generate.py --config /users/acp21rjf/learning-to-augment/exp/configs/configs_in_paper/unconditional_mask_lm/UMLM.yaml --index $SLURM_ARRAY_TASK_ID --steps 55 --repeats 10 #--skip_percentage 98.0 --remove_skipped_paths
+python generate_search.py --config ./configs/configs_in_paper/conditional_multistep_mask_lm/generation.yaml --split 'train' --index $SLURM_ARRAY_TASK_ID --steps 55
 #taskset -c 0,1,2,3,4,5,6,7 python generate.py --config ./configs/example.yaml --index $SLURM_ARRAY_TASK_ID & taskset -c 8,9,10,11,12,13,14,15 python generate.py --config ./configs/example.yaml --index $SLURM_ARRAY_TASK_ID
 
 # if [ $? -ne 0 ]; then

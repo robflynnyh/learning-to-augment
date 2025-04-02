@@ -30,6 +30,7 @@ class CustomDataset(Dataset):
             wer_weight=1.0,
             set_minus_or_positive=False,
             expand_mask_to_audio=False,
+            all_zero_to_one=False,
             logger=print
         ):
         self.data = sorted(files)
@@ -48,12 +49,14 @@ class CustomDataset(Dataset):
         self.set_minus_or_positive = set_minus_or_positive
         self.expand_mask_to_audio = expand_mask_to_audio
         self.logger = logger
+        self.all_zero_to_one = all_zero_to_one
 
     def __len__(self):
         # Return the total number of samples
         return len(self.data)
     
     def standardize_pipeline(self, rewards):
+        
         if self.set_minus_or_positive:
             rewards[rewards < 0] = -1
             rewards[rewards > 0] = 1
@@ -79,9 +82,14 @@ class CustomDataset(Dataset):
             rewards_min = rewards.min(dim=0, keepdim=True).values
             rewards_max = rewards.max(dim=0, keepdim=True).values
             if rewards_min == rewards_max:
-                rewards = torch.zeros_like(rewards)
+                rewards = torch.zeros_like(rewards) # best outcome
             else:
                 rewards = 2*(rewards - rewards_min)/(rewards_max - rewards_min) - 1
+
+        if self.all_zero_to_one:
+            # if all rewards are zero then set them to 1 instead
+            if rewards.min() == 0 and rewards.max() == 0:
+                rewards = torch.ones_like(rewards)
 
         return rewards
 
@@ -106,6 +114,8 @@ class CustomDataset(Dataset):
                 misc['probs'] = rollout['probs']
             if 'eps' in rollout:
                 misc['eps'] = rollout['eps']
+            if 'generation' in rollout:
+                misc['generation'] = rollout['generation']
 
 
             if decreases.ndim == 3: has_wer = True
@@ -139,7 +149,7 @@ class CustomDataset(Dataset):
             return {
                 'reward': all_rewards, # (repeats)
                 'total_reward': total_reward,
-                'masks':masks, # (masks, 1, C, T)
+                'masks':masks, # (masks, 1, C, T)       
                 **({'audio':audio} if self.load_audio else {}),
                 **misc
             }

@@ -11,6 +11,6 @@ echo "Running oracle_eval.py with config $CONFIG"
 
 cd ../
 
-python oracle_eval.py --config $CONFIG
+python oracle_eval.py --config $CONFIG --indexes 1
 
 # example use: sbatch --export=CONFIG='./configs/example.yaml'  ./run_eval_cpu.sh

@@ -1,0 +1,39 @@
+checkpointing:
+  asr_model: "/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt"
+  #asr_model: "/mnt/parscratch/users/acp21rjf/spotify/checkpoints_seq_scheduler_rb/n_seq_sched_2048_rp_1/step_105360.pt" 
+  #"/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_4096_rp_1/step_105360.pt"
+
+training:
+  device: 'cuda'
+  random_seed: 1234
+  batch_size: 84
+  epochs: 100
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/UMLM/tmp_modelgpu.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/UMLM/tmp_modelgpu.pt
+
+evaluation: 
+  rollout_setting: 'search'
+  search_repeats: 1
+  dataset: 'tedlium'
+  split: 'test'
+  use_cer: false
+  epochs: 1
+  augmentation_config:
+    repeats: 1
+    use_random: true
+  optim_args:
+    lr: 1e-6
+    single_step_lr: 8e-2
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/UVQLM/oracle/tedlium.txt
+
+policy:
+  lr: 6e-4
+  class: UnconditionalMaskGenerator
+  config:
+    mask_vae_state_dict_path: "/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/bvae_USINGTHISFORNOW_2048gpu.pt"
+    mask_vae_config:
+      latent_dim: 128
+      codebook_size: 2048
+      use_vq: true
+
+

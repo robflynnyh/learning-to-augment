@@ -6,11 +6,25 @@ checkpointing:
 training:
   device: 'cuda'
   random_seed: 1234
-  batch_size: 40  
-  epochs: 200
-  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/UMLM/modelgpu.pt
+  batch_size: 84
+  epochs: 100
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/UMLM/tmp_modelgpu.pt
   tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/UMLM/tmp_modelgpu.pt
 
+evaluation: 
+  rollout_setting: 'search'
+  search_repeats: 3
+  dataset: 'tedlium'
+  split: 'test'
+  use_cer: false
+  epochs: 1
+  augmentation_config:
+    repeats: 1
+    use_random: true
+  optim_args:
+    lr: 1e-6
+    single_step_lr: 8e-2
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/UVQLM/oracle/tedlium8e2.txt
 
 policy:
   lr: 6e-4
@@ -22,10 +36,4 @@ policy:
       codebook_size: 2048
       use_vq: true
 
-generation:
-  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_mmr9e2/"
 
-
-
-  
-#this_american_life_566_audio_307200.pt

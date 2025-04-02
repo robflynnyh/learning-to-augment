@@ -40,6 +40,7 @@ def main(config, policy_net=None):
     else:
         raise ValueError("Invalid rollout setting")
     
+    print(f'Using rollout function: {rollout_function.__name__}')
     search_repeats = config.get('evaluation', {}).get('search_repeats', 4)
 
 
@@ -52,6 +53,7 @@ def main(config, policy_net=None):
     if policy_net is None:
         policy_net = load_rl_models(config)
         load_policy(policy_net, config)
+    print(f'Using policy with class: {policy_net.__class__}')
    
     rollout_fn = partial(rollout_function, 
                          load_asr_model_fn = partial_load_asr_model_fn, 
@@ -67,7 +69,7 @@ def main(config, policy_net=None):
     dataset = 'tedlium3_segmented_data'
     split = config.get('evaluation', {}).get('split', 'test')
     epochs = config.get('evaluation', {}).get('epochs', 1)
-    optim_args = config.get('evaluation', {}).get('optim_args', {"lr":8e-6})
+    optim_args = config.get('evaluation', {}).get('optim_args', {"lr":8e-6, 'single_step_lr': 9e-2})
     data = dataset_functions[dataset](split)
     
     indexes = config.get('indexes', [-1])
@@ -127,7 +129,7 @@ if __name__ == "__main__":
     parser.add_argument('--dont_save', '-dont_save', action='store_true', help='Do not save the results')
     args = parser.parse_args()
     config = OmegaConf.load(args.config)
-    config['indexes'] = args.indexes
+    config['indexes'] = args.indexes if 'indexes' not in config else config['indexes'] # If indexes is specified in yaml config, overwrite 
     config['save'] = not args.dont_save
     main(config)
 

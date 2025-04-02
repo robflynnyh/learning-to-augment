@@ -18,6 +18,7 @@ import numpy as np
 from l2augment.rollout import cpu_rollout as singlestep_rollout
 from l2augment.utils.helpers import load_asr_model_fn as create_load_asr_model_fn
 from lcasr.utils.general import load_model as load_asr_model, get_model_class
+import contextlib
 
 def seed_all(seed):
     """A decorator to temporarily set the seed for random, numpy, and torch."""
@@ -49,6 +50,35 @@ def seed_all(seed):
         return wrapper
     return decorator
 
+
+@contextlib.contextmanager
+def seed_all_ctx(seed):
+    """A context manager to temporarily set the seed for random, numpy, and torch."""
+    # Save current states
+    random_state = random.getstate()
+    np_state = np.random.get_state()
+    torch_state = torch.random.get_rng_state()
+    torch_cuda_state = None
+    if torch.cuda.is_available():
+        torch_cuda_state = torch.cuda.random.get_rng_state_all()
+    
+    try:
+        # Set seeds
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+        
+        yield
+    
+    finally:
+        # Restore original states
+        random.setstate(random_state)
+        np.random.set_state(np_state)
+        torch.random.set_rng_state(torch_state)
+        if torch.cuda.is_available() and torch_cuda_state is not None:
+            torch.cuda.random.set_rng_state_all(torch_cuda_state)
 
 
 DEFAULT_OPTIMIZER_CLASS = MADGRAD
@@ -129,6 +159,7 @@ def cpu_rollout_presearch(
         search_repeats = 5,
         **kwargs
     ):
+    raise NotImplementedError("Need to update this function to use policy properly, cba rn as mainly using cpu_rollout_search so adding a NotImplementedError for now")
     
     dtype = torch.float32 #temporary
     torch.use_deterministic_algorithms(True, warn_only=True)
@@ -302,36 +333,48 @@ def find_top_masks(
         audio:Tensor,
         text:str,
         tokenizer,
+        policy:Module,
         load_asr_model_fn:Callable,
         repeats=20,
         other_audio=None,
+        single_step_lr=4e-2,
+        augmentation_args:Dict[str, Any] = {}
     ):
     masks = []
     rewards = []
+    generations = []
     for repeat in range(repeats):
         audio_a = audio.clone()
         # outputs = policy.augment(audio_a, **augmentation_config)
         # audio_b, mask = outputs[0], outputs[1]
         #n_time_masks = random.randint(3, 10)
         #masker = SpecAugment(n_time_masks=6, n_freq_masks=0, freq_mask_param=0, zero_masking=True, min_p=0.2)
-        mask = torch.ones_like(audio_a)
-        method = random.randint(0,2)
-        mask = apply_masker(mask)
-        audio_b = mask * audio_a
+        #mask = torch.ones_like(audio_a)
+        # method = random.randint(0,2)
+        # mask = apply_masker(mask)
+        policy_out = policy.augment(audio_a, **augmentation_args)
+        audio_b, mask = policy_out[0], policy_out[1]
+        if len(policy_out) > 2: misc = policy_out[2]
+        else: misc = None
+
+        if misc is not None:
+            if 'generation' in misc:
+                generations.append(misc['generation'])
+        
         # mask = torch.rand_like(audio_a)
         # mask = torch.bernoulli(mask)
         # audio_b = mask * audio_a
         masks.append(mask)
 
         prev_cer, u_cer, _ = singlestep_rollout(
-            policy = None,
+            policy = None,  
             audio = audio if other_audio is None else other_audio,
             audio_a = audio_a,
             audio_b = audio_b,
             load_asr_model_fn = load_asr_model_fn,
             tokenizer = tokenizer,
             text = text,
-            optim_args = {"lr":4e-2},
+            optim_args = {"lr":single_step_lr},
             return_wer = True,
             verbose=False,
             augmented_target=False if other_audio is None else True,
@@ -348,10 +391,20 @@ def find_top_masks(
     rewards = torch.stack(rewards)
     top_rewards, top_indices = torch.topk(rewards, 1, dim=0)
     top_mask = masks[top_indices[0]]
-    return top_mask
+    if len(generations) > 0:
+        generations = torch.stack(generations, 0)
 
 
-@seed_all(123456)
+    masks = torch.stack(masks)
+
+    return top_mask, rewards, masks, generations
+
+
+def shuffle_data(data, seed=123456):
+    with seed_all_ctx(seed=seed):
+        random.shuffle(data)
+    return data
+
 def cpu_rollout_search(
         policy:Module,
         load_asr_model_fn:Callable,
@@ -361,13 +414,13 @@ def cpu_rollout_search(
         asr_model_class:Module,
         seq_len:int=2048,
         overlap=0.875,
-        optim_args:Dict[str, Any] = {"lr":8e-6},
+        optim_args:Dict[str, Any] = {"lr":8e-6, 'single_step_lr': 9e-2},
         original_wer = None,
-        max_steps = None,
         shuffle=True,
         augmentation_config:Dict[str, Any] = {},
         epochs = 1,
         search_repeats = 5,
+        shuffle_seed = 123456,
         **kwargs
     ):
     
@@ -383,7 +436,8 @@ def cpu_rollout_search(
     
     asr_model = load_asr_model_fn()
     asr_model = asr_model.to(dtype=dtype)
-    optimizer = kwargs.get("optimizer_class", DEFAULT_OPTIMIZER_CLASS)(asr_model.parameters(), **optim_args)
+
+    optimizer = kwargs.get("optimizer_class", DEFAULT_OPTIMIZER_CLASS)(asr_model.parameters(), lr=optim_args['lr'])
     asr_model.eval()
     decoder = GreedyCTCDecoder(tokenizer = tokenizer, blank_id = asr_model.decoder.num_classes-1)
 
@@ -415,12 +469,16 @@ def cpu_rollout_search(
 
     asr_model.eval()
 
+    masks = []
+    audio = []
+    rewards = []
+    generations = []
   
-    for epoch in range(epochs*8):
+    for epoch in range(epochs):
         
         utterance_ids = list(range(len(utterances)))
         #other_ids = list(range(len(utterances)))
-        if shuffle: random.shuffle(utterance_ids)
+        if shuffle: shuffle_data(utterance_ids, seed=shuffle_seed+epoch)
         #random.shuffle(other_ids)
         for i, utt_id in enumerate(utterance_ids):
             print(f'Epoch {epoch+1}/{epochs*8} - Utterance {i+1}/{len(utterances)}')
@@ -442,8 +500,22 @@ def cpu_rollout_search(
 
             #print(asr_model.state_dict()['layers.5.attend.fn.qkv_proj.weight'])
 
-            cur_mask = find_top_masks(cur_audio, cur_text, tokenizer, repeats=search_repeats, load_asr_model_fn=tmp_load_asr_model_fn)
+            cur_mask, all_rewards, all_masks, generation = find_top_masks(
+                cur_audio, 
+                cur_text, 
+                tokenizer, 
+                repeats=search_repeats, 
+                load_asr_model_fn=tmp_load_asr_model_fn, 
+                policy=policy,
+                single_step_lr=optim_args.get('single_step_lr', 9e-2),
+                augmentation_args=augmentation_config
+            )
             #cur_mask = apply_masker(torch.ones_like(cur_audio))
+
+            masks.append(all_masks)
+            rewards.append(all_rewards)
+            audio.append(cur_audio.clone().to('cpu'))
+            generations.append(generation)
 
             asr_model.load_state_dict(prev_state_dict)
             optimizer.load_state_dict(prev_optimizer_state_dict)    
@@ -493,13 +565,22 @@ def cpu_rollout_search(
     # masks = torch.stack(masks, 0).squeeze(-1)
     print(original_wer, new_wer, '-')
 
+    rewards = torch.stack(rewards, 0)
+    # print(rewards.shape)
+    # print([el.shape for el in masks])
+    # print([el.shape for el in audio])
+    # exit()
+
     return {
-        'original_cer': original_wer,
-        'updated_cer': new_wer,
+        'original_wer': original_wer,
+        'updated_wer': new_wer,
         'hypothesis': hyps,
         'original_hypothesis': original_hypothesis,
-        'reference': refs
-
+        'reference': refs,
+        'rewards': rewards,
+        'masks': masks,
+        'audio': audio,
+        'generations': generations
     }
 
 

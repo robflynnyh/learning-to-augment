@@ -11,6 +11,6 @@ source activate /mnt/parscratch/users/acp21rjf/conda/main/
 cd ../
 
 #python train_freq_mask.py --config ./configs/configs_in_paper/DT_train/DT.yaml
-python train_freq_mask.py --config ./configs/configs_in_paper/DT_train/test.yaml
+python train_freq_mask.py --config ./configs/configs_in_paper/conditional_mask_lm/MLM.yaml
 
 # example use: sbatch --export=CONFIG='./configs/example.yaml'  ./train_cpu.sh

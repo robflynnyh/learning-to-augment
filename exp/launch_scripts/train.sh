@@ -11,4 +11,4 @@ source activate /mnt/parscratch/users/acp21rjf/conda/main
 
 cd ../
 
-python train_freq_mask_loop.py --config ./configs/configs_in_paper/CM_train/CM.yaml
+python train_freq_mask.py --config ./configs/configs_in_paper/conditional_multistep_mask_lm/MLM.yaml

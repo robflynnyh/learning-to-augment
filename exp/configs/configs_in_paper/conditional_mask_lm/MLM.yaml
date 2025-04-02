@@ -1,0 +1,71 @@
+checkpointing:
+  asr_model: "/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt"
+  #asr_model: "/mnt/parscratch/users/acp21rjf/spotify/checkpoints_seq_scheduler_rb/n_seq_sched_2048_rp_1/step_105360.pt" 
+  #"/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_4096_rp_1/step_105360.pt"
+
+training:
+  device: 'cuda'
+  random_seed: 1234
+  batch_size: 4
+  epochs: 10 #200
+  tolerance: 3
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/MLM/modelcpu.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/MLM/tmp_modelcpu.pt
+
+validation:
+  #default: 0.0432 #0.040266551749508626
+  dataset: 'tedlium'
+  split: 'dev'
+  use_cer: true
+  optim_args:
+    lr: 2e-2
+  rollout_fn: singlestep
+
+evaluation:
+  dataset: 'earnings22'
+  split: 'test'
+  use_cer: false
+  epochs: 1
+  optim_args:
+    lr: 5e-6
+
+dataset:
+  load_audio: true
+  clamp_min: null
+  clamp_max: null
+  cer_weight: 0.0
+  wer_weight: 1.0 
+  scale: true
+  standardize_std: false
+  all_zero_to_one: true
+
+policy:
+  lr: 6e-4
+  class: ConditionalMaskGenerator
+  config:
+    codebook_size: 2048
+    hidden_size: 256
+    default_conditioning_reward: 1.0
+    audio_vae_state_dict_path: "/mnt/parscratch/users/acp21rjf/l2augment_model/autoenc_audio/model_gpu.pt"
+    audio_vae_config:
+      latent_dim: 256 # same as default hdim
+      use_vq: false
+      norm_type: 'bn'
+    mask_vae_state_dict_path: "/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/bvae_USINGTHISFORNOW_2048gpu.pt"
+    mask_vae_config:
+      latent_dim: 128
+      codebook_size: 2048
+      use_vq: true
+
+generation:
+  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_uvqmlm/"
+  return_wer: true
+  optim_args:
+    lr: 1e-1
+
+collate_function: DTLM
+
+
+
+  
+#this_american_life_566_audio_307200.pt
