@@ -73,7 +73,6 @@ def train_policy(
                 wandb.log({'policy_loss':loss.item(), 'epoch': cur_epoch, **{k:v.item() for k,v in losses.items()}})
                 
                 pbar.set_description(desc=f'loss: {loss.item()}')
-                backward_pass(loss, policy, optim)
 
             avg_val_loss = sum(val_losses) / len(val_losses)
 
@@ -122,11 +121,18 @@ def train_policy(
         return policy
     
 def prepare_data(config, split='train'):
-    rollout_directory = os.path.join(config['generation']['save_dir'], split)
+    rollout_dirs = config['generation']['save_dir']
+    if isinstance(rollout_dirs, str): rollout_dirs = [rollout_dirs]
 
-    all_rollouts = os.listdir(rollout_directory)
-    all_rollouts = [el for el in all_rollouts if el.endswith('.pt')]
-    all_rollouts = [os.path.join(rollout_directory, el) for el in all_rollouts]
+    all_rollouts = []
+    for rollout_dir in rollout_dirs:
+        rollout_directory = os.path.join(rollout_dir, split)
+
+        all_rollouts_cur = os.listdir(rollout_directory)
+        all_rollouts_cur = [el for el in all_rollouts_cur if el.endswith('.pt')]
+        all_rollouts_cur = [os.path.join(rollout_directory, el) for el in all_rollouts_cur]
+
+        all_rollouts.extend(all_rollouts_cur)
 
     return all_rollouts
 

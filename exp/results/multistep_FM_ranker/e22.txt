@@ -1,0 +1,2 @@
+ID: 0 - Dataset: earnings22 - Split: test - Epochs: 1 - Original_WER: 0.23519800665808877 - Updated_WER: 0.18971468251536874
+ID: 0 - Dataset: earnings22 - Split: test - Epochs: 1 - Original_WER: 0.23519800665808877 - Updated_WER: 0.19222678348957375

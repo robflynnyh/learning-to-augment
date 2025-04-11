@@ -1,0 +1,4 @@
+ID: 0 - Dataset: tedlium - Split: dev - Epochs: 1 - Original_WER: 0.10003316016359014 - Updated_WER: 0.0885376367856748
+ID: 0 - Dataset: tedlium - Split: dev - Epochs: 1 - Original_WER: 0.10003316016359014 - Updated_WER: 0.0885376367856748
+ID: 0 - Dataset: tedlium - Split: dev - Epochs: 1 - Original_WER: 0.10003316016359014 - Updated_WER: 0.08925610699679452
+ID: 0 - Dataset: tedlium - Split: dev - Epochs: 5 - Original_WER: 0.10003316016359014 - Updated_WER: 0.0878191665745551

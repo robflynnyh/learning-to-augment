@@ -12,7 +12,4 @@ source activate /mnt/parscratch/users/acp21rjf/conda/main
 ulimit -n 65536
 
 cd ..
-
-python train_freq_mask.py --config ./configs/configs_in_paper/conditional_multistep_mask_lm/MLM_noaudio_signals.yaml
-
-#python train_freq_mask.py --config ./configs/configs_in_paper/conditional_multistep_mask_lm/MLM_noaudio.yaml
+python train_freq_mask.py --config ./configs/configs_in_paper/multistep_FM_ranker/MLM2.yaml

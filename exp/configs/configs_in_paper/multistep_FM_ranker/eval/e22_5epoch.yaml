@@ -1,0 +1,64 @@
+checkpointing:
+  asr_model: "/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt"
+  #asr_model: "/mnt/parscratch/users/acp21rjf/spotify/checkpoints_seq_scheduler_rb/n_seq_sched_2048_rp_1/step_105360.pt" 
+  #"/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_4096_rp_1/step_105360.pt"
+
+training:
+  device: 'cuda'
+  random_seed: 1234
+  batch_size: 4
+  epochs: 100 #200
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/modelcpu2.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/tmp_modelcpu.pt
+  prefetch_factor: null
+  num_workers: 0
+
+# validation:
+#   #default: 0.0432 #0.040266551749508626
+#   dataset: 'tedlium'
+#   split: 'dev'
+#   use_cer: true
+#   optim_args:
+#     lr: 1e-2
+#   rollout_fn: singlestep
+
+evaluation:
+  dataset: 'earnings22'
+  split: 'test'
+  use_cer: false
+  epochs: 5
+  optim_args:
+    lr: 5e-6
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/multistep_FM_ranker/e22.txt
+
+# dataset:
+#   load_audio: true
+#   clamp_min: null
+#   clamp_max: null
+#   cer_weight: 0.0
+#   wer_weight: 1.0 
+#   scale: true
+#   standardize_std: false
+#   all_zero_to_one: true
+
+collate_function: MultiStep_FM_ranker
+dataset_class: MultiStepFMDataset
+
+policy:
+  lr: 3e-3
+  class: MultiStepMaskRanker
+  #config:
+ 
+
+generation:
+  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_multistep_FM/"
+  optim_args:
+    lr: 8e-6
+    single_step_lr: 9e-2
+
+
+
+
+
+  
+#this_american_life_566_audio_307200.pt

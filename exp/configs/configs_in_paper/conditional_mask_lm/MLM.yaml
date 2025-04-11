@@ -22,7 +22,7 @@ validation:
   rollout_fn: singlestep
 
 evaluation:
-  dataset: 'earnings22'
+  dataset: 'tedlium'
   split: 'test'
   use_cer: false
   epochs: 1

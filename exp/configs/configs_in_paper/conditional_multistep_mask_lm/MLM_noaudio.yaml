@@ -7,9 +7,9 @@ training:
   device: 'cuda'
   random_seed: 1234
   batch_size: 1
-  epochs: 10 #200
-  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/modelcpu.pt
-  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/tmp_modelcpu.pt
+  epochs: 10000  #200
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_modelcpu2.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_tmp_modelcpu2.pt
   max_steps: 10000
   prefetch_factor: null
   num_workers: 0
@@ -24,8 +24,8 @@ training:
 #   rollout_fn: singlestep
 
 evaluation:
-  dataset: 'tedlium'
-  split: 'dev'
+  dataset: 'earnings22'
+  split: 'test'
   use_cer: false
   epochs: 1
 
@@ -47,9 +47,10 @@ policy:
   class: ConditionalMultiStepMaskGenerator
   config:
     codebook_size: 2048
-    hidden_dim: 512
-    embedding_dim: 256
+    hidden_dim: 512 
+    embedding_dim: 512
     default_conditioning_reward: 1.0
+    condition_on_audio: false
     audio_vae_state_dict_path: "/mnt/parscratch/users/acp21rjf/l2augment_model/autoenc_audio/model_gpu.pt"
     audio_vae_config:
       latent_dim: 256 # same as default hdim

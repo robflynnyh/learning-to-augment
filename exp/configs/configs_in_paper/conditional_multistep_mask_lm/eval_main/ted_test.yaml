@@ -6,9 +6,9 @@ checkpointing:
 training:
   device: 'cuda'
   random_seed: 1234
-  batch_size: 1
+  batch_size: 2
   epochs: 10 #200
-  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/modelcpu.pt
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/curbest.pt
   tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/tmp_modelcpu.pt
   max_steps: 10000
   prefetch_factor: null
@@ -25,9 +25,12 @@ training:
 
 evaluation:
   dataset: 'tedlium'
-  split: 'dev'
+  split: 'test'
   use_cer: false
   epochs: 1
+  optim_args:
+    lr: 5e-6
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/CMultiStepVQLM/tedlium_test.txt
 
 # dataset:
 #   load_audio: true

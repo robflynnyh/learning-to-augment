@@ -27,7 +27,7 @@ evaluation:
   use_cer: false
   epochs: 1
   augmentation_config:
-    repeats: 10
+    repeats: 15
     use_random: false
   optim_args:
     lr: 5e-6

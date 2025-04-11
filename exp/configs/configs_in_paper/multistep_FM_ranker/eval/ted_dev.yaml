@@ -6,11 +6,10 @@ checkpointing:
 training:
   device: 'cuda'
   random_seed: 1234
-  batch_size: 1
-  epochs: 10 #200
-  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/modelcpu.pt
-  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/tmp_modelcpu.pt
-  max_steps: 10000
+  batch_size: 4
+  epochs: 100 #200
+  model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/modelcpu2.pt
+  tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/tmp_modelcpu.pt
   prefetch_factor: null
   num_workers: 0
 
@@ -28,6 +27,9 @@ evaluation:
   split: 'dev'
   use_cer: false
   epochs: 1
+  optim_args:
+    lr: 5e-6
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/multistep_FM_ranker/ted_dev.txt
 
 # dataset:
 #   load_audio: true
@@ -39,30 +41,17 @@ evaluation:
 #   standardize_std: false
 #   all_zero_to_one: true
 
-collate_function: MultiStep_DTLM
-dataset_class: MultiStepDataset
+collate_function: MultiStep_FM_ranker
+dataset_class: MultiStepFMDataset
 
 policy:
-  lr: 1e-3
-  class: ConditionalMultiStepMaskGenerator
-  config:
-    codebook_size: 2048
-    hidden_dim: 512
-    embedding_dim: 256
-    default_conditioning_reward: 1.0
-    audio_vae_state_dict_path: "/mnt/parscratch/users/acp21rjf/l2augment_model/autoenc_audio/model_gpu.pt"
-    audio_vae_config:
-      latent_dim: 256 # same as default hdim
-      use_vq: false
-      norm_type: 'bn'
-    mask_vae_state_dict_path: "/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/bvae_USINGTHISFORNOW_2048gpu.pt"
-    mask_vae_config:
-      latent_dim: 128
-      codebook_size: 2048
-      use_vq: true
+  lr: 3e-3
+  class: MultiStepMaskRanker
+  #config:
+ 
 
 generation:
-  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_multistep_cvqmlm"
+  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_multistep_FM/"
   optim_args:
     lr: 8e-6
     single_step_lr: 9e-2

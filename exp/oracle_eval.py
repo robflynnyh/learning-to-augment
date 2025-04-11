@@ -91,8 +91,7 @@ def main(config, policy_net=None):
             epochs = epochs,
             optim_args = optim_args
         )
-
-        print(rollout_output['original_cer'], rollout_output['updated_cer'])
+        print(rollout_output['original_wer'], rollout_output['updated_wer'])
 
         u_hyps.extend(rollout_output['hypothesis'])
         o_hyps.extend(rollout_output['original_hypothesis']) 

@@ -22,8 +22,8 @@ validation:
     lr: 5e-6
 
 evaluation:
-  dataset: 'tedlium'
-  split: 'dev'
+  dataset: 'earnings22'
+  split: 'test'
   use_cer: false
   epochs: 1
   augmentation_config:

@@ -11,7 +11,18 @@ training:
   model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/UMLM/modelgpu.pt
   tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/UMLM/tmp_modelgpu.pt
 
-
+evaluation:
+  rollout_setting: 'search'
+  search_repeats: 10
+  dataset: 'tedlium'
+  split: 'test'
+  use_cer: false
+  epochs: 1
+  augmentation_config:
+    repeats: 1
+    use_random: true
+  optim_args:
+    lr: 5e-6
 
 policy:
   lr: 6e-4
@@ -24,11 +35,12 @@ policy:
       use_vq: true
 
 generation:
-  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_multistep_cvqmlm"
+  save_dir: "/mnt/parscratch/users/acp21rjf/l2augment_rollout_multistep_cvqmlm_bp"
   search_repeats: 20
   optim_args:
-    lr: 8e-6
-    single_step_lr: 1e-1
+    lr: 5e-6
+    single_step_lr: 9.5e-2
+  rollout_repeats: 1
 
 
 
