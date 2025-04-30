@@ -221,6 +221,9 @@ def MultiStep_DTLM_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.T
     rewards = {}
     batch_idxs = {}
     dropped_idxs = {}
+    
+    entropy = {}
+    n_losses = {}
 
     step_counts = [len(item['audio']) for item in batch if item is not None]
     max_steps = max(step_counts)
@@ -239,12 +242,19 @@ def MultiStep_DTLM_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.T
                 if step_idx not in rewards: rewards[step_idx] = []
                 if step_idx not in batch_idxs: batch_idxs[step_idx] = []
                 if step_idx not in dropped_idxs: dropped_idxs[step_idx] = []
+                if step_idx not in entropy and 'entropy' in item: entropy[step_idx] = []
+                if step_idx not in n_losses and 'n_losses' in item: n_losses[step_idx] = []
 
                 audio[step_idx].append(item['audio'][step_idx])
                 generations[step_idx].append(item['generations'][step_idx].to(torch.long))
                 audio_lengths[step_idx].append(item['audio'][step_idx].shape[-1])
                 generation_lengths[step_idx].append(item['generations'][step_idx].shape[-1])
                 paths[step_idx].append(item['paths'][step_idx])
+
+                if 'entropy' in item:
+                    entropy[step_idx].append(item['entropy'][step_idx])
+                if 'n_losses' in item:
+                    n_losses[step_idx].append(item['n_losses'][step_idx])
 
                 counts[step_idx].append(item['rewards'][step_idx].shape[0])
                 rewards[step_idx].append(item['rewards'][step_idx])
@@ -266,6 +276,11 @@ def MultiStep_DTLM_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.T
         paths[step_idx] = torch.tensor(paths[step_idx])
         counts[step_idx] = torch.tensor(counts[step_idx])
         rewards[step_idx] = torch.cat(rewards[step_idx], dim=0)
+        if 'entropy' in item:
+            entropy[step_idx] = torch.stack(entropy[step_idx], dim=0)
+        if 'n_losses' in item:
+            n_losses[step_idx] = torch.stack(n_losses[step_idx], dim=0)
+
 
         if audio_lengths[step_idx].min() != audio_lengths[step_idx].max(): # pad audio to max length
             max_length = audio_lengths[step_idx].max()
@@ -296,11 +311,98 @@ def MultiStep_DTLM_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.T
         'paths': paths,
         'counts': counts,
         'rewards': rewards,
-        'dropped_idxs': dropped_idxs
+        'dropped_idxs': dropped_idxs,
+        'entropy': entropy,
+        'n_losses': n_losses,
     }
 
 
+def MultiStep_FM_ranker_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:    
+
+    audio = {}
+    masks = {}
+    audio_lengths = {}
+    paths = {}
+    counts = {}
+    rewards = {}
+    batch_idxs = {}
+    dropped_idxs = {}
+
+    step_counts = [len(item['masks']) for item in batch if item is not None]
+    has_audio = all('audio' in item for item in batch)
+    max_steps = max(step_counts)
+    all_global_decreases = torch.tensor([item['global_decrease'] for item in batch if item is not None])
+
+    for step_idx in range(max_steps):
+        for i, item in enumerate(batch):
+            if item == None: continue
+            cur_total_steps = len(item['masks'])
+            if step_idx < cur_total_steps:
+                if step_idx not in audio and has_audio: audio[step_idx] = []
+                if step_idx not in audio_lengths: audio_lengths[step_idx] = []
+                if step_idx not in paths: paths[step_idx] = []
+                if step_idx not in counts: counts[step_idx] = []
+                if step_idx not in rewards: rewards[step_idx] = []
+                if step_idx not in batch_idxs: batch_idxs[step_idx] = []
+                if step_idx not in dropped_idxs: dropped_idxs[step_idx] = []
+                if step_idx not in masks: masks[step_idx] = []
+
+                if has_audio:
+                    audio[step_idx].append(item['audio'][step_idx])
+                    audio_lengths[step_idx].append(item['audio'][step_idx].shape[-1])
+
+                masks[step_idx].append(item['masks'][step_idx].to(torch.long))
+                paths[step_idx].append(item['paths'][step_idx])
+
+                counts[step_idx].append(item['rewards'][step_idx].shape[0])
+                rewards[step_idx].append(item['rewards'][step_idx])
+                batch_idxs[step_idx].append(i)
+
+        batch_idxs[step_idx] = torch.tensor(batch_idxs[step_idx])       
+        if step_idx != 0:
+            prev_batch_idxs = batch_idxs[step_idx-1]
+            diff_mask = torch.isin(prev_batch_idxs, batch_idxs[step_idx], invert=True)
+            diff = prev_batch_idxs[diff_mask] # get the indexes that are not in the current batch
+            indices = torch.arange(prev_batch_idxs.shape[0])[diff_mask]
+            dropped_idxs[step_idx] = indices
+        else:
+            dropped_idxs[step_idx] = torch.tensor([])
+        
+
+        paths[step_idx] = torch.tensor(paths[step_idx])
+        counts[step_idx] = torch.tensor(counts[step_idx])
+        rewards[step_idx] = torch.cat(rewards[step_idx], dim=0)
+        masks[step_idx] = torch.stack(masks[step_idx], dim=0)
+
+        if has_audio: 
+            audio_lengths[step_idx] = torch.tensor(audio_lengths[step_idx])
+
+            if audio_lengths[step_idx].min() != audio_lengths[step_idx].max(): # pad audio to max length
+                max_length = audio_lengths[step_idx].max()
+                for i in range(len(audio[step_idx])):
+                    cur_len = audio[step_idx][i].shape[-1]
+                    if cur_len < max_length:
+                        diff = max_length - cur_len
+                        audio[step_idx][i] = torch.cat([audio[step_idx][i], torch.zeros(audio[step_idx][i].shape[0], audio[step_idx][i].shape[1], diff)], dim=-1)
+
+            audio[step_idx] = torch.cat(audio[step_idx], dim=0)
+
+    returns = {
+        'masks': masks,
+        'paths': paths,
+        'counts': counts,
+        'rewards': rewards,
+        'dropped_idxs': dropped_idxs,
+        'global_decrease': all_global_decreases
+    }
+    if has_audio:
+        returns['audio'] = audio
+        returns['audio_lengths'] = audio_lengths
+
+    return returns
+
 collate_functions_dict = {
+    "MultiStep_FM_ranker": MultiStep_FM_ranker_fn,
     "MultiStep_DTLM": MultiStep_DTLM_fn,
     "DTLM": DTLM_fn,
     "default": mask_collate_fn,

@@ -144,6 +144,189 @@ class FrequencyMaskingRanker(Policy):
     def learnt_augmentation(self, audio, repeats=1):
         raise NotImplementedError # must be implemented in subclass
 
+    
+
+
+class MultiStepMaskRanker(Policy): 
+    def __init__(            
+            self,
+            hidden_dim=256,
+            gru_layers=2,
+            audio_vae_config:Dict={},
+            audio_vae_state_dict_path:str=None,
+            condition_on_audio:bool=False,
+            **kwargs
+        ) -> None:
+        super().__init__()
+
+        self.audio_enc = VQVariationalAutoEncoder(**audio_vae_config) if condition_on_audio else None
+        if audio_vae_state_dict_path is not None and condition_on_audio:
+            audio_vae_state_dict = torch.load(audio_vae_state_dict_path, map_location='cpu')['model_state_dict']
+            self.audio_enc.load_state_dict(audio_vae_state_dict)
+            print(f'Loaded VAE state dict from {audio_vae_state_dict_path}')
+
+        self.latent_to_hidden = nn.Linear(self.audio_enc.latent_dim, hidden_dim) if condition_on_audio else None
+        self.reccurent_audio = nn.GRU(input_size=hidden_dim, hidden_size=hidden_dim, num_layers=1, batch_first=True, bidirectional=False) if condition_on_audio else None
+
+        self.condition_on_audio = condition_on_audio
+
+        self.masker = SpecAugment(n_time_masks=0, n_freq_masks=6, freq_mask_param=34, zero_masking=True)
+        self.mask_encoder = SwiGlu(input_dim=80, output_dim=hidden_dim, expansion_factor=1)
+        self.reccurent = nn.GRU(input_size=hidden_dim, hidden_size=hidden_dim, num_layers=gru_layers, batch_first=True, bidirectional=False)
+        self.reccurent_norm = nn.LayerNorm(hidden_dim)
+        self.prediction = nn.Sequential(
+            nn.LayerNorm(hidden_dim),
+            SwiGlu(input_dim=hidden_dim, output_dim=2, expansion_factor=1),
+        )
+
+
+    @torch.no_grad()
+    def augment(self, audio, state=None, repeats=25, *args, **kwargs):
+        # generate N masks using self.masker
+        b, c, t = audio.shape
+   
+        assert c == 80, 'audio must have 80 channels'
+        assert b == 1, 'only implemented for batch size 1'
+        masks = torch.ones(b * repeats, c, 1).to(audio.device)
+        masks = self.masker(masks).squeeze(-1)
+        encoded_masks = self.mask_encoder(masks)
+        
+        if state is not None: state = repeat(state, 'l 1 d -> l r d', r=repeats).contiguous()
+
+        output, h_n = self.reccurent_step(encoded_masks, state=state)
+        output = output + encoded_masks.unsqueeze(1)
+        prediction = self.prediction(output.squeeze(1)).unbind(-1)[0]#.mean(-1)
+        
+        best_mask_idx = prediction.argmax()
+        best_mask = masks[best_mask_idx, None, :, None]
+        best_h_n = h_n[:, best_mask_idx, None].clone()
+        
+        audio = audio * best_mask
+      
+        return audio, best_mask, {'state': best_h_n}
+
+    @torch.no_grad()
+    def encode_audio(self, audio, lengths, counts=None):
+        if self.condition_on_audio is False: raise Exception('Audio encoding is not enabled in this model')
+
+        if audio.size(-1) < 160: #self.min_audio_size:
+            pad = 160 - audio.size(-1)
+            audio = torch.cat((audio, torch.zeros(audio.size(0), audio.size(1), pad).to(audio.device)), dim=-1)
+
+        self.audio_enc.eval()
+
+        z, _, _, downsampled_lengths = self.audio_enc.encode(audio, lengths, counts)
+        return z, downsampled_lengths
+    
+    def reccurent_step(self, masks, state=None):
+        masks = self.reccurent_norm(masks)
+        return self.reccurent(masks.unsqueeze(1), state)
+
+    def forward_pass(self, batch, device, **kwargs):
+        if self.condition_on_audio:
+            audio = batch['audio']
+            audio_lengths = batch['audio_lengths']
+         
+        masks = batch['masks']
+        rewards = batch['rewards']
+        dropped_idxs = batch['dropped_idxs']
+        paths = batch['paths']
+        counts = batch['counts']
+        global_decrease = batch['global_decrease'].to(device)
+
+        max_batch_size = masks[0].shape[0]
+        loss_local = 0
+        loss_global = 0
+        loss_size = 0
+        global_loss_size = 0
+
+        top_level_h_n = None # hidden state for top level of the hierarchical gru
+
+
+        for step in range(len(masks.keys())):
+            print(f'Step {step} of {len(masks.keys())}')
+            cur_rewards = rewards[step].to(device)
+            cur_dropped_idxs = dropped_idxs[step].to(device)
+            cur_paths = paths[step].to(device)
+            cur_masks = masks[step].to(device, dtype=torch.float32)
+            cur_batch_size = cur_masks.size(0)
+            cur_counts = counts[step].to(device)
+            repeats = cur_masks.size(1)
+            cur_masks = rearrange(cur_masks, 'b r 1 c -> (b r) c')
+
+            if self.condition_on_audio:
+                cur_audio = audio[step].to(device)
+                cur_audio_lengths = audio_lengths[step].to(device)
+                cur_audio_latents, cur_audio_latent_lengths = self.encode_audio(cur_audio, cur_audio_lengths)
+                cur_audio_latents = cur_audio_latents.transpose(-1, -2)
+                cur_audio_latents = self.latent_to_hidden(cur_audio_latents)
+                packed_latents = torch.nn.utils.rnn.pack_padded_sequence(cur_audio_latents, cur_audio_latent_lengths.cpu(), batch_first=True, enforce_sorted=False)
+                packed_latents, audio_hidden = self.reccurent_audio(packed_latents)
+                audio_hidden = torch.repeat_interleave(audio_hidden, repeats=cur_counts, dim=1)          
+
+            if len(cur_dropped_idxs) > 0:
+                to_keep = torch.tensor([i for i in range(top_level_h_n.size(1)) if i not in cur_dropped_idxs]).to(device)
+                global_decrease = global_decrease[to_keep]
+                if top_level_h_n is not None:
+                    top_level_h_n = top_level_h_n[:, to_keep].clone() # remove dropped indices from top level hidden state
+
+            if top_level_h_n is not None:
+                top_level_h_n = top_level_h_n.repeat_interleave(repeats, dim=1)
+            cur_global_decrease = global_decrease#.repeat_interleave(repeats, dim=0)
+            
+            encoded_masks = self.mask_encoder(cur_masks)
+
+            if self.condition_on_audio:
+                output, _ = self.reccurent_audio(encoded_masks.unsqueeze(1), audio_hidden)
+                output = output.squeeze(1)
+                encoded_masks = encoded_masks + output
+
+        
+            output, h_n = self.reccurent_step(encoded_masks, state=top_level_h_n)
+            output = output + encoded_masks.unsqueeze(1) # residual connection
+            paths_offset = torch.arange(cur_batch_size).to(device) * repeats + cur_paths
+
+            top_level_h_n = h_n[:, paths_offset].clone()
+
+            # print(encoded_masks.shape, h_n.shape, output.shape)
+            prediction = self.prediction(output.squeeze(1))
+
+            #print(prediction.shape)
+            local_prediction, global_prediction = torch.unbind(prediction, dim=-1)
+            local_prediction = (local_prediction + global_prediction) / 2
+            global_prediction = global_prediction[paths_offset]
+     
+            #print(local_prediction.shape, global_prediction.shape)
+
+            # print(encoded_masks.shape, h_n.shape, output.shape)
+            # print(prediction.shape, cur_rewards.shape)
+            
+            if random.random() < 0.011:
+                print(global_prediction)
+                print(cur_global_decrease)
+                print('-------')
+                print(local_prediction)
+                print(cur_rewards)
+                print('///')
+            
+            cur_loss_local = nn.functional.mse_loss(local_prediction, cur_rewards, reduction='none')
+            loss_local += cur_loss_local.sum()
+            cur_loss_global = nn.functional.mse_loss(global_prediction, cur_global_decrease, reduction='none')
+            loss_global += cur_loss_global.sum()
+
+            loss_size += prediction.size(0)
+            global_loss_size += cur_global_decrease.size(0)
+        
+        loss_local = loss_local / loss_size
+        loss_global = loss_global / global_loss_size
+        loss = (loss_local*1 + loss_global*0)# / 2
+
+
+        return loss, {'loss':loss, 'loss_local':loss_local, 'loss_global':loss_global}
+    
+
+
+
 class MixedMaskingRanker(Policy):
     def __init__(self, zero_masking=True, epochs_until_random=-1) -> None:
         super().__init__()
@@ -1328,8 +1511,6 @@ class ConditionalMaskGenerator(Policy):
         #         wandb.log({'generated':vis})
         #         plt.close()
         
-
-
         return ce_loss, {'loss':ce_loss, 'total_loss':ce_loss}
 
 
@@ -1344,16 +1525,18 @@ class ConditionalMultiStepMaskGenerator(Policy):
             mask_vae_config:Dict={},
             mask_vae_state_dict_path:str=None,  
             default_conditioning_reward=1.0,
+            min_audio_size=160,
+            condition_on_audio=True,
+            decoder_layers=4,
             **kwargs
         ) -> None:
         super().__init__()
 
-
+        self.min_audio_size = min_audio_size
         self.default_conditioning_reward = default_conditioning_reward
-        self.audio_enc = VQVariationalAutoEncoder(**audio_vae_config)
-        if audio_vae_state_dict_path is not None:
+        self.audio_enc = VQVariationalAutoEncoder(**audio_vae_config) if condition_on_audio else None
+        if audio_vae_state_dict_path is not None and condition_on_audio:
             audio_vae_state_dict = torch.load(audio_vae_state_dict_path, map_location='cpu')['model_state_dict']
-            #audio_vae_state_dict = {k.replace('vae.', 'audio_enc.'):v for k,v in audio_vae_state_dict.items()} 
             self.audio_enc.load_state_dict(audio_vae_state_dict)
             print(f'Loaded VAE state dict from {audio_vae_state_dict_path}')
 
@@ -1368,13 +1551,22 @@ class ConditionalMultiStepMaskGenerator(Policy):
 
         self.embeddings = nn.Embedding(self.codebook_size + 1, embedding_dim, padding_idx=self.codebook_size)
 
-        self.score_enc = timestep_encoder(hidden_dim=hidden_dim)
+        
 
+        self.condition_on_audio = condition_on_audio
+        self.decoder_layers = decoder_layers
+
+    
+        self.score_enc = timestep_encoder(hidden_dim=hidden_dim//3)
+        self.entropy_embed = timestep_encoder(hidden_dim=hidden_dim//3)
+        self.n_losses_embed = timestep_encoder(hidden_dim=hidden_dim//3)
+   
+        self.signal_fusion = SwiGlu(self.n_losses_embed.network.weight.shape[0] * 2 * 3, hidden_dim)
 
         self.decoder = nn.GRU(
             input_size=hidden_dim,
             hidden_size=hidden_dim,
-            num_layers=4,
+            num_layers=decoder_layers,
             batch_first=True,
         )
 
@@ -1399,10 +1591,11 @@ class ConditionalMultiStepMaskGenerator(Policy):
     @torch.no_grad()
     def encode_audio(self, audio, lengths, eps=None, counts=None):
 
-        if audio.size(-1) < 160:
-            pad = 160 - audio.size(-1)
+        if audio.size(-1) < self.min_audio_size:
+            pad = self.min_audio_size - audio.size(-1)
             audio = torch.cat((audio, torch.zeros(audio.size(0), audio.size(1), pad).to(audio.device)), dim=-1)
 
+        self.audio_enc.eval()
         z, _, _, downsampled_lengths = self.audio_enc.encode(audio, lengths, counts)
         return z, downsampled_lengths
     
@@ -1418,11 +1611,28 @@ class ConditionalMultiStepMaskGenerator(Policy):
         return top_level_h_n
     
     @torch.no_grad()
-    def generate(self, audio_hn, sample=True, target_output_length=None, target_prediction_steps=None):
-        score_emb = self.score_enc(torch.tensor([self.default_conditioning_reward]).unsqueeze(-1)).unsqueeze(1)
+    def generate(
+        self, 
+        audio_latent, 
+        state, 
+        entropy,
+        n_losses,
+        sample=True, 
+        target_output_length=None, 
+        target_prediction_steps=None, 
+        device='cpu'
+    ):
+        
+        score_enc = self.score_enc(torch.tensor([self.default_conditioning_reward], device=device).unsqueeze(-1)).unsqueeze(1)
+        entropy_emb = self.entropy_embed(entropy.unsqueeze(-1))[None, None, :]
+        n_losses_emb = self.n_losses_embed(n_losses.unsqueeze(-1))[None, None, :]
+
+        bos_emb = self.signal_fusion(torch.cat((score_enc, entropy_emb, n_losses_emb), dim=-1))
+      
+        #score_emb = self.score_enc(torch.tensor([self.default_conditioning_reward], device=device).unsqueeze(-1)).unsqueeze(1)
         outputs = []
-        h_n = audio_hn
-        seq = score_emb
+        h_n = state
+        seq = bos_emb
 
         mode = self.training
         self.eval()
@@ -1442,12 +1652,18 @@ class ConditionalMultiStepMaskGenerator(Policy):
             else: idx = probs.argmax(-1)
             outputs.append(idx.squeeze().item())
             if idx.item() == self.codebook_size: break
-            seq = self.embeddings(idx)
+            mask_token = self.embeddings(idx)
+
+            if self.condition_on_audio:
+                seq = torch.cat((audio_latent[:, step, None], mask_token), dim=-1)
+            else:
+                seq = mask_token
             
         outputs = [el for el in outputs if el != self.codebook_size]
         if len(outputs) == 0: return False
         #print(outputs)
-        outputs = torch.tensor(outputs, device=audio_hn.device)
+        outputs = torch.tensor(outputs, device=device)
+        #print(outputs)
        
         mask_latent = self.mask_enc.VQ.codebook[outputs][None].transpose(-1, -2)
         mask_h = self.mask_enc.latent_to_hidden(mask_latent)
@@ -1461,36 +1677,88 @@ class ConditionalMultiStepMaskGenerator(Policy):
         #mask_pred = torch.bernoulli(mask_pred).to(dtype=torch.long)
         mask_pred = torch.round(mask_pred, decimals=0).to(dtype=torch.long)
 
+        final_h_n = h_n[-1]
+        top_level_state = self.hn_to_state(final_h_n).unsqueeze(1)
+        top_level_h_n = self.update_state(top_level_state, top_level_h_n=state)
+
         if mode:
             self.train()
             self.mask_enc.eval()
 
-        return mask_pred, outputs
+        return mask_pred, outputs, top_level_h_n
+
+    @staticmethod
+    def calc_entropy(log_probs):
+        probs = log_probs.exp()  # Convert log probs to probs
+        entropy = -torch.sum(probs * log_probs, dim=-1, keepdim=True)  # Element-wise entropy
+        return entropy.mean()
+    
+    @staticmethod
+    def calc_nlosses(asr_model, audio):
+        noise = torch.randn_like(audio)
+        out = asr_model(noise)
+        tgts = torch.LongTensor([])[None]
+        out = out['final_posteriors']
+        N, B = out.shape[1], out.shape[0]
+        n_loss = torch.nn.functional.ctc_loss(
+            out.transpose(0, 1),
+            tgts,
+            torch.LongTensor([N] * out.shape[0]),
+            torch.LongTensor([tgts.shape[1]] * tgts.shape[0]),
+            blank=out.shape[-1] - 1,
+            reduction='mean',
+        )
+        return n_loss
 
     @torch.no_grad()
-    def augment(self, audio, *args, **kwargs):
+    def augment(self, audio, asr_model, teacher_predictions, state=None, *args, **kwargs):
         assert audio.size(0) == 1, 'only batch size 1 is supported atm'
         mode = self.training
         self.eval()
+        self.to(audio.device)
+
+        entropy = self.calc_entropy(teacher_predictions)
+        n_losses = self.calc_nlosses(asr_model, audio)
 
         lengths = torch.tensor([audio.size(-1)]).to(audio.device)
-        audio_latent, downsampled_audio_lengths = self.encode_audio(audio, lengths=lengths, counts=None)
-        audio_hn = self.encode(audio_latent, downsampled_audio_lengths)
-     
-        mask_pred, generation = self.generate(
-            audio_hn=audio_hn,
+        if self.condition_on_audio:
+            audio_latent, downsampled_audio_lengths = self.encode_audio(audio, lengths=lengths, counts=None)
+            audio_latent = audio_latent.transpose(-1, -2)
+        else:
+            downsampled_audio_lengths = self.mask_enc.calc_downsampled_length(lengths)
+            audio_latent = None
+        
+        mask_pred, generation, new_state = self.generate(
+            audio_latent=audio_latent,
+            state=state,
             sample=True,
             target_output_length=lengths[0].item(),
-            target_prediction_steps=downsampled_audio_lengths[0].item()
+            target_prediction_steps=downsampled_audio_lengths[0].item(),
+            n_losses=n_losses,
+            entropy=entropy,
+            device=audio.device
         )
         audio = audio * mask_pred
 
         if mode: self.train()
         
-        return audio, mask_pred, {'generation':generation}
+        return audio, mask_pred, {'generation':generation, 'state':new_state}
 
-    def forward(self, latent_seq, rewards, latent_lengths, h_n=None):
-        bos_emb = self.score_enc(rewards.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
+    def forward(
+            self, 
+            latent_seq, 
+            rewards, 
+            latent_lengths,
+            entropy,
+            n_losses, 
+            h_n=None
+        ):
+        score_enc = self.score_enc(rewards.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
+        entropy_emb = self.entropy_embed(entropy.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
+        n_losses_emb = self.n_losses_embed(n_losses.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
+   
+        bos_emb = self.signal_fusion(torch.cat((score_enc, entropy_emb, n_losses_emb), dim=-1))
+        #bos_emb = self.score_enc(rewards.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
       
         latent_seq = torch.cat((bos_emb, latent_seq), dim=1)
         latent_lengths = latent_lengths + 1
@@ -1507,6 +1775,9 @@ class ConditionalMultiStepMaskGenerator(Policy):
         generation_lengths = batch['generation_lengths']
         dropped_idxs = batch['dropped_idxs']
         paths = batch['paths']
+        entropy = batch['entropy'] 
+        n_losses = batch['n_losses']
+
         max_batch_size = audio[0].shape[0]
         loss = 0
         loss_size = 0
@@ -1524,28 +1795,52 @@ class ConditionalMultiStepMaskGenerator(Policy):
             cur_paths = paths[step].to(device)
             cur_batch_size = cur_audio.size(0)
 
+
+            # cur_entropy_embed = self.entropy_embed(cur_entropy)
+            # cur_n_losses_embed = self.n_losses_embed(cur_n_losses)
+            # print(f'cur_entropy_embed: {cur_entropy_embed.shape}, cur_n_losses_embed: {cur_n_losses_embed.shape}')
+            # exit()         
+
             if top_level_h_n is not None and len(cur_dropped_idxs) > 0:
-                top_level_h_n = top_level_h_n[:, cur_dropped_idxs].clone() 
-   
-            audio_latent, downsampled_audio_lengths = self.encode_audio(cur_audio, lengths=cur_lengths, counts=None)
+                # remove dropped indices from top level hidden state
+                to_keep = torch.tensor([i for i in range(top_level_h_n.size(1)) if i not in cur_dropped_idxs]).to(device)
+                top_level_h_n = top_level_h_n[:, to_keep].clone()
+
+
+            if self.condition_on_audio:
+                audio_latent, downsampled_audio_lengths = self.encode_audio(cur_audio, lengths=cur_lengths, counts=None)
    
             mask_emb = self.embeddings(cur_generations)
             num_repeats = mask_emb.size(1) # breadth of augmentation search at each step (using value of 20 atm)
-            audio_latent = repeat(audio_latent, 'b c t -> b r t c', r=num_repeats)
-            cur_generation_lengths = repeat(cur_generation_lengths, 'b -> (b r)', r=mask_emb.size(1))
-            latent_seq = torch.cat((audio_latent, mask_emb), dim=-1)
             
+            cur_entropy = entropy[step].to(device).repeat_interleave(num_repeats, dim=0)
+            cur_n_losses = n_losses[step].to(device).repeat_interleave(num_repeats, dim=0)
 
+            cur_generation_lengths = repeat(cur_generation_lengths, 'b -> (b r)', r=mask_emb.size(1))
+            if self.condition_on_audio:
+                audio_latent = repeat(audio_latent, 'b c t -> b r t c', r=num_repeats)
+                latent_seq = torch.cat((audio_latent, mask_emb), dim=-1)
+            else:
+                latent_seq = mask_emb
+            
             # join batch and repeat dimensions
             latent_seq = rearrange(latent_seq, 'b r t c -> (b r) t c') 
             cur_generations = repeat(cur_generations, 'b r t -> (b r) t')
 
             conditioning_hn = repeat(top_level_h_n, 'l b c -> l (b r) c', r=num_repeats) if top_level_h_n is not None else None
-            predictions, latent_lengths, misc = self(latent_seq=latent_seq, rewards=cur_rewards, latent_lengths=cur_generation_lengths, h_n=conditioning_hn)
+            predictions, latent_lengths, misc = self(
+                latent_seq=latent_seq, 
+                rewards=cur_rewards, 
+                latent_lengths=cur_generation_lengths,
+                entropy=cur_entropy,
+                n_losses=cur_n_losses,
+                h_n=conditioning_hn
+            )
             h_n = misc['h_n'] # print(h_n.shape) (layers, (b r), c)
 
             final_h_n = h_n[-1]
             path_batch__with_offset = torch.arange(cur_paths.size(0)).to(device) * num_repeats + cur_paths # path is the best performing augmentations that were used to update the model
+       
             # select h_n for each path
             final_h_n = final_h_n[path_batch__with_offset]
             top_level_state = self.hn_to_state(final_h_n).unsqueeze(1) # b, c -> b, 1, c (add time dimension)
@@ -1861,6 +2156,7 @@ policy_dict['FrequencyMaskingRanker'] = FrequencyMaskingRanker
 policy_dict['MixedMaskingRanker'] = MixedMaskingRanker
 policy_dict['UnconditionalFrequencyMaskingRanker'] = UnconditionalFrequencyMaskingRanker
 policy_dict['ConditionalFrequencyMaskingRanker'] = ConditionalFrequencyMaskingRanker
+policy_dict['MultiStepMaskRanker'] = MultiStepMaskRanker
 
 policy_dict['UnconditionalMaskGenerator'] = UnconditionalMaskGenerator
 policy_dict['ConditionalMaskGenerator'] = ConditionalMaskGenerator

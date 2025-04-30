@@ -74,8 +74,8 @@ class CustomDataset(Dataset):
             rewards = rewards.clamp(max=self.clamp_max)
 
         if self.standardize_std:
-            if rewards.shape[0] > 1 or rewards_std == 0:
-                rewards_std = rewards.std(0, keepdim=True) # center mean then clamp then calculate std before standardizing
+            rewards_std = rewards.std(0, keepdim=True)
+            if rewards.shape[0] > 1 and rewards_std.sum() > 0:
                 rewards = rewards / (rewards_std + 1e-6)
         if self.scale:
             # min -1, max 1 but avoid 0 division

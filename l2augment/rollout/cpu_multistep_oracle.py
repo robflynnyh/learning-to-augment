@@ -328,6 +328,30 @@ def cpu_rollout_presearch(
 
     }
 
+def get_cross_loss(logits:List[Tensor], decoder):
+    sentences = [decoder(logit.squeeze(0)) for logit in logits]
+    losses = []
+  
+    for j, logit in enumerate(logits):
+     
+            encoded = decoder.tokenizer.encode("")
+            encoded = torch.LongTensor(encoded)[None]
+            input_lengths = torch.LongTensor([logit.shape[1]])
+            target_lengths = torch.LongTensor([encoded.shape[1]])
+            loss = torch.nn.functional.ctc_loss(
+                log_probs=logit.transpose(0, 1),
+                targets=encoded,
+                input_lengths=input_lengths,
+                target_lengths=target_lengths,
+                blank=logit.shape[-1] - 1,
+                reduction='mean',
+            )
+            losses.append(loss.item())
+
+    losses = torch.tensor(losses)
+    mean_cross_loss = losses.mean()
+    std_cross_loss = losses.std()
+    return mean_cross_loss, std_cross_loss
 
 def find_top_masks(
         audio:Tensor,
@@ -335,14 +359,17 @@ def find_top_masks(
         tokenizer,
         policy:Module,
         load_asr_model_fn:Callable,
+        decoder,
         repeats=20,
         other_audio=None,
         single_step_lr=4e-2,
-        augmentation_args:Dict[str, Any] = {}
+        augmentation_args:Dict[str, Any] = {},
+        random_path=False,
     ):
     masks = []
     rewards = []
     generations = []
+    masked_predictions = []
     for repeat in range(repeats):
         audio_a = audio.clone()
         # outputs = policy.augment(audio_a, **augmentation_config)
@@ -376,9 +403,11 @@ def find_top_masks(
             text = text,
             optim_args = {"lr":single_step_lr},
             return_wer = True,
+            return_masked_prediction=False,
             verbose=False,
             augmented_target=False if other_audio is None else True,
         )
+        #masked_predictions.append(masked_prediction)
 
         
         reward = prev_cer - u_cer
@@ -386,18 +415,39 @@ def find_top_masks(
         
         rewards.append(reward_wer)
         print(reward_wer.item())
-        
+    
+    
     # select the top-5 rewards
     rewards = torch.stack(rewards)
-    top_rewards, top_indices = torch.topk(rewards, 1, dim=0)
+    top_rewards, top_indices = torch.topk(rewards, 1, dim=0, largest=True)
+    if random_path:
+        top_indices = [torch.tensor(random.randint(0, len(masks)-1))]
     top_mask = masks[top_indices[0]]
     if len(generations) > 0:
         generations = torch.stack(generations, 0)
 
-
     masks = torch.stack(masks)
 
-    return top_mask, rewards, masks, generations
+    #mean_cross_loss, std_cross_loss = get_cross_loss(masked_predictions, decoder)
+    #top_mask = torch.ones_like(top_mask)
+
+    return top_mask, rewards, masks, generations, top_indices[0].item() #, mean_cross_loss, std_cross_loss
+
+def calculate_entropy_from_log_probs(log_probs: torch.Tensor, dim: int = -1, keepdim: bool = False) -> torch.Tensor:
+    """
+    Calculate the entropy from log probabilities.
+
+    Args:
+        log_probs (torch.Tensor): Log-probabilities from the model. Expected shape: [..., vocab_size].
+        dim (int): The dimension over which to compute entropy (usually vocab dimension).
+        keepdim (bool): Whether to retain the reduced dimension.
+
+    Returns:
+        torch.Tensor: Entropy values with the same shape as `log_probs` minus the `dim` dimension (unless keepdim=True).
+    """
+    probs = log_probs.exp()  # Convert log probs to probs
+    entropy = -torch.sum(probs * log_probs, dim=dim, keepdim=keepdim)  # Element-wise entropy
+    return entropy.mean()
 
 
 def shuffle_data(data, seed=123456):
@@ -421,6 +471,7 @@ def cpu_rollout_search(
         epochs = 1,
         search_repeats = 5,
         shuffle_seed = 123456,
+        random_path=False,
         **kwargs
     ):
     
@@ -473,15 +524,19 @@ def cpu_rollout_search(
     audio = []
     rewards = []
     generations = []
-  
+    top_idxs = []
+    
+    n_losses = []
+    entropy = []
+
     for epoch in range(epochs):
         
         utterance_ids = list(range(len(utterances)))
-        #other_ids = list(range(len(utterances)))
+        other_ids = list(range(len(utterances)))
         if shuffle: shuffle_data(utterance_ids, seed=shuffle_seed+epoch)
-        #random.shuffle(other_ids)
+        random.shuffle(other_ids)
         for i, utt_id in enumerate(utterance_ids):
-            print(f'Epoch {epoch+1}/{epochs*8} - Utterance {i+1}/{len(utterances)}')
+            print(f'Epoch {epoch+1}/{epochs} - Utterance {i+1}/{len(utterances)} - ID {utt_id}')
             cur_utterance = utterances[utt_id]
             cur_audio = cur_utterance['spectrogram'].to(device, dtype=dtype)
             cur_text = cur_utterance['text']
@@ -500,22 +555,28 @@ def cpu_rollout_search(
 
             #print(asr_model.state_dict()['layers.5.attend.fn.qkv_proj.weight'])
 
-            cur_mask, all_rewards, all_masks, generation = find_top_masks(
+            cur_mask, all_rewards, all_masks, generation, top_idx = find_top_masks(
                 cur_audio, 
-                cur_text, 
+                cur_text,
                 tokenizer, 
                 repeats=search_repeats, 
                 load_asr_model_fn=tmp_load_asr_model_fn, 
                 policy=policy,
                 single_step_lr=optim_args.get('single_step_lr', 9e-2),
-                augmentation_args=augmentation_config
+                augmentation_args=augmentation_config,
+                random_path=random_path,
+                decoder=decoder,
+                #other_audio=utterances[other_ids[i]]['spectrogram'].to(device, dtype=dtype),
             )
             #cur_mask = apply_masker(torch.ones_like(cur_audio))
+                            
 
             masks.append(all_masks)
             rewards.append(all_rewards)
             audio.append(cur_audio.clone().to('cpu'))
-            generations.append(generation)
+            if len(generation) > 0:
+                generations.append(generation)
+            top_idxs.append(top_idx)
 
             asr_model.load_state_dict(prev_state_dict)
             optimizer.load_state_dict(prev_optimizer_state_dict)    
@@ -529,14 +590,32 @@ def cpu_rollout_search(
 
             with torch.no_grad():
                 out_teacher = asr_model(audio_signal = cur_audio)
+                out_random = asr_model(audio_signal = torch.randn_like(cur_audio, device=device))
             out_noised = asr_model(audio_signal = augmented_audio_sample)['final_posteriors']
 
             teacher_output_posteriors = out_teacher['final_posteriors'].squeeze(0)
+
+            entropy.append(calculate_entropy_from_log_probs(teacher_output_posteriors))
+
             pseudo_targets = decoder(teacher_output_posteriors) 
             pseudo_targets = torch.LongTensor(tokenizer.encode(pseudo_targets))[None]
             N, B = out_noised.shape[1], out_noised.shape[0]
             total_tokens_in_loss = N * B
             loss = ctc_loss_fn(out_noised.transpose(0, 1), pseudo_targets, torch.LongTensor([N] * out_noised.shape[0]), torch.LongTensor([pseudo_targets.shape[1]] * pseudo_targets.shape[0])) / total_tokens_in_loss
+
+
+            tgts = torch.LongTensor(tokenizer.encode(""))[None]
+            N, B = out_noised.shape[1], out_noised.shape[0]
+            n_loss = torch.nn.functional.ctc_loss(
+                out_random['final_posteriors'].transpose(0, 1),
+                tgts,
+                torch.LongTensor([N] * out_noised.shape[0]),
+                torch.LongTensor([tgts.shape[1]] * tgts.shape[0]),
+                blank=out_noised.shape[-1] - 1,
+                reduction='mean',
+            )
+            n_losses.append(n_loss.item())
+
             optimizer.zero_grad()
             loss.backward()
 
@@ -566,12 +645,23 @@ def cpu_rollout_search(
     print(original_wer, new_wer, '-')
 
     rewards = torch.stack(rewards, 0)
+    top_idxs = torch.tensor(top_idxs, dtype=torch.long)
     # print(rewards.shape)
     # print([el.shape for el in masks])
     # print([el.shape for el in audio])
     # exit()
+    n_losses = torch.tensor(n_losses, dtype=torch.float32)
+    entropy = torch.tensor(entropy, dtype=torch.float32)
 
-    return {
+    # torch.save(
+    #     {'n_losses': n_losses, 'entropy': entropy},
+    #     './e_0.pt'
+    # )
+    # exit()
+
+    # exit()
+
+    returns = {
         'original_wer': original_wer,
         'updated_wer': new_wer,
         'hypothesis': hyps,
@@ -580,8 +670,13 @@ def cpu_rollout_search(
         'rewards': rewards,
         'masks': masks,
         'audio': audio,
-        'generations': generations
+        'top_idxs': top_idxs,
+        'n_losses': n_losses,
+        'entropy': entropy
     }
+    if len(generations) > 0:
+        returns['generations'] = generations
+    return returns
 
 
         

@@ -34,6 +34,8 @@ def cpu_rollout(
         augmented_target = False,
         return_wer = False,
         verbose=True,
+        get_weight_difference = False,
+        return_masked_prediction = False,
         **kwargs
     ):
 
@@ -53,7 +55,9 @@ def cpu_rollout(
 
     ctc_loss_fn = torch.nn.CTCLoss(blank=asr_model.decoder.num_classes-1, reduction='sum')
 
-
+    if get_weight_difference:
+        # Get the weights of the model before training
+        initial_weights = {name: param.clone() for name, param in asr_model.named_parameters()}
 
 
     asr_model.eval()
@@ -80,6 +84,7 @@ def cpu_rollout(
 
     pseudo_targets = decoder(out_a.squeeze(0)) 
     pseudo_targets = torch.LongTensor(tokenizer.encode(pseudo_targets))[None]
+
 
 
 
@@ -126,8 +131,21 @@ def cpu_rollout(
         prev = torch.stack([prev, prev_wer])
         updated = torch.stack([updated, updated_wer])
         print(prev.shape, updated.shape) if verbose else None
+
+    returns = [prev, updated, masks]
+
+    if get_weight_difference:
+        # Get the weights of the model after training
+        final_weights = {name: param.clone() for name, param in asr_model.named_parameters()}
+        weight_diff = {name: (final_weights[name] - initial_weights[name]).norm().item() for name in initial_weights.keys()}
+        total_weight_diff = sum(weight_diff.values())
+        print(f"Total weight difference: {total_weight_diff}") if verbose else None
+        returns.append(total_weight_diff)
     
-    return prev, updated, masks
+    if return_masked_prediction   :
+        returns.append(out_b)
+
+    return returns
         
        
 

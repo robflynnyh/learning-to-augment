@@ -185,29 +185,32 @@ def cpu_rollout(
         masks = None
         if max_steps != None and max_steps < len(training_keys): total_steps = max_steps
         if shuffle: random.shuffle(training_keys)
+        state = None
+
         for i, key in tqdm(enumerate(training_keys), total=total_steps):
             if max_steps != None and i > max_steps: break
 
             audio_chunk = training_data[key].clone().to(device)
+
+
+            with torch.no_grad():
+                out_teacher = asr_model(audio_signal = audio_chunk)
+
             with torch.no_grad():
                 b,c,t = audio_chunk.shape
-                if 1==2: #t > seq_len//2:
-                    a, b, c, d = audio_chunk.chunk(4, dim=-1)
-                    aug_a, mask_a = policy.augment(a, **augmentation_config)[:2]
-                    aug_b, mask_b = policy.augment(b, **augmentation_config)[:2]
-                    aug_c, mask_c = policy.augment(c, **augmentation_config)[:2]
-                    aug_d, mask_d = policy.augment(d, **augmentation_config)[:2]
-                    mask = torch.cat([mask_a, mask_b, mask_c, mask_d], dim=-1)
-                    augmented_audio_sample = torch.cat([aug_a, aug_b, aug_c, aug_d], dim=-1)
-                else:
-                    augmentation_config['epoch'] = epoch
-                    augmented_audio_sample, mask = policy.augment(audio_chunk, **augmentation_config)[:2]
+                augmentation_config['epoch'] = epoch
+                policy_outputs = policy.augment(audio_chunk, **augmentation_config, state=state, teacher_predictions=out_teacher['final_posteriors'], asr_model=asr_model)
+                augmented_audio_sample, mask = policy_outputs[:2]
+                if len(policy_outputs) > 2:
+                    misc = policy_outputs[-1]
+                    if 'state' in misc:
+                        state = misc['state']
+
                 if isinstance(masks, list): 
                     masks.append(mask)
         
 
-            with torch.no_grad():
-                out_teacher = asr_model(audio_signal = audio_chunk)
+            
             out_noised = asr_model(audio_signal = augmented_audio_sample)['final_posteriors']
 
             teacher_output_posteriors = out_teacher['final_posteriors'].squeeze(0)
@@ -224,7 +227,9 @@ def cpu_rollout(
             optimizer.step()
 
         all_logits, logit_count = torch.zeros((1, audio_n//4 + seq_len, tokenizer.vocab_size() + 1)), torch.zeros((1, audio_n//4 + seq_len, tokenizer.vocab_size() + 1))
-        if masks != None: torch.save(masks, 'noise.pt')
+        if masks != None: 
+            print('Saving masks')
+            torch.save(masks, 'noise.pt')
     
     if epochs > 0:
         for key in tqdm(training_keys):

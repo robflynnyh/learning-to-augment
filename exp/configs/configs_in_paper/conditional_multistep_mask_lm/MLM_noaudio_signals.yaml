@@ -24,8 +24,8 @@ training:
 #   rollout_fn: singlestep
 
 evaluation:
-  dataset: 'rev16'
-  split: 'test'
+  dataset: 'tedlium'
+  split: 'dev'
   use_cer: false
   epochs: 1
 
@@ -49,7 +49,7 @@ policy:
     codebook_size: 2048
     hidden_dim: 512 
     embedding_dim: 512
-    default_conditioning_reward: 1.0
+    default_conditioning_reward: 0.0
     condition_on_audio: false
     audio_vae_state_dict_path: "/mnt/parscratch/users/acp21rjf/l2augment_model/autoenc_audio/model_gpu.pt"
     audio_vae_config:
