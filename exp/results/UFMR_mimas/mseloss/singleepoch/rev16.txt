@@ -1,0 +1,1 @@
+ID: 0 - Dataset: rev16 - Split: test - Epochs: 1 - Original_WER: 0.17250412341127389 - Updated_WER: 0.16237304233709335

@@ -207,10 +207,11 @@ def prepare_chunks(spec, seq_len, overlap):
 
 def this_american_life_data():
     EXT = '.mp3'
-    AUDIO_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/audio'
-    TRAIN_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/train-transcripts-aligned.json'
-    DEV_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/valid-transcripts-aligned.json'
-    TEST_PATH = '/mnt/parscratch/users/acp21rjf/this_american_life/test-transcripts-aligned.json'
+    _TAL = os.environ.get('L2A_TAL_DIR', '/mnt/parscratch/users/acp21rjf/this_american_life')
+    AUDIO_PATH = os.path.join(_TAL, 'audio')
+    TRAIN_PATH = os.path.join(_TAL, 'train-transcripts-aligned.json')
+    DEV_PATH = os.path.join(_TAL, 'valid-transcripts-aligned.json')
+    TEST_PATH = os.path.join(_TAL, 'test-transcripts-aligned.json')
 
     def fetch_data(txt_path:str):
         with open(txt_path, 'r') as f:
@@ -256,9 +257,10 @@ def this_american_life_data():
     return get_text_and_audio
 
 def earnings22_data():
-    TEST_PATH = '/mnt/parscratch/users/acp21rjf/earnings22/test_original'
-    DEV_PATH = '/mnt/parscratch/users/acp21rjf/earnings22/dev_original'
-    ALL_TEXT_PATH = '/mnt/parscratch/users/acp21rjf/earnings22/full_transcripts.json'
+    _E22 = os.environ.get('L2A_EARNINGS22_DIR', '/mnt/parscratch/users/acp21rjf/earnings22')
+    TEST_PATH = os.path.join(_E22, 'test_original')
+    DEV_PATH = os.path.join(_E22, 'dev_original')
+    ALL_TEXT_PATH = os.path.join(_E22, 'full_transcripts.json')
     def fetch_data(audio_path:str = TEST_PATH, txt_path:str = ALL_TEXT_PATH):
         with open(txt_path, 'r') as f:
             all_text_json = json.load(f)
@@ -310,7 +312,7 @@ def earnings22_data():
     return get_text_and_audio
 
 def tedlium3_segmented_data():
-    default_base_path = "/mnt/parscratch/users/acp21rjf/TEDLIUM_release-3/legacy/"
+    default_base_path = os.environ.get('L2A_TEDLIUM3_LEGACY_DIR', "/mnt/parscratch/users/acp21rjf/TEDLIUM_release-3/legacy/")
 
     def proc_stm_and_timings(stm_path:str):
         stm = open_stm(stm_path)
@@ -358,7 +360,7 @@ def tedlium3_segmented_data():
     return get_text_and_audio
 
 def tedlium3_data():
-    default_base_path = "/mnt/parscratch/users/acp21rjf/TEDLIUM_release-3/legacy/"
+    default_base_path = os.environ.get('L2A_TEDLIUM3_LEGACY_DIR', "/mnt/parscratch/users/acp21rjf/TEDLIUM_release-3/legacy/")
 
     def proc_stm_and_timings(stm_path:str):
         stm = open_stm(stm_path)
@@ -424,7 +426,7 @@ def tedlium3_data():
 
 
 def rev16_data():
-    default_base_path = '/mnt/parscratch/users/acp21rjf/rev_benchmark'
+    default_base_path = os.environ.get('L2A_REV16_DIR', '/mnt/parscratch/users/acp21rjf/rev_benchmark')
     #TEST_IDS = '/mnt/parscratch/users/acp21rjf/rev_benchmark/test.txt'
 
     def fetch_data(data_path:str, ids:str):
@@ -469,7 +471,7 @@ def rev16_data():
 
 def chime6_data():
 
-    default_basedir = "/mnt/parscratch/users/acp21rjf/chime6/"
+    default_basedir = os.environ.get('L2A_CHIME6_DIR', "/mnt/parscratch/users/acp21rjf/chime6/")
     TEST_AUDIO = 'audio/eval'
     DEV_AUDIO = 'audio/dev'
     TEST_TEXT = 'transcriptions/eval'

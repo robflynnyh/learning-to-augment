@@ -1,0 +1,1 @@
+ID: 0 - Dataset: chime6 - Split: test - Epochs: 5 - Original_WER: 0.8436200211491012 - Updated_WER: 0.6250088121254846
