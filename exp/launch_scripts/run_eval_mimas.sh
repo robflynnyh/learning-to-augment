@@ -60,6 +60,16 @@ mkdir -p "$OUT_DIR"
 PATCHED="$OUT_DIR/${TAG}.yaml"
 SAVE_PATH="$OUT_DIR/${TAG}.txt"
 
+if [[ "${FORCE_RERUN:-0}" != "1" && -f "$SAVE_PATH" ]] && grep -q 'Updated_WER:' "$SAVE_PATH"; then
+    line_count="$(wc -l < "$SAVE_PATH" | tr -d '[:space:]')"
+    if [[ "$line_count" != "1" ]]; then
+        echo "[run_eval_mimas] warning: completed result has $line_count lines: $SAVE_PATH" >&2
+    fi
+    echo "[run_eval_mimas] skipping completed eval: $SAVE_PATH"
+    echo "[run_eval_mimas] set FORCE_RERUN=1 to run it again"
+    exit 0
+fi
+
 source /store/store4/software/bin/anaconda3/etc/profile.d/conda.sh
 conda activate /store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2
 
