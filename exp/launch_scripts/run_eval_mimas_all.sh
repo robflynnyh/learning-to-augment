@@ -4,6 +4,7 @@
 #   ./run_eval_mimas_all.sh <gpu_id> [variant ...]
 #
 # Defaults to all checkpoint variants under /store/store5/.../ufmr.
+# Singlestep configs are intentionally excluded.
 # Set INCLUDE_TAL=1 if you also want the TAL configs (requires L2A_TAL_DIR).
 
 set -euo pipefail
@@ -39,7 +40,7 @@ else
     mapfile -t VARIANTS < <(find "$VARIANT_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
 fi
 
-mapfile -t CONFIGS < <(find "$CONFIG_ROOT" -type f -name '*.yaml' ! -name 'run_evals.sh' | sort)
+mapfile -t CONFIGS < <(find "$CONFIG_ROOT" -type f -name '*.yaml' ! -name 'run_evals.sh' ! -path '*/singlestep/*' | sort)
 
 if [[ ${#VARIANTS[@]} -eq 0 ]]; then
     echo "No variants found under $VARIANT_ROOT" >&2
