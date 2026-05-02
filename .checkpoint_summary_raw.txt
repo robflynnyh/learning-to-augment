@@ -1,0 +1,427 @@
+
+ l2augment_model/autoenc_audio/model_cpu.pt
+ size 8493946 keys ['model_state_dict', 'config'] prefix ['decoder', 'encoder', 'latent_to_hidden', 'mu', 'output', 'rnn_in', 'rnn_out']
+ policy {'lr': 0.0006, 'class': 'VQVAE', 'config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 48, 'epochs': 200, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/autoenc_audio/model_cpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/autoenc_audio/tmp_model_cpu.pt', 'max_steps': 10000}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/autoenc_audio/model_gpu.pt
+ size 8494266 keys ['model_state_dict', 'config'] prefix ['decoder', 'encoder', 'latent_to_hidden', 'mu', 'output', 'rnn_in', 'rnn_out']
+ policy {'lr': 0.001, 'class': 'VQVAE', 'config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 256, 'epochs': 200, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/autoenc_audio/model_gpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/autoenc_audio/tmp_model_gpu.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/autoenc_audio/tmp_model_cpu.pt
+ size 8494438 keys ['model_state_dict', 'config'] prefix ['decoder', 'encoder', 'latent_to_hidden', 'mu', 'output', 'rnn_in', 'rnn_out']
+ policy {'lr': 0.0006, 'class': 'VQVAE', 'config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 48, 'epochs': 200, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/autoenc_audio/model_cpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/autoenc_audio/tmp_model_cpu.pt', 'max_steps': 10000}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/autoenc_audio/tmp_model_gpu.pt
+ size 8494734 keys ['model_state_dict', 'config'] prefix ['decoder', 'encoder', 'latent_to_hidden', 'mu', 'output', 'rnn_in', 'rnn_out']
+ policy {'lr': 0.001, 'class': 'VQVAE', 'config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 256, 'epochs': 200, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/autoenc_audio/model_gpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/autoenc_audio/tmp_model_gpu.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/bvae/bvae_USINGTHISFORNOW_2048gpu.pt
+ size 10305266 keys ['model_state_dict', 'config'] prefix ['VQ', 'decoder', 'encoder', 'latent_to_hidden', 'mu', 'output', 'rnn_in', 'rnn_out']
+ policy {'lr': 0.001, 'class': 'BVAE', 'config': {'latent_dim': 128, 'codebook_size': 2048}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 40, 'epochs': 200, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/model2048gpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/tmp_model2048gpu.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/bvae/model3.pt
+ size 19191906 keys ['model_state_dict', 'config'] prefix ['VQ', 'decoder', 'encoder', 'mu', 'output']
+ policy {'lr': 0.0006, 'class': 'BVAE', 'config': {'latent_dim': 128, 'codebook_size': 64}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 4, 'epochs': 200, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/model3.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/tmp_model3.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/bvae/model.pt
+ size 19056042 keys ['model_state_dict', 'config'] prefix ['VQ', 'decoder', 'encoder', 'mu', 'output']
+ policy {'lr': 0.00065, 'class': 'BVAE', 'config': {'latent_dim': 32}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 4, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/tmp_model.pt', 'max_steps': 10000}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/bvae/tmp_model2048cpu.pt
+ size 10305558 keys ['model_state_dict', 'config'] prefix ['VQ', 'decoder', 'encoder', 'latent_to_hidden', 'mu', 'output', 'rnn_in', 'rnn_out']
+ policy {'lr': 0.0006, 'class': 'BVAE', 'config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 4, 'epochs': 200, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/model2048cpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/tmp_model2048cpu.pt', 'max_steps': 10000}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/bvae/tmp_model2048gpu.pt
+ size 10305266 keys ['model_state_dict', 'config'] prefix ['VQ', 'decoder', 'encoder', 'latent_to_hidden', 'mu', 'output', 'rnn_in', 'rnn_out']
+ policy {'lr': 0.001, 'class': 'BVAE', 'config': {'latent_dim': 128, 'codebook_size': 2048}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 40, 'epochs': 200, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/model2048gpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/tmp_model2048gpu.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/bvae/tmp_model2.pt
+ size 19256738 keys ['model_state_dict', 'config'] prefix ['VQ', 'decoder', 'encoder', 'mu', 'output']
+ policy {'lr': 0.0006, 'class': 'BVAE', 'config': {'latent_dim': 64}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 4, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvaemodel2.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/tmp_model2.pt', 'max_steps': 10000}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/bvae/tmp_model3.pt
+ size 19191906 keys ['model_state_dict', 'config'] prefix ['VQ', 'decoder', 'encoder', 'mu', 'output']
+ policy {'lr': 0.0006, 'class': 'BVAE', 'config': {'latent_dim': 128, 'codebook_size': 64}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 4, 'epochs': 200, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/model3.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/tmp_model3.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/bvae/tmp_model.pt
+ size 19061066 keys ['model_state_dict', 'config'] prefix ['VQ', 'decoder', 'encoder', 'mu', 'output']
+ policy {'lr': 0.00065, 'class': 'BVAE', 'config': {'latent_dim': 32}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 4, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/tmp_model.pt', 'max_steps': 10000}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/cfmsimple/tmp_model.pt
+ size 17268794 keys ['model_state_dict', 'config'] prefix ['predict', 'vae']
+ policy {'lr': 0.0003, 'class': 'ConditionalFrequencyMaskingRanker', 'config': {'loss_type': 'mse', 'latent_dim': 256, 'mel_bins': 80, 'vae_config': {'input_dim': 80, 'hidden_dim': 128, 'latent_dim': 256, 'layers': 6}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/cfmsimple/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/cfmsimple/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/cfm/tmp_model.pt
+ size 17234554 keys ['model_state_dict', 'config'] prefix ['encode_audio', 'encode_mask', 'predict', 'vae']
+ policy {'lr': 0.0001, 'class': 'ConditionalFrequencyMaskingRanker', 'config': {'loss_type': 'mse', 'latent_dim': 256, 'mel_bins': 80, 'vae_config': {'input_dim': 80, 'hidden_dim': 128, 'latent_dim': 256, 'layers': 6, 'min_input_size': 256}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 3, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/cfm/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/cfm/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/cm/test/model.pt
+ size 42046018 keys ['model_state_dict', 'config'] prefix ['output', 'vae']
+ policy {'lr': 2e-05, 'class': 'ConditionalMaskingPolicy', 'config': {'hidden_dim': 256, 'mel_bins': 80, 'latent_dim': 16, 'output_dim': 1, 'vae_config': {'input_dim': 80, 'hidden_dim': 256, 'latent_dim': 16, 'layers': 5}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 42, 'epochs': 1, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/cm/test/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/cm/test/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/cm/test/tmp_model.pt
+ size 42053370 keys ['model_state_dict', 'config'] prefix ['output', 'vae']
+ policy {'lr': 2e-05, 'class': 'ConditionalMaskingPolicy', 'config': {'hidden_dim': 256, 'mel_bins': 80, 'latent_dim': 16, 'output_dim': 1, 'vae_config': {'input_dim': 80, 'hidden_dim': 256, 'latent_dim': 16, 'layers': 5}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 42, 'epochs': 1, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/cm/test/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/cm/test/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/CMultiStepMLM/curbest.pt
+ size 51386661 keys ['model_state_dict', 'config'] prefix ['audio_enc', 'decoder', 'embeddings', 'hn_to_state', 'mask_enc', 'prediction', 'score_enc']
+ policy {'lr': 0.001, 'class': 'ConditionalMultiStepMaskGenerator', 'config': {'codebook_size': 2048, 'hidden_dim': 512, 'embedding_dim': 256, 'default_conditioning_reward': 1.0, 'audio_vae_config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}, 'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 1, 'epochs': 10, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/modelcpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/tmp_modelcpu.pt', 'max_steps': 10000, 'prefetch_factor': None, 'num_workers': 0}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/CMultiStepMLM/modelcpu.pt
+ size 51386661 keys ['model_state_dict', 'config'] prefix ['audio_enc', 'decoder', 'embeddings', 'hn_to_state', 'mask_enc', 'prediction', 'score_enc']
+ policy {'lr': 0.001, 'class': 'ConditionalMultiStepMaskGenerator', 'config': {'codebook_size': 2048, 'hidden_dim': 512, 'embedding_dim': 256, 'default_conditioning_reward': 1.0, 'audio_vae_config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}, 'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 1, 'epochs': 10, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/modelcpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/tmp_modelcpu.pt', 'max_steps': 10000, 'prefetch_factor': None, 'num_workers': 0}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/CMultiStepMLM/no_audio_modelcpu2.pt
+ size 44994898 keys ['model_state_dict', 'config'] prefix ['decoder', 'embeddings', 'hn_to_state', 'mask_enc', 'prediction', 'score_enc']
+ policy {'lr': 0.001, 'class': 'ConditionalMultiStepMaskGenerator', 'config': {'codebook_size': 2048, 'hidden_dim': 512, 'embedding_dim': 512, 'default_conditioning_reward': 1.0, 'condition_on_audio': False, 'audio_vae_config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}, 'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 1, 'epochs': 10000, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_modelcpu2.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_tmp_modelcpu2.pt', 'max_steps': 10000, 'prefetch_factor': None, 'num_workers': 0}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/CMultiStepMLM/no_audio_modelcpu.pt
+ size 44994270 keys ['model_state_dict', 'config'] prefix ['decoder', 'embeddings', 'hn_to_state', 'mask_enc', 'prediction', 'score_enc']
+ policy {'lr': 0.001, 'class': 'ConditionalMultiStepMaskGenerator', 'config': {'codebook_size': 2048, 'hidden_dim': 512, 'embedding_dim': 512, 'default_conditioning_reward': 1.0, 'condition_on_audio': False, 'audio_vae_config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}, 'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 1, 'epochs': 10, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_modelcpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_tmp_modelcpu.pt', 'max_steps': 10000, 'prefetch_factor': None, 'num_workers': 0}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/CMultiStepMLM/no_audio_modelgpu_big.pt
+ size 70212158 keys ['model_state_dict', 'config'] prefix ['decoder', 'embeddings', 'hn_to_state', 'mask_enc', 'prediction', 'score_enc']
+ policy {'lr': 0.001, 'class': 'ConditionalMultiStepMaskGenerator', 'config': {'codebook_size': 2048, 'hidden_dim': 512, 'embedding_dim': 512, 'decoder_layers': 8, 'default_conditioning_reward': 1.0, 'condition_on_audio': False, 'audio_vae_config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}, 'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 1, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_modelgpu_big.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_tmp_modelgpu_big.pt', 'max_steps': 10000, 'prefetch_factor': None, 'num_workers': 0}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/CMultiStepMLM/no_audio_modelsignals.pt
+ size 51259258 keys ['model_state_dict', 'config'] prefix ['decoder', 'embeddings', 'entropy_embed', 'hn_to_state', 'mask_enc', 'n_losses_embed', 'prediction', 'score_enc', 'signal_fusion']
+ policy {'lr': 0.001, 'class': 'ConditionalMultiStepMaskGenerator', 'config': {'codebook_size': 2048, 'hidden_dim': 512, 'embedding_dim': 512, 'default_conditioning_reward': 1.0, 'condition_on_audio': False, 'audio_vae_config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}, 'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 1, 'epochs': 10000, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_modelsignals.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_tmp_modelsignals.pt', 'max_steps': 10000, 'prefetch_factor': 4, 'num_workers': 8}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/CMultiStepMLM/no_audio_tmp_modelcpu2.pt
+ size 44994898 keys ['model_state_dict', 'config'] prefix ['decoder', 'embeddings', 'hn_to_state', 'mask_enc', 'prediction', 'score_enc']
+ policy {'lr': 0.001, 'class': 'ConditionalMultiStepMaskGenerator', 'config': {'codebook_size': 2048, 'hidden_dim': 512, 'embedding_dim': 512, 'default_conditioning_reward': 1.0, 'condition_on_audio': False, 'audio_vae_config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}, 'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 1, 'epochs': 10000, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_modelcpu2.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_tmp_modelcpu2.pt', 'max_steps': 10000, 'prefetch_factor': None, 'num_workers': 0}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/CMultiStepMLM/no_audio_tmp_modelcpu.pt
+ size 44994670 keys ['model_state_dict', 'config'] prefix ['decoder', 'embeddings', 'hn_to_state', 'mask_enc', 'prediction', 'score_enc']
+ policy {'lr': 0.001, 'class': 'ConditionalMultiStepMaskGenerator', 'config': {'codebook_size': 2048, 'hidden_dim': 512, 'embedding_dim': 512, 'default_conditioning_reward': 1.0, 'condition_on_audio': False, 'audio_vae_config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}, 'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 1, 'epochs': 10, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_modelcpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_tmp_modelcpu.pt', 'max_steps': 10000, 'prefetch_factor': None, 'num_workers': 0}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/CMultiStepMLM/no_audio_tmp_modelgpu_big.pt
+ size 70212158 keys ['model_state_dict', 'config'] prefix ['decoder', 'embeddings', 'hn_to_state', 'mask_enc', 'prediction', 'score_enc']
+ policy {'lr': 0.001, 'class': 'ConditionalMultiStepMaskGenerator', 'config': {'codebook_size': 2048, 'hidden_dim': 512, 'embedding_dim': 512, 'decoder_layers': 8, 'default_conditioning_reward': 1.0, 'condition_on_audio': False, 'audio_vae_config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}, 'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 1, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_modelgpu_big.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_tmp_modelgpu_big.pt', 'max_steps': 10000, 'prefetch_factor': None, 'num_workers': 0}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/CMultiStepMLM/no_audio_tmp_modelsignals.pt
+ size 51259258 keys ['model_state_dict', 'config'] prefix ['decoder', 'embeddings', 'entropy_embed', 'hn_to_state', 'mask_enc', 'n_losses_embed', 'prediction', 'score_enc', 'signal_fusion']
+ policy {'lr': 0.001, 'class': 'ConditionalMultiStepMaskGenerator', 'config': {'codebook_size': 2048, 'hidden_dim': 512, 'embedding_dim': 512, 'default_conditioning_reward': 1.0, 'condition_on_audio': False, 'audio_vae_config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}, 'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 1, 'epochs': 10000, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_modelsignals.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/no_audio_tmp_modelsignals.pt', 'max_steps': 10000, 'prefetch_factor': 4, 'num_workers': 8}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/CMultiStepMLM/tmp_modelcpu.pt
+ size 51387513 keys ['model_state_dict', 'config'] prefix ['audio_enc', 'decoder', 'embeddings', 'hn_to_state', 'mask_enc', 'prediction', 'score_enc']
+ policy {'lr': 0.001, 'class': 'ConditionalMultiStepMaskGenerator', 'config': {'codebook_size': 2048, 'hidden_dim': 512, 'embedding_dim': 256, 'default_conditioning_reward': 1.0, 'audio_vae_config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}, 'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 1, 'epochs': 10, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/modelcpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/CMultiStepMLM/tmp_modelcpu.pt', 'max_steps': 10000, 'prefetch_factor': None, 'num_workers': 0}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/dt/test/best_model.pt
+ size 46989114 keys ['model_state_dict', 'config'] prefix ['audio_enc', 'decoder', 'embeddings', 'encoder', 'mask_enc', 'prediction', 'score_enc']
+ policy {'lr': 0.001, 'class': 'DTConditionalMaskingPolicy', 'config': {'default_conditioning_reward': 1.0, 'hidden_dim': 256, 'mel_bins': 80, 'output_dim': 80, 'audio_vae_config': {'input_dim': 80, 'hidden_dim': 256, 'latent_dim': 16, 'layers': 5}, 'mask_vae_config': {'latent_dim': 128, 'codebook_size': 64}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 4, 'epochs': 10, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/dt/test/best_model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/dt/test/tmp_model.pt', 'max_steps': 2500}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/dt/test/tmp_model.pt
+ size 46989114 keys ['model_state_dict', 'config'] prefix ['audio_enc', 'decoder', 'embeddings', 'encoder', 'mask_enc', 'prediction', 'score_enc']
+ policy {'lr': 0.001, 'class': 'DTConditionalMaskingPolicy', 'config': {'default_conditioning_reward': 1.0, 'hidden_dim': 256, 'mel_bins': 80, 'output_dim': 80, 'audio_vae_config': {'input_dim': 80, 'hidden_dim': 256, 'latent_dim': 16, 'layers': 5}, 'mask_vae_config': {'latent_dim': 128, 'codebook_size': 64}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 4, 'epochs': 10, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/dt/test/best_model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/dt/test/tmp_model.pt', 'max_steps': 2500}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/MLM/modelcpu.pt
+ size 38815606 keys ['model_state_dict', 'config'] prefix ['audio_enc', 'decoder', 'embeddings', 'encoder', 'mask_enc', 'prediction', 'score_enc']
+ policy {'lr': 0.0006, 'class': 'ConditionalMaskGenerator', 'config': {'codebook_size': 2048, 'hidden_size': 256, 'default_conditioning_reward': 1.0, 'audio_vae_config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}, 'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 4, 'epochs': 10, 'tolerance': 3, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/MLM/modelcpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/MLM/tmp_modelcpu.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/MLM/tmp_modelcpu.pt
+ size 38816646 keys ['model_state_dict', 'config'] prefix ['audio_enc', 'decoder', 'embeddings', 'encoder', 'mask_enc', 'prediction', 'score_enc']
+ policy {'lr': 0.0006, 'class': 'ConditionalMaskGenerator', 'config': {'codebook_size': 2048, 'hidden_size': 256, 'default_conditioning_reward': 1.0, 'audio_vae_config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}, 'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 4, 'epochs': 10, 'tolerance': 3, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/MLM/modelcpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/MLM/tmp_modelcpu.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/multistep_FM_ranker/curbest.pt
+ size 2251776 keys ['model_state_dict', 'config'] prefix ['mask_encoder', 'prediction', 'reccurent']
+ policy {'lr': 0.003, 'class': 'MultiStepMaskRanker'}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 4, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/modelcpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/tmp_modelcpu.pt', 'prefetch_factor': None, 'num_workers': 0}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/multistep_FM_ranker/modelcpu2.pt
+ size 2251987 keys ['model_state_dict', 'config'] prefix ['mask_encoder', 'prediction', 'reccurent']
+ policy {'lr': 0.003, 'class': 'MultiStepMaskRanker'}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 4, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/modelcpu2.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/tmp_modelcpu2.pt', 'prefetch_factor': None, 'num_workers': 0}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/multistep_FM_ranker/modelcpul2.pt
+ size 59196514 keys ['model_state_dict', 'config'] prefix ['mask_encoder', 'prediction', 'reccurent', 'reccurent_norm']
+ policy {'lr': 0.001, 'class': 'MultiStepMaskRanker', 'config': {'hidden_dim': 1024, 'gru_layers': 2, 'condition_on_audio': False}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 32, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/modelcpul2.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/tmp_modelcpul2.pt', 'prefetch_factor': 6, 'num_workers': 8}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/multistep_FM_ranker/modelcpu.pt
+ size 14949312 keys ['model_state_dict', 'config'] prefix ['mask_encoder', 'prediction', 'reccurent', 'reccurent_norm']
+ policy {'lr': 0.001, 'class': 'MultiStepMaskRanker', 'config': {'hidden_dim': 512, 'condition_on_audio': False}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 32, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/modelcpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/tmp_modelcpu.pt', 'prefetch_factor': 6, 'num_workers': 8}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/multistep_FM_ranker/tmp_modelcpu2.pt
+ size 2252047 keys ['model_state_dict', 'config'] prefix ['mask_encoder', 'prediction', 'reccurent']
+ policy {'lr': 0.003, 'class': 'MultiStepMaskRanker'}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 4, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/modelcpu2.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/tmp_modelcpu2.pt', 'prefetch_factor': None, 'num_workers': 0}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/multistep_FM_ranker/tmp_modelcpuaudio.pt
+ size 14950233 keys ['model_state_dict', 'config'] prefix ['mask_encoder', 'prediction', 'reccurent', 'reccurent_norm']
+ policy {'lr': 0.001, 'class': 'MultiStepMaskRanker', 'config': {'hidden_dim': 512, 'condition_on_audio': False, 'audio_vae_config': {'latent_dim': 256, 'use_vq': False, 'norm_type': 'bn'}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 32, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/modelcpuaudio.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/tmp_modelcpuaudio.pt', 'prefetch_factor': 6, 'num_workers': 8}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/multistep_FM_ranker/tmp_modelcpul2.pt
+ size 59196582 keys ['model_state_dict', 'config'] prefix ['mask_encoder', 'prediction', 'reccurent', 'reccurent_norm']
+ policy {'lr': 0.001, 'class': 'MultiStepMaskRanker', 'config': {'hidden_dim': 1024, 'gru_layers': 2, 'condition_on_audio': False}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 32, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/modelcpul2.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/tmp_modelcpul2.pt', 'prefetch_factor': 6, 'num_workers': 8}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/multistep_FM_ranker/tmp_modelcpu.pt
+ size 14949380 keys ['model_state_dict', 'config'] prefix ['mask_encoder', 'prediction', 'reccurent', 'reccurent_norm']
+ policy {'lr': 0.001, 'class': 'MultiStepMaskRanker', 'config': {'hidden_dim': 512, 'condition_on_audio': False}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 32, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/modelcpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/multistep_FM_ranker/tmp_modelcpu.pt', 'prefetch_factor': 6, 'num_workers': 8}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/ssvae/model.pt
+ size 14531940 keys ['model_state_dict', 'config'] prefix ['decoder', 'encoder', 'logvar', 'lst_dec', 'lstm_enc', 'mu', 'output']
+ policy {}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 1000, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ssvae/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ssvae/tmp_model.pt'}
+ dataset {}
+ checkpointing {}
+
+ l2augment_model/ssvae/tmp_model.pt
+ size 14537852 keys ['model_state_dict', 'config'] prefix ['decoder', 'encoder', 'logvar', 'lst_dec', 'lstm_enc', 'mu', 'output']
+ policy {}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 1000, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ssvae/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ssvae/tmp_model.pt'}
+ dataset {}
+ checkpointing {}
+
+ l2augment_model/ufm/mseloss2e1/model.pt
+ size 162816 keys ['model_state_dict', 'config'] prefix ['network']
+ policy {'lr': 0.0001, 'class': 'UnconditionalFrequencyMaskingRanker', 'config': {'loss_type': 'mse'}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss2e1/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss2e1/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/ufm/mseloss2e1/tmp_model.pt
+ size 163040 keys ['model_state_dict', 'config'] prefix ['network']
+ policy {'lr': 0.0001, 'class': 'UnconditionalFrequencyMaskingRanker', 'config': {'loss_type': 'mse'}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss2e1/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss2e1/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/ufm/mseloss/model.pt
+ size 162688 keys ['model_state_dict', 'config'] prefix ['network']
+ policy {'lr': 0.0001, 'class': 'UnconditionalFrequencyMaskingRanker', 'config': {'loss_type': 'mse'}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/ufm/mseloss/tmp_model.pt
+ size 162912 keys ['model_state_dict', 'config'] prefix ['network']
+ policy {'lr': 0.0001, 'class': 'UnconditionalFrequencyMaskingRanker', 'config': {'loss_type': 'mse'}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/mseloss/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/ufm/multloss/model.pt
+ size 162816 keys ['model_state_dict', 'config'] prefix ['network']
+ policy {'lr': 0.0001, 'class': 'UnconditionalFrequencyMaskingRanker', 'config': {'loss_type': 'mult'}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/multloss/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/multloss/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/ufm/multloss/tmp_model.pt
+ size 163040 keys ['model_state_dict', 'config'] prefix ['network']
+ policy {'lr': 0.0001, 'class': 'UnconditionalFrequencyMaskingRanker', 'config': {'loss_type': 'mult'}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/multloss/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/multloss/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/ufm/test_cer/model.pt
+ size 163136 keys ['model_state_dict', 'config'] prefix ['network']
+ policy {'lr': 0.0001, 'class': 'UnconditionalFrequencyMaskingRanker'}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_cer/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_cer/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/ufm/test_cer/tmp_model.pt
+ size 163360 keys ['model_state_dict', 'config'] prefix ['network']
+ policy {'lr': 0.0001, 'class': 'UnconditionalFrequencyMaskingRanker'}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_cer/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_cer/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/ufm/test/tmp_model.pt
+ size 163360 keys ['model_state_dict', 'config'] prefix ['network']
+ policy {'lr': 1e-05, 'class': 'UnconditionalFrequencyMaskingRanker'}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/ufm/test_wer_cer/model.pt
+ size 163392 keys ['model_state_dict', 'config'] prefix ['network']
+ policy {'lr': 0.0001, 'class': 'UnconditionalFrequencyMaskingRanker'}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer_cer/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer_cer/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/ufm/test_wer_cer/tmp_model.pt
+ size 163616 keys ['model_state_dict', 'config'] prefix ['network']
+ policy {'lr': 0.0001, 'class': 'UnconditionalFrequencyMaskingRanker'}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer_cer/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer_cer/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/ufm/test_wer/model.pt
+ size 163392 keys ['model_state_dict', 'config'] prefix ['network']
+ policy {'lr': 0.0001, 'class': 'UnconditionalFrequencyMaskingRanker'}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/ufm/test_wer/tmp_model.pt
+ size 163616 keys ['model_state_dict', 'config'] prefix ['network']
+ policy {'lr': 0.0001, 'class': 'UnconditionalFrequencyMaskingRanker'}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 100, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer/tmp_model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/UMLM/modelgpu.pt
+ size 20833190 keys ['model_state_dict', 'config'] prefix ['decoder', 'embeddings', 'mask_enc', 'prediction']
+ policy {'lr': 0.0006, 'class': 'UnconditionalMaskGenerator', 'config': {'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 40, 'epochs': 200, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/UMLM/modelgpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/UMLM/tmp_modelgpu.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/UMLM/tmp_modelcpu.pt
+ size 20836179 keys ['model_state_dict', 'config'] prefix ['decoder', 'embeddings', 'mask_enc', 'prediction']
+ policy {'lr': 0.0006, 'class': 'UnconditionalMaskGenerator', 'config': {'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 4, 'epochs': 200, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/UMLM/modelcpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/UMLM/tmp_modelcpu.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/UMLM/tmp_modelgpu.pt
+ size 20833566 keys ['model_state_dict', 'config'] prefix ['decoder', 'embeddings', 'mask_enc', 'prediction']
+ policy {'lr': 0.0006, 'class': 'UnconditionalMaskGenerator', 'config': {'mask_vae_config': {'latent_dim': 128, 'codebook_size': 2048, 'use_vq': True}}}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 40, 'epochs': 200, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/UMLM/modelgpu.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/UMLM/tmp_modelgpu.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt'}
+
+ l2augment_model/vae/model.pt
+ size 18904372 keys ['model_state_dict', 'config'] prefix ['decoder', 'encoder', 'logvar', 'mu', 'output']
+ policy {}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 1000, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/vae/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/vae/tmp_model.pt'}
+ dataset {}
+ checkpointing {}
+
+ l2augment_model/vae_tmp/model.pt
+ size 18909324 keys ['model_state_dict', 'config'] prefix ['decoder', 'encoder', 'logvar', 'mu', 'output']
+ policy {}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 1000, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/vae/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/vae/tmp_model.pt'}
+ dataset {}
+ checkpointing {}
+
+ l2augment_model/vae/tmp_model.pt
+ size 18909324 keys ['model_state_dict', 'config'] prefix ['decoder', 'encoder', 'logvar', 'mu', 'output']
+ policy {}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 84, 'epochs': 1000, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/vae/model.pt', 'tmp_model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/vae/tmp_model.pt'}
+ dataset {}
+ checkpointing {}
+
+ l2augment_value/model.pt
+ size 14657778 keys ['model_state_dict', 'config'] prefix ['data_mask_combine', 'data_with_state_ds', 'encode', 'gru', 'init_state', 'reward_prediction', 'sequence_to_state']
+ policy {'lr': 0.002}
+ training {'device': 'cuda', 'random_seed': 1234, 'batch_size': 24, 'lr': 0.002, 'epochs': 25, 'model_save_path': '/mnt/parscratch/users/acp21rjf/l2augment_model/model.pt'}
+ dataset {}
+ checkpointing {'asr_model': '/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_4096_rp_1/step_105360.pt'}
