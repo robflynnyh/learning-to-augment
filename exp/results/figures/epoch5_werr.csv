@@ -1,0 +1,11 @@
+dataset,method,epoch,original_wer,updated_wer,relative_werr,source
+TED-LIUM,UFMR,5,0.0854155591,0.0770866560,9.7510,/exp/exp4/acp21rjf/learning-to-augment/exp/results/UFMR/multiepoch/tedlium.txt
+TED-LIUM,Random FM,5,0.0854155591,0.0749246855,12.2822,/exp/exp4/acp21rjf/learning-to-augment/exp/results/RFM/multiepoch/tedlium.txt
+Earnings-22,UFMR,5,0.2351980067,0.1854870004,21.1358,/exp/exp4/acp21rjf/learning-to-augment/exp/results/UFMR/multiepoch/e22.txt
+Earnings-22,Random FM,5,0.2351980067,0.1847517513,21.4484,/exp/exp4/acp21rjf/learning-to-augment/exp/results/RFM/multiepoch/e22.txt
+Rev16,UFMR,5,0.1725807193,0.1623372976,5.9354,/exp/exp4/acp21rjf/learning-to-augment/exp/results/UFMR/multiepoch/rev16.txt
+Rev16,Random FM,5,0.1725807193,0.1626079364,5.7786,/exp/exp4/acp21rjf/learning-to-augment/exp/results/RFM/multiepoch/rev16.txt
+TAL,UFMR,5,,,,
+TAL,Random FM,5,0.1656883310,0.1596632495,3.6364,/exp/exp4/acp21rjf/learning-to-augment/exp/results/RFM/multiepoch/TAL.txt
+CHiME-6,UFMR,5,0.8436728939,0.6198977793,26.5239,/exp/exp4/acp21rjf/learning-to-augment/exp/results/UFMR/multiepoch/chime6.txt
+CHiME-6,Random FM,5,0.8436728939,0.6443249912,23.6286,/exp/exp4/acp21rjf/learning-to-augment/exp/results/RFM/multiepoch/chime6.txt

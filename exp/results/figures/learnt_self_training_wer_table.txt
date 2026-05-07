@@ -1,0 +1,20 @@
+\begin{table}[hbt]
+    \centering
+    \begin{tabular}{llccccc}
+        \toprule
+        Method & Epochs & TED-LIUM & Earnings-22 & Rev16 & TAL & CHiME-6 \\
+        \midrule
+        UFMR & 1 & 7.7 & 18.9 & \textbf{16.2} & \textbf{15.9} & 64.4 \\
+        UFMR & 5 & 7.7 & 18.5 & 16.2 &  & \textbf{62.0} \\
+        \midrule
+        Random FM & 1 &  & 19.8 & 16.6 & 16.1 & 66.0 \\
+        Random FM & 5 & \textbf{7.5} & \textbf{18.5} & 16.3 & 16.0 & 64.4 \\
+        \midrule
+        No augmentation & 3 & 8.3 & 23.8 & 18.0 & 16.7 &  \\
+        \midrule
+        No adaptation & N/A & 8.5 & 23.5 & 17.3 & 16.6 & 84.4 \\
+        \bottomrule
+    \end{tabular}
+    \caption{WERs for learnt and random frequency masking across single- and multi-epoch test-time self-training.}
+    \label{tab:selftrain:learnt-augmentation-wer}
+\end{table}
