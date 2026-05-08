@@ -19,6 +19,8 @@ PYTHON = "PYTHONDONTWRITEBYTECODE=1 python3"
 def write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
+    if path.suffix == ".sh":
+        path.chmod(0o755)
 
 
 def clean_yaml_dir(path: Path) -> None:
@@ -134,7 +136,8 @@ policy:
 
 
 def main() -> None:
-    search_repeats = [1, 2, 3, 4, 5, 10, 20, 50, 100]
+    search_repeats = [1, 2, 3, 4, 5, 10, 20, 50]
+    search_repeats_arg = " ".join(str(repeats) for repeats in search_repeats)
     adaptation_lrs = [1e-6, 8e-6]
     single_step_lrs = [4e-2, 9e-2]
 
@@ -183,7 +186,7 @@ mkdir -p "${{MPLCONFIGDIR}}" "exp/results/repro/oracle/{result_dir}/logs"
 result="exp/results/repro/oracle/{result_dir}/tedlium_lr{lr_name}_searchlr{search_lr_name}.txt"
 : > "${{result}}"
 
-for repeats in 1 2 3 4 5 10 20 50 100; do
+for repeats in {search_repeats_arg}; do
   PYTHONDONTWRITEBYTECODE=1 python3 exp/oracle_eval.py \\
     --config "exp/results/repro/oracle/{result_dir}/configs/tedlium_lr{lr_name}_searchlr{search_lr_name}_repeats${{repeats}}.yaml"
 done
@@ -195,24 +198,24 @@ done
 
     write(
         ORACLE_REPRO_ROOT / "RMM/run_cpu.sh",
-        """#!/usr/bin/env bash
+        f"""#!/usr/bin/env bash
 set -euo pipefail
 
 cd "$(dirname "$0")/../../../../.."
 export CUDA_VISIBLE_DEVICES=""
-export MPLCONFIGDIR="${MPLCONFIGDIR:-/exp/exp4/acp21rjf/.scratch/matplotlib-cache}"
-export L2A_TEDLIUM3_LEGACY_DIR="${L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TEDLIUM_release-3/legacy}"
-mkdir -p "${MPLCONFIGDIR}"
+export MPLCONFIGDIR="${{MPLCONFIGDIR:-/exp/exp4/acp21rjf/.scratch/matplotlib-cache}}"
+export L2A_TEDLIUM3_LEGACY_DIR="${{L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TEDLIUM_release-3/legacy}}"
+mkdir -p "${{MPLCONFIGDIR}}"
 
 mkdir -p exp/results/repro/oracle/RMM
 
 for lr in 1e-6 8e-6; do
   for search_lr in 4e-2 9e-2; do
-    result="exp/results/repro/oracle/RMM/tedlium_lr${lr}_searchlr${search_lr}.txt"
-    : > "${result}"
-    for repeats in 1 2 3 4 5 10 20 50 100; do
+    result="exp/results/repro/oracle/RMM/tedlium_lr${{lr}}_searchlr${{search_lr}}.txt"
+    : > "${{result}}"
+    for repeats in {search_repeats_arg}; do
       PYTHONDONTWRITEBYTECODE=1 python3 exp/oracle_eval.py \\
-        --config "exp/results/repro/oracle/RMM/configs/tedlium_lr${lr}_searchlr${search_lr}_repeats${repeats}.yaml"
+        --config "exp/results/repro/oracle/RMM/configs/tedlium_lr${{lr}}_searchlr${{search_lr}}_repeats${{repeats}}.yaml"
     done
   done
 done
@@ -221,24 +224,24 @@ done
 
     write(
         ORACLE_REPRO_ROOT / "RFM/run_cpu.sh",
-        """#!/usr/bin/env bash
+        f"""#!/usr/bin/env bash
 set -euo pipefail
 
 cd "$(dirname "$0")/../../../../.."
 export CUDA_VISIBLE_DEVICES=""
-export MPLCONFIGDIR="${MPLCONFIGDIR:-/exp/exp4/acp21rjf/.scratch/matplotlib-cache}"
-export L2A_TEDLIUM3_LEGACY_DIR="${L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TEDLIUM_release-3/legacy}"
-mkdir -p "${MPLCONFIGDIR}"
+export MPLCONFIGDIR="${{MPLCONFIGDIR:-/exp/exp4/acp21rjf/.scratch/matplotlib-cache}}"
+export L2A_TEDLIUM3_LEGACY_DIR="${{L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TEDLIUM_release-3/legacy}}"
+mkdir -p "${{MPLCONFIGDIR}}"
 
 mkdir -p exp/results/repro/oracle/RFM
 
 for lr in 1e-6 8e-6; do
   for search_lr in 4e-2 9e-2; do
-    result="exp/results/repro/oracle/RFM/tedlium_lr${lr}_searchlr${search_lr}.txt"
-    : > "${result}"
-    for repeats in 1 2 3 4 5 10 20 50 100; do
+    result="exp/results/repro/oracle/RFM/tedlium_lr${{lr}}_searchlr${{search_lr}}.txt"
+    : > "${{result}}"
+    for repeats in {search_repeats_arg}; do
       PYTHONDONTWRITEBYTECODE=1 python3 exp/oracle_eval.py \\
-        --config "exp/results/repro/oracle/RFM/configs/tedlium_lr${lr}_searchlr${search_lr}_repeats${repeats}.yaml"
+        --config "exp/results/repro/oracle/RFM/configs/tedlium_lr${{lr}}_searchlr${{search_lr}}_repeats${{repeats}}.yaml"
     done
   done
 done

@@ -75,7 +75,7 @@ top-level runs:
 Each top-level run evaluates candidate counts:
 
 ```text
-1, 2, 3, 4, 5, 10, 20, 50, 100
+1, 2, 3, 4, 5, 10, 20, 50
 ```
 
 Generated configs live under:

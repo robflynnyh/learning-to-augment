@@ -10,7 +10,7 @@ mkdir -p "${MPLCONFIGDIR}" "exp/results/repro/oracle/RMM/logs"
 result="exp/results/repro/oracle/RMM/tedlium_lr8e-6_searchlr4e-2.txt"
 : > "${result}"
 
-for repeats in 1 2 3 4 5 10 20 50 100; do
+for repeats in 1 2 3 4 5 10 20 50; do
   PYTHONDONTWRITEBYTECODE=1 python3 exp/oracle_eval.py \
     --config "exp/results/repro/oracle/RMM/configs/tedlium_lr8e-6_searchlr4e-2_repeats${repeats}.yaml"
 done
