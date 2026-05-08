@@ -9,7 +9,7 @@ import os
 import re
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib-cache")
+os.environ.setdefault("MPLCONFIGDIR", str(Path.home() / ".scratch" / "matplotlib-cache"))
 
 import matplotlib.pyplot as plt
 
@@ -28,6 +28,7 @@ RESULT_RE = re.compile(
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_RESULTS_DIR = SCRIPT_DIR.parent
 DEFAULT_INPUT = DEFAULT_RESULTS_DIR / "RMM/oracle/tedlium.txt"
+DEFAULT_UFMR_INPUT = DEFAULT_RESULTS_DIR / "UFMR_segmented/tedlium.txt"
 DEFAULT_OUTPUT = DEFAULT_RESULTS_DIR / "figures/oracle_wer.pdf"
 DEFAULT_CSV = DEFAULT_RESULTS_DIR / "figures/oracle_wer.csv"
 
@@ -71,7 +72,7 @@ def write_csv(rows: list[dict[str, object]], csv_path: Path) -> None:
             )
 
 
-def plot(rows: list[dict[str, object]], output_path: Path) -> None:
+def plot(rows: list[dict[str, object]], output_path: Path, ufmr_rows: list[dict[str, object]] | None = None) -> None:
     if not rows:
         raise ValueError("No oracle results were parsed.")
 
@@ -83,6 +84,9 @@ def plot(rows: list[dict[str, object]], output_path: Path) -> None:
     fig, ax = plt.subplots(figsize=(5.6, 3.2))
     ax.plot(repeats, wers, label="Oracle WER", marker="o", markersize=3.0, linewidth=1.2)
     ax.axhline(original_wer, color="black", linestyle="--", linewidth=0.8, label="No adaptation")
+    if ufmr_rows:
+        ufmr_wer = 100.0 * ufmr_rows[-1]["updated_wer"]
+        ax.axhline(ufmr_wer, color="#1f77b4", linestyle=":", linewidth=1.1, label="UFMR")
     ax.set_xlabel("Augmentation search breadth per step")
     ax.set_ylabel("WER")
     ax.grid(True, which="both", linewidth=0.5, color="gray", alpha=0.3)
@@ -95,15 +99,19 @@ def plot(rows: list[dict[str, object]], output_path: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
+    parser.add_argument("--ufmr-input", type=Path, default=DEFAULT_UFMR_INPUT)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--csv", type=Path, default=DEFAULT_CSV)
     args = parser.parse_args()
 
     rows = parse_results(args.input)
+    ufmr_rows = parse_results(args.ufmr_input) if args.ufmr_input.exists() else []
     write_csv(rows, args.csv)
-    plot(rows, args.output)
+    plot(rows, args.output, ufmr_rows=ufmr_rows)
     print(f"Wrote {args.csv}")
     print(f"Wrote {args.output}")
+    if ufmr_rows:
+        print(f"Added UFMR line from {args.ufmr_input}")
 
 
 if __name__ == "__main__":

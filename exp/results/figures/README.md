@@ -33,6 +33,14 @@ Output:
 
 ## Oracle WER Plot
 
+Run the segmented UFMR comparison line first, if `exp/results/UFMR_segmented/tedlium.txt` is missing:
+
+```bash
+L2A_TEDLIUM3_LEGACY_DIR=/store/store4/data/TEDLIUM_release-3/legacy \
+MPLCONFIGDIR=/tmp/matplotlib-cache \
+python3 exp/oracle_eval.py --config exp/results/UFMR_segmented/tedlium.yaml
+```
+
 ```bash
 python3 exp/results/scripts/plot_oracle_wer.py
 ```
@@ -40,6 +48,7 @@ python3 exp/results/scripts/plot_oracle_wer.py
 Source:
 
 - `exp/results/RMM/oracle/tedlium.txt`
+- `exp/results/UFMR_segmented/tedlium.txt`
 
 Outputs:
 
