@@ -1,0 +1,1 @@
+ID: 0 - Dataset: tedlium3_segmented_data - Split: test - Epochs: 1 - Original_WER: 0.0958641953432328 - Updated_WER: 0.09182407768366588 - Repeats: 1 - Rollout Type: cpu_rollout_policy

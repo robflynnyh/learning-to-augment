@@ -372,13 +372,6 @@ def find_top_masks(
     masked_predictions = []
     for repeat in range(repeats):
         audio_a = audio.clone()
-        # outputs = policy.augment(audio_a, **augmentation_config)
-        # audio_b, mask = outputs[0], outputs[1]
-        #n_time_masks = random.randint(3, 10)
-        #masker = SpecAugment(n_time_masks=6, n_freq_masks=0, freq_mask_param=0, zero_masking=True, min_p=0.2)
-        #mask = torch.ones_like(audio_a)
-        # method = random.randint(0,2)
-        # mask = apply_masker(mask)
         policy_out = policy.augment(audio_a, **augmentation_args)
         audio_b, mask = policy_out[0], policy_out[1]
         if len(policy_out) > 2: misc = policy_out[2]
@@ -590,7 +583,6 @@ def cpu_rollout_search(
 
             with torch.no_grad():
                 out_teacher = asr_model(audio_signal = cur_audio)
-                out_random = asr_model(audio_signal = torch.randn_like(cur_audio, device=device))
             out_noised = asr_model(audio_signal = augmented_audio_sample)['final_posteriors']
 
             teacher_output_posteriors = out_teacher['final_posteriors'].squeeze(0)
@@ -604,17 +596,20 @@ def cpu_rollout_search(
             loss = ctc_loss_fn(out_noised.transpose(0, 1), pseudo_targets, torch.LongTensor([N] * out_noised.shape[0]), torch.LongTensor([pseudo_targets.shape[1]] * pseudo_targets.shape[0])) / total_tokens_in_loss
 
 
-            tgts = torch.LongTensor(tokenizer.encode(""))[None]
-            N, B = out_noised.shape[1], out_noised.shape[0]
-            n_loss = torch.nn.functional.ctc_loss(
-                out_random['final_posteriors'].transpose(0, 1),
-                tgts,
-                torch.LongTensor([N] * out_noised.shape[0]),
-                torch.LongTensor([tgts.shape[1]] * tgts.shape[0]),
-                blank=out_noised.shape[-1] - 1,
-                reduction='mean',
-            )
-            n_losses.append(n_loss.item())
+            if kwargs.get("return_noise_loss", False):
+                with torch.no_grad():
+                    out_random = asr_model(audio_signal = torch.randn_like(cur_audio, device=device))
+                tgts = torch.LongTensor(tokenizer.encode(""))[None]
+                N, B = out_noised.shape[1], out_noised.shape[0]
+                n_loss = torch.nn.functional.ctc_loss(
+                    out_random['final_posteriors'].transpose(0, 1),
+                    tgts,
+                    torch.LongTensor([N] * out_noised.shape[0]),
+                    torch.LongTensor([tgts.shape[1]] * tgts.shape[0]),
+                    blank=out_noised.shape[-1] - 1,
+                    reduction='mean',
+                )
+                n_losses.append(n_loss.item())
 
             optimizer.zero_grad()
             loss.backward()
@@ -679,12 +674,125 @@ def cpu_rollout_search(
     return returns
 
 
+def cpu_rollout_policy(
+        policy:Module,
+        load_asr_model_fn:Callable,
+        tokenizer,
+        utterances:List[Dict[str, Any]],
+        asr_model_config:Dict[str, Any],
+        asr_model_class:Module,
+        seq_len:int=2048,
+        overlap=0.875,
+        optim_args:Dict[str, Any] = {"lr":8e-6},
+        original_wer = None,
+        shuffle=True,
+        augmentation_config:Dict[str, Any] = {},
+        epochs = 1,
+        shuffle_seed = 123456,
+        **kwargs
+    ):
+    dtype = torch.float32
+    torch.use_deterministic_algorithms(True, warn_only=True)
+
+    asr_model = load_asr_model_fn()
+    asr_model = asr_model.to(dtype=dtype)
+    optimizer = kwargs.get("optimizer_class", DEFAULT_OPTIMIZER_CLASS)(asr_model.parameters(), lr=optim_args['lr'])
+    asr_model.eval()
+    decoder = GreedyCTCDecoder(tokenizer = tokenizer, blank_id = asr_model.decoder.num_classes-1)
+    ctc_loss_fn = torch.nn.CTCLoss(blank=asr_model.decoder.num_classes-1, reduction='sum')
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    asr_model = asr_model.to(device)
+    policy = policy.to(device)
+
+    original_hypothesis = None
+    if original_wer is None:
+        hyps, refs = [], []
+        for utterance in utterances:
+            audio_chunk = utterance['spectrogram']
+            with torch.no_grad():
+                out = asr_model(audio_signal = audio_chunk.to(device))
+            logits = out['final_posteriors'][0].to('cpu')
+            out_text = decoder(logits)
+            out_text = normalizer(out_text)
+            hyps.append(out_text)
+            refs.append(normalizer(utterance['text']))
+
+        original_wer = word_error_rate_detail(hypotheses=hyps, references=refs, use_cer=False)[0]
+        original_hypothesis = hyps
+        print(f"Original WER: {original_wer}")
+
+    masks = []
+    for epoch in range(epochs):
+        utterance_ids = list(range(len(utterances)))
+        if shuffle: shuffle_data(utterance_ids, seed=shuffle_seed+epoch)
+        state = None
+        for i, utt_id in enumerate(utterance_ids):
+            print(f'Epoch {epoch+1}/{epochs} - Utterance {i+1}/{len(utterances)} - ID {utt_id}')
+            cur_utterance = utterances[utt_id]
+            cur_audio = cur_utterance['spectrogram'].to(device, dtype=dtype)
+
+            with torch.no_grad():
+                out_teacher = asr_model(audio_signal = cur_audio)
+                policy_outputs = policy.augment(
+                    cur_audio,
+                    **augmentation_config,
+                    epoch=epoch,
+                    state=state,
+                    teacher_predictions=out_teacher['final_posteriors'],
+                    asr_model=asr_model,
+                )
+                augmented_audio_sample, cur_mask = policy_outputs[:2]
+                if len(policy_outputs) > 2:
+                    misc = policy_outputs[-1]
+                    if isinstance(misc, dict) and 'state' in misc:
+                        state = misc['state']
+
+            masks.append(cur_mask.detach().to('cpu'))
+            out_noised = asr_model(audio_signal = augmented_audio_sample)['final_posteriors']
+
+            teacher_output_posteriors = out_teacher['final_posteriors'].squeeze(0)
+            pseudo_targets = decoder(teacher_output_posteriors)
+            pseudo_targets = torch.LongTensor(tokenizer.encode(pseudo_targets))[None]
+            N, B = out_noised.shape[1], out_noised.shape[0]
+            total_tokens_in_loss = N * B
+            loss = ctc_loss_fn(out_noised.transpose(0, 1), pseudo_targets, torch.LongTensor([N] * out_noised.shape[0]), torch.LongTensor([pseudo_targets.shape[1]] * pseudo_targets.shape[0])) / total_tokens_in_loss
+
+            optimizer.zero_grad()
+            loss.backward()
+            if kwargs.get("clip", False): torch.nn.utils.clip_grad_norm_(asr_model.parameters(), kwargs["clip"])
+            optimizer.step()
+
+    if epochs > 0:
+        hyps, refs = [], []
+        for utterance in utterances:
+            audio_chunk = utterance['spectrogram']
+            with torch.no_grad():
+                out = asr_model(audio_signal = audio_chunk.to(device))
+            logits = out['final_posteriors'][0].to('cpu')
+            out_text = decoder(logits)
+            out_text = normalizer(out_text)
+            hyps.append(out_text)
+            refs.append(normalizer(utterance['text']))
+
+        new_wer = word_error_rate_detail(hypotheses=hyps, references=refs, use_cer=False)[0]
+    else:
+        new_wer = original_wer
+        hyps, refs = original_hypothesis, [normalizer(utterance['text']) for utterance in utterances]
+
+    print(original_wer, new_wer, '-')
+    return {
+        'original_wer': original_wer,
+        'updated_wer': new_wer,
+        'hypothesis': hyps,
+        'original_hypothesis': original_hypothesis,
+        'reference': refs,
+        'masks': masks,
+    }
+
+
         
        
-
-
-
-
 
 
 

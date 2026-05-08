@@ -8,7 +8,7 @@ from lcasr.utils.general import load_model as load_asr_model, get_model_class
 # from l2augment.modelling import load_model as load_rl_models
 from l2augment.utils.helpers import load_model as load_policy, load_asr_model_fn
 
-from l2augment.rollout.cpu_multistep_oracle import cpu_rollout_presearch, cpu_rollout_search
+from l2augment.rollout.cpu_multistep_oracle import cpu_rollout_presearch, cpu_rollout_search, cpu_rollout_policy
 
 from l2augment.modelling.models import Policy
 from lcasr.utils.audio_tools import load_json
@@ -33,10 +33,13 @@ def main(config, policy_net=None):
     asr_model_state_dict = asr_model_checkpoint['model']
 
     
-    if config.get('evaluation', {}).get('rollout_setting', 'search') == 'search':
+    rollout_setting = config.get('evaluation', {}).get('rollout_setting', 'search')
+    if rollout_setting == 'search':
         rollout_function = cpu_rollout_search
-    elif config.get('evaluation', {}).get('rollout_setting', 'search') == 'presearch':
+    elif rollout_setting == 'presearch':
         rollout_function = cpu_rollout_presearch
+    elif rollout_setting == 'policy':
+        rollout_function = cpu_rollout_policy
     else:
         raise ValueError("Invalid rollout setting")
     
@@ -111,7 +114,10 @@ def main(config, policy_net=None):
     save_path = config.get('evaluation', {}).get('save_path', "")
     if save_path != "" and config.get('save', True):
         id = config.get('evaluation', {}).get('id', "0") 
-        results = f"ID: {id} - Dataset: {dataset} - Split: {split} - Epochs: {epochs} - Original_WER: {original_wer} - Updated_WER: {wer} - Repeats: {search_repeats} - Rollout Type: {rollout_function.__name__}"
+        result_repeats = search_repeats
+        if rollout_setting == 'policy':
+            result_repeats = config.get('evaluation', {}).get('augmentation_config', {}).get('repeats', search_repeats)
+        results = f"ID: {id} - Dataset: {dataset} - Split: {split} - Epochs: {epochs} - Original_WER: {original_wer} - Updated_WER: {wer} - Repeats: {result_repeats} - Rollout Type: {rollout_function.__name__}"
         with open(save_path, 'a') as file:
             file.write(results)
             file.write('\n')
@@ -131,7 +137,6 @@ if __name__ == "__main__":
     config['indexes'] = args.indexes if 'indexes' not in config else config['indexes'] # If indexes is specified in yaml config, overwrite 
     config['save'] = not args.dont_save
     main(config)
-
 
 
 

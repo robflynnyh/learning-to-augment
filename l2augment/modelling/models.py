@@ -328,18 +328,34 @@ class MultiStepMaskRanker(Policy):
 
 
 class MixedMaskingRanker(Policy):
-    def __init__(self, zero_masking=True, epochs_until_random=-1) -> None:
+    def __init__(
+            self,
+            zero_masking=True,
+            epochs_until_random=-1,
+            time_masks_min=12,
+            time_masks_max=12,
+            freq_masks_min=5,
+            freq_masks_max=7,
+            freq_mask_param_min=24,
+            freq_mask_param_max=44,
+        ) -> None:
         super().__init__()
         self.zero_masking = zero_masking
         self.epochs_until_random = epochs_until_random
+        self.time_masks_min = time_masks_min
+        self.time_masks_max = time_masks_max
+        self.freq_masks_min = freq_masks_min
+        self.freq_masks_max = freq_masks_max
+        self.freq_mask_param_min = freq_mask_param_min
+        self.freq_mask_param_max = freq_mask_param_max
 
-    @staticmethod
-    def get_mask(audio):
+    def get_mask(self, audio):
         x = torch.ones_like(audio)
         min_p = random.random()/2
-        time_masker = SpecAugment(n_time_masks=12, n_freq_masks=0, freq_mask_param=0, zero_masking=True, min_p=min_p)
-        freq_masks = random.randint(5,7)
-        freq_mask_param = random.randint(24, 44)
+        n_time_masks = random.randint(self.time_masks_min, self.time_masks_max)
+        time_masker = SpecAugment(n_time_masks=n_time_masks, n_freq_masks=0, freq_mask_param=0, zero_masking=True, min_p=min_p)
+        freq_masks = random.randint(self.freq_masks_min, self.freq_masks_max)
+        freq_mask_param = random.randint(self.freq_mask_param_min, self.freq_mask_param_max)
         freq_masker = SpecAugment(n_time_masks=0, n_freq_masks=freq_masks, freq_mask_param=freq_mask_param, zero_masking=True)
         method = random.randint(0,2)
         if method == 0:
