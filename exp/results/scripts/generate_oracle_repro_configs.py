@@ -166,8 +166,8 @@ run_combo 8e-6 9e-2
 def main() -> None:
     search_repeats = [1, 2, 3, 4, 5, 10, 20, 50]
     search_repeats_arg = " ".join(str(repeats) for repeats in search_repeats)
-    adaptation_lrs = [1e-6, 8e-6]
-    single_step_lrs = [4e-2, 9e-2]
+    oracle_combos = [(1e-6, 4e-2), (8e-6, 9e-2)]
+    ufmr_lrs = [1e-6, 8e-6]
 
     rmm_config_dir = ORACLE_REPRO_ROOT / "RMM/configs"
     rfm_config_dir = ORACLE_REPRO_ROOT / "RFM/configs"
@@ -179,18 +179,19 @@ def main() -> None:
     job_dir.mkdir(parents=True, exist_ok=True)
     for script_path in job_dir.glob("*.sh"):
         script_path.unlink()
+    for script_path in ORACLE_REPRO_ROOT.glob("launch_*.sh"):
+        script_path.unlink()
 
-    for lr in adaptation_lrs:
-        for single_step_lr in single_step_lrs:
-            for repeats in search_repeats:
-                write(
-                    rmm_config_dir / f"tedlium_lr{fmt_lr(lr)}_searchlr{fmt_lr(single_step_lr)}_repeats{repeats}.yaml",
-                    rmm_config(repeats, lr, single_step_lr),
-                )
-                write(
-                    rfm_config_dir / f"tedlium_lr{fmt_lr(lr)}_searchlr{fmt_lr(single_step_lr)}_repeats{repeats}.yaml",
-                    rfm_config(repeats, lr, single_step_lr),
-                )
+    for lr, single_step_lr in oracle_combos:
+        for repeats in search_repeats:
+            write(
+                rmm_config_dir / f"tedlium_lr{fmt_lr(lr)}_searchlr{fmt_lr(single_step_lr)}_repeats{repeats}.yaml",
+                rmm_config(repeats, lr, single_step_lr),
+            )
+            write(
+                rfm_config_dir / f"tedlium_lr{fmt_lr(lr)}_searchlr{fmt_lr(single_step_lr)}_repeats{repeats}.yaml",
+                rfm_config(repeats, lr, single_step_lr),
+            )
 
     for method in ["RMM", "RFM"]:
         write(
@@ -198,22 +199,20 @@ def main() -> None:
             oracle_stream_script(method, search_repeats_arg),
         )
 
-    for lr in adaptation_lrs:
+    for lr in ufmr_lrs:
         write(ufmr_config_dir / f"tedlium_lr{fmt_lr(lr)}.yaml", ufmr_policy_config(lr))
 
     write(
-        ORACLE_REPRO_ROOT / "launch_two_streams.sh",
+        ORACLE_REPRO_ROOT / "launch_single_sequential.sh",
         """#!/usr/bin/env bash
 set -euo pipefail
 
 cd "$(dirname "$0")/../../../.."
 mkdir -p exp/results/repro/oracle/logs
 
-for method in rmm rfm; do
-  job="exp/results/repro/oracle/jobs/${method}_historical_then_recent.sh"
-  screen -L -Logfile "exp/results/repro/oracle/logs/${method}_historical_then_recent.log" \\
-    -dmS "l2a_${method}_historical_then_recent" bash "${job}"
-done
+screen -L -Logfile "exp/results/repro/oracle/logs/single_sequential.log" \\
+  -dmS "l2a_oracle_single_sequential" \\
+  bash -lc './exp/results/repro/oracle/jobs/rmm_historical_then_recent.sh && ./exp/results/repro/oracle/jobs/rfm_historical_then_recent.sh'
 
 screen -ls | grep 'l2a_'
 """,

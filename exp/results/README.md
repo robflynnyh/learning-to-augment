@@ -21,7 +21,7 @@ repro/
       rmm_historical_then_recent.sh
       rfm_historical_then_recent.sh
     logs/
-    launch_two_streams.sh
+    launch_single_sequential.sh
   policy/
     UFMR_segmented/
       configs/
@@ -62,8 +62,9 @@ time+frequency masking.
 
 ## Configured Oracle Reproduction
 
-The current oracle reproduction launch runs two policy streams in parallel. Each stream first runs the
-historical matched setup and then the newer/default setup:
+The current oracle reproduction launch runs a single detached stream. It runs the RMM jobs first and
+then the RFM jobs. For each policy, it first runs the historical matched setup and then the
+newer/default setup:
 
 - historical matched setup: adaptation learning rate `1e-6`, oracle-search learning rate `4e-2`
 - newer/default setup: adaptation learning rate `8e-6`, oracle-search learning rate `9e-2`
@@ -80,18 +81,17 @@ Generated configs live under:
 - `repro/oracle/RMM/configs/`
 - `repro/oracle/RFM/configs/`
 
-The two stream scripts live under:
+The policy stream scripts live under:
 
 - `repro/oracle/jobs/`
 
 The launch script is:
 
 ```bash
-./exp/results/repro/oracle/launch_two_streams.sh
+./exp/results/repro/oracle/launch_single_sequential.sh
 ```
 
-It starts one detached `screen` session for `RMM` and one for `RFM`, and writes logs to
-`exp/results/repro/oracle/logs/`.
+It starts one detached `screen` session and writes logs to `exp/results/repro/oracle/logs/`.
 
 ## Paths And Environment
 
