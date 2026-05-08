@@ -13,18 +13,15 @@ repro/
   oracle/
     RMM/
       configs/
-      run_cpu.sh
       tedlium_lr*_searchlr*.txt
     RFM/
       configs/
-      run_cpu.sh
       tedlium_lr*_searchlr*.txt
     jobs/
-      rmm_lr*_searchlr*.sh
-      rfm_lr*_searchlr*.sh
+      rmm_historical_then_recent.sh
+      rfm_historical_then_recent.sh
     logs/
-    launch_screens.sh
-    run_cpu.sh
+    launch_two_streams.sh
   policy/
     UFMR_segmented/
       configs/
@@ -63,16 +60,16 @@ This matches the verified historical mixed-mask distribution: a random number of
 frequency-mask width `34`, and a uniform random choice between time-only, frequency-only, and
 time+frequency masking.
 
-## Configured Matrix
+## Configured Oracle Reproduction
 
-The current oracle reproduction matrix is configured but has not been launched. It contains eight
-top-level runs:
+The current oracle reproduction launch runs two policy streams in parallel. Each stream first runs the
+historical matched setup and then the newer/default setup:
 
+- historical matched setup: adaptation learning rate `1e-6`, oracle-search learning rate `4e-2`
+- newer/default setup: adaptation learning rate `8e-6`, oracle-search learning rate `9e-2`
 - policies: `RMM` (`MixedMaskingRanker`) and `RFM` (`FrequencyMaskingRanker` with random frequency masks)
-- adaptation learning rates: `1e-6` and `8e-6`
-- oracle-search learning rates: `4e-2` and `9e-2`
 
-Each top-level run evaluates candidate counts:
+Each setup evaluates candidate counts:
 
 ```text
 1, 2, 3, 4, 5, 10, 20, 50
@@ -83,24 +80,18 @@ Generated configs live under:
 - `repro/oracle/RMM/configs/`
 - `repro/oracle/RFM/configs/`
 
-Per-combination job scripts live under:
+The two stream scripts live under:
 
 - `repro/oracle/jobs/`
 
-The aggregate launch script is:
+The launch script is:
 
 ```bash
-./exp/results/repro/oracle/launch_screens.sh
+./exp/results/repro/oracle/launch_two_streams.sh
 ```
 
-It starts one detached `screen` session per top-level run and writes logs to
-`exp/results/repro/oracle/logs/`. This script has not been run yet.
-
-For sequential CPU execution, use:
-
-```bash
-./exp/results/repro/oracle/run_cpu.sh
-```
+It starts one detached `screen` session for `RMM` and one for `RFM`, and writes logs to
+`exp/results/repro/oracle/logs/`.
 
 ## Paths And Environment
 

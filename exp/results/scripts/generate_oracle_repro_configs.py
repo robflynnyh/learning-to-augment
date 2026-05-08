@@ -135,6 +135,34 @@ policy:
 """
 
 
+def oracle_stream_script(method: str, repeats_arg: str) -> str:
+    result_dir = method
+    return f"""#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/../../../../.."
+export CUDA_VISIBLE_DEVICES=""
+export MPLCONFIGDIR="${{MPLCONFIGDIR:-/exp/exp4/acp21rjf/.scratch/matplotlib-cache}}"
+export L2A_TEDLIUM3_LEGACY_DIR="${{L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TEDLIUM_release-3/legacy}}"
+mkdir -p "${{MPLCONFIGDIR}}" "exp/results/repro/oracle/{result_dir}/logs"
+
+run_combo() {{
+  local lr="$1"
+  local search_lr="$2"
+  local result="exp/results/repro/oracle/{result_dir}/tedlium_lr${{lr}}_searchlr${{search_lr}}.txt"
+  : > "${{result}}"
+  for repeats in {repeats_arg}; do
+    PYTHONDONTWRITEBYTECODE=1 python3 exp/oracle_eval.py \\
+      --config "exp/results/repro/oracle/{result_dir}/configs/tedlium_lr${{lr}}_searchlr${{search_lr}}_repeats${{repeats}}.yaml"
+  done
+}}
+
+# Historical matched setup, followed by the newer/default setup.
+run_combo 1e-6 4e-2
+run_combo 8e-6 9e-2
+"""
+
+
 def main() -> None:
     search_repeats = [1, 2, 3, 4, 5, 10, 20, 50]
     search_repeats_arg = " ".join(str(repeats) for repeats in search_repeats)
@@ -164,114 +192,27 @@ def main() -> None:
                     rfm_config(repeats, lr, single_step_lr),
                 )
 
-            lr_name = fmt_lr(lr)
-            search_lr_name = fmt_lr(single_step_lr)
-            for method, result_dir in [
-                ("RMM", "RMM"),
-                ("RFM", "RFM"),
-            ]:
-                method_lc = method.lower()
-                job_name = f"{method_lc}_lr{lr_name}_searchlr{search_lr_name}"
-                write(
-                    job_dir / f"{job_name}.sh",
-                    f"""#!/usr/bin/env bash
-set -euo pipefail
-
-cd "$(dirname "$0")/../../../../.."
-export CUDA_VISIBLE_DEVICES=""
-export MPLCONFIGDIR="${{MPLCONFIGDIR:-/exp/exp4/acp21rjf/.scratch/matplotlib-cache}}"
-export L2A_TEDLIUM3_LEGACY_DIR="${{L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TEDLIUM_release-3/legacy}}"
-mkdir -p "${{MPLCONFIGDIR}}" "exp/results/repro/oracle/{result_dir}/logs"
-
-result="exp/results/repro/oracle/{result_dir}/tedlium_lr{lr_name}_searchlr{search_lr_name}.txt"
-: > "${{result}}"
-
-for repeats in {search_repeats_arg}; do
-  PYTHONDONTWRITEBYTECODE=1 python3 exp/oracle_eval.py \\
-    --config "exp/results/repro/oracle/{result_dir}/configs/tedlium_lr{lr_name}_searchlr{search_lr_name}_repeats${{repeats}}.yaml"
-done
-""",
-                )
+    for method in ["RMM", "RFM"]:
+        write(
+            job_dir / f"{method.lower()}_historical_then_recent.sh",
+            oracle_stream_script(method, search_repeats_arg),
+        )
 
     for lr in adaptation_lrs:
         write(ufmr_config_dir / f"tedlium_lr{fmt_lr(lr)}.yaml", ufmr_policy_config(lr))
 
     write(
-        ORACLE_REPRO_ROOT / "RMM/run_cpu.sh",
-        f"""#!/usr/bin/env bash
-set -euo pipefail
-
-cd "$(dirname "$0")/../../../../.."
-export CUDA_VISIBLE_DEVICES=""
-export MPLCONFIGDIR="${{MPLCONFIGDIR:-/exp/exp4/acp21rjf/.scratch/matplotlib-cache}}"
-export L2A_TEDLIUM3_LEGACY_DIR="${{L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TEDLIUM_release-3/legacy}}"
-mkdir -p "${{MPLCONFIGDIR}}"
-
-mkdir -p exp/results/repro/oracle/RMM
-
-for lr in 1e-6 8e-6; do
-  for search_lr in 4e-2 9e-2; do
-    result="exp/results/repro/oracle/RMM/tedlium_lr${{lr}}_searchlr${{search_lr}}.txt"
-    : > "${{result}}"
-    for repeats in {search_repeats_arg}; do
-      PYTHONDONTWRITEBYTECODE=1 python3 exp/oracle_eval.py \\
-        --config "exp/results/repro/oracle/RMM/configs/tedlium_lr${{lr}}_searchlr${{search_lr}}_repeats${{repeats}}.yaml"
-    done
-  done
-done
-""",
-    )
-
-    write(
-        ORACLE_REPRO_ROOT / "RFM/run_cpu.sh",
-        f"""#!/usr/bin/env bash
-set -euo pipefail
-
-cd "$(dirname "$0")/../../../../.."
-export CUDA_VISIBLE_DEVICES=""
-export MPLCONFIGDIR="${{MPLCONFIGDIR:-/exp/exp4/acp21rjf/.scratch/matplotlib-cache}}"
-export L2A_TEDLIUM3_LEGACY_DIR="${{L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TEDLIUM_release-3/legacy}}"
-mkdir -p "${{MPLCONFIGDIR}}"
-
-mkdir -p exp/results/repro/oracle/RFM
-
-for lr in 1e-6 8e-6; do
-  for search_lr in 4e-2 9e-2; do
-    result="exp/results/repro/oracle/RFM/tedlium_lr${{lr}}_searchlr${{search_lr}}.txt"
-    : > "${{result}}"
-    for repeats in {search_repeats_arg}; do
-      PYTHONDONTWRITEBYTECODE=1 python3 exp/oracle_eval.py \\
-        --config "exp/results/repro/oracle/RFM/configs/tedlium_lr${{lr}}_searchlr${{search_lr}}_repeats${{repeats}}.yaml"
-    done
-  done
-done
-""",
-    )
-
-    write(
-        ORACLE_REPRO_ROOT / "run_cpu.sh",
-        """#!/usr/bin/env bash
-set -euo pipefail
-
-cd "$(dirname "$0")/../../../.."
-
-./exp/results/repro/oracle/RMM/run_cpu.sh
-./exp/results/repro/oracle/RFM/run_cpu.sh
-""",
-    )
-
-    write(
-        ORACLE_REPRO_ROOT / "launch_screens.sh",
+        ORACLE_REPRO_ROOT / "launch_two_streams.sh",
         """#!/usr/bin/env bash
 set -euo pipefail
 
 cd "$(dirname "$0")/../../../.."
 mkdir -p exp/results/repro/oracle/logs
 
-for job in exp/results/repro/oracle/jobs/*.sh; do
-  name="$(basename "${job}" .sh)"
-  screen -L -Logfile "exp/results/repro/oracle/logs/${name}.log" \\
-    -dmS "l2a_${name}" bash "${job}"
+for method in rmm rfm; do
+  job="exp/results/repro/oracle/jobs/${method}_historical_then_recent.sh"
+  screen -L -Logfile "exp/results/repro/oracle/logs/${method}_historical_then_recent.log" \\
+    -dmS "l2a_${method}_historical_then_recent" bash "${job}"
 done
 
 screen -ls | grep 'l2a_'
