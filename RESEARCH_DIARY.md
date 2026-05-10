@@ -21,3 +21,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Regenerated the ROB-60 newer/default oracle plot with a log-scaled repeat
   axis after review feedback that the linear-axis version was visually
   compressed.
+- Prepared a follow-up ROB-60 oracle sweep for Robert's requested
+  `lr=1e-5`, `search_lr=2e-1` setting. The sweep adds RMM/RFM configs for
+  repeats `1 2 3 4 5 10 20 50` and uses a Mimas `with-gpu` screen wrapper with
+  a Linear completion callback.
