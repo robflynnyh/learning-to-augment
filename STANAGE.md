@@ -90,3 +90,38 @@ rsync -ah --checksum --info=progress2 \
 ```
 
 Do not pull rollout directories unless explicitly needed; they may be huge.
+
+## Symphony callback credentials on Stanage
+
+Stanage jobs launched for Symphony must keep the same Linear callback contract
+as Mimas jobs. The Slurm wrapper should call
+`scripts/callbacks/linear_experiment_callback.py` from an `EXIT` trap and move
+the issue back to `Todo` when the job exits.
+
+The template `scripts/templates/slurm_experiment_wrapper.template.sh` expects
+`LINEAR_API_KEY` to be available through:
+
+```text
+~/.config/learning-to-augment/linear.env
+```
+
+Do not assume this file already exists on Stanage. When a Stanage run is
+directly requested, provision it from Mimas without printing or logging the key:
+
+```bash
+test -n "${LINEAR_API_KEY:?LINEAR_API_KEY is required}"
+printf 'LINEAR_API_KEY=%q\n' "${LINEAR_API_KEY}" | \
+  ssh stanage.shef.ac.uk \
+    'umask 077; mkdir -p ~/.config/learning-to-augment; cat > ~/.config/learning-to-augment/linear.env; chmod 600 ~/.config/learning-to-augment/linear.env'
+```
+
+Before submitting a long Stanage job, validate the callback path from the
+Stanage checkout with a non-mutating check:
+
+```bash
+LINEAR_ENV_FILE=~/.config/learning-to-augment/linear.env bash -lc \
+  'set -a; . "$LINEAR_ENV_FILE"; set +a; python3 scripts/callbacks/linear_experiment_callback.py --issue <issue> --status-code 0 --runner-label slurm:check --queued-command check-only --target-state Todo --check-only'
+```
+
+Do not put `LINEAR_API_KEY` in command arguments, Slurm scripts, logs, Git,
+Linear comments, or shell history.

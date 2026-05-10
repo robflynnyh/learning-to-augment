@@ -25,7 +25,10 @@ For Stanage work, follow `STANAGE.md` and the repo's existing
 `exp/launch_scripts/*.sh` Slurm patterns. Use short bounded SSH commands from
 Mimas, submit compute through Slurm, keep stdout/stderr and generated artifacts
 under a durable issue-specific path on `/mnt/parscratch/users/acp21rjf/`, and
-do not run meaningful compute on a Stanage login node.
+do not run meaningful compute on a Stanage login node. Before submitting a
+Stanage job with a Linear callback, provision and validate the callback
+credential as described in `STANAGE.md`; do not print, commit, log, or pass
+`LINEAR_API_KEY` in command arguments.
 
 Do not spend agent turns waiting for a queued or running experiment to start or
 finish. After queueing a long experiment, post a Linear comment with the queued

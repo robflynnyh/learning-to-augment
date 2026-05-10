@@ -24,6 +24,12 @@ to work from detached or scripted contexts without Codex-only tools.
 plotting inputs, and result notes. Prefer programmatic aggregation or parsing
 over hand-editing metrics.
 
+For nontrivial new experiment families, create a small README under the relevant
+experiment or result directory before launch, and create or update an `OUTCOME.md`
+under the result directory when results are available. Keep names and paths
+compatible with the existing `exp/results/` layout rather than forcing a new
+top-level experiment tree.
+
 `STANAGE.md` records Stanage paths and checkpoint transfer notes for this
 repository. Treat remote and `/store/...` checkpoint/data locations as read-only
 unless the issue explicitly says otherwise.
@@ -42,3 +48,7 @@ and why the artifact was not committed.
 
 Keep Symphony-specific instructions and runtime config under `symphony/`.
 `symphony/.env` is local-only and must not be committed.
+
+Append concise dated entries to `RESEARCH_DIARY.md` for meaningful project
+changes, experiment launches, completed runs, fixes, and interpretation updates.
+Do not add repetitive launch bookkeeping that will not help a future agent.
