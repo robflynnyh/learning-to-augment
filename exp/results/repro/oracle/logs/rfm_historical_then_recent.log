@@ -1,0 +1,83 @@
+/exp/exp4/acp21rjf/long-context-asr/lcasr/utils/general.py:44: UserWarning: No model_class specified in model config or args, defaulting to SCConformerXL
+  warnings.warn('No model_class specified in model config or args, defaulting to SCConformerXL')
+Using rollout function: cpu_rollout_search
+Using policy with class: <class 'l2augment.modelling.models.FrequencyMaskingRanker'>
+Index 1/11 - 0
+--- BillGates_2010 ---
+Original WER: 0.10660004164064127
+Epoch 1/1 - Utterance 1/167 - ID 36
+0.0
+Epoch 1/1 - Utterance 2/167 - ID 130
+-41.666664123535156
+Epoch 1/1 - Utterance 3/167 - ID 42
+0.0
+Epoch 1/1 - Utterance 4/167 - ID 106
+-25.0
+Epoch 1/1 - Utterance 5/167 - ID 70
+-2.127659797668457
+Epoch 1/1 - Utterance 6/167 - ID 105
+-4.651163101196289
+Epoch 1/1 - Utterance 7/167 - ID 38
+-3.22580623626709
+Epoch 1/1 - Utterance 8/167 - ID 71
+0.0
+Epoch 1/1 - Utterance 9/167 - ID 63
+-6.060606002807617
+Epoch 1/1 - Utterance 10/167 - ID 78
+0.0
+Epoch 1/1 - Utterance 11/167 - ID 163
+-6.25
+Epoch 1/1 - Utterance 12/167 - ID 137
+-5.405405521392822
+Epoch 1/1 - Utterance 13/167 - ID 62
+5.882352828979492
+Epoch 1/1 - Utterance 14/167 - ID 87
+-2.2727272510528564
+Epoch 1/1 - Utterance 15/167 - ID 151
+-4.5454559326171875
+Epoch 1/1 - Utterance 16/167 - ID 3
+0.0
+Epoch 1/1 - Utterance 17/167 - ID 140
+0.0
+Epoch 1/1 - Utterance 18/167 - ID 121
+0.0
+Epoch 1/1 - Utterance 19/167 - ID 85
+3.3333332538604736
+Epoch 1/1 - Utterance 20/167 - ID 119
+-6.896553039550781
+Epoch 1/1 - Utterance 21/167 - ID 16
+0.0
+Epoch 1/1 - Utterance 22/167 - ID 59
+-1.9230775833129883
+Epoch 1/1 - Utterance 23/167 - ID 82
+0.0
+Epoch 1/1 - Utterance 24/167 - ID 49
+0.0
+Epoch 1/1 - Utterance 25/167 - ID 39
+-2.5641021728515625
+Epoch 1/1 - Utterance 26/167 - ID 84
+2.222222328186035
+Epoch 1/1 - Utterance 27/167 - ID 93
+0.0
+Epoch 1/1 - Utterance 28/167 - ID 92
+4.34782600402832
+Epoch 1/1 - Utterance 29/167 - ID 53
+0.0
+Epoch 1/1 - Utterance 30/167 - ID 157
+1.25
+Epoch 1/1 - Utterance 31/167 - ID 153
+-3.4482760429382324
+Epoch 1/1 - Utterance 32/167 - ID 131
+-2.040816307067871
+Epoch 1/1 - Utterance 33/167 - ID 117
+0.0
+Epoch 1/1 - Utterance 34/167 - ID 57
+-4.1666669845581055
+Epoch 1/1 - Utterance 35/167 - ID 28
+0.0
+Epoch 1/1 - Utterance 36/167 - ID 99
+0.0
+Epoch 1/1 - Utterance 37/167 - ID 37
+0.0
+Epoch 1/1 - Utterance 38/167 - ID 133
+-3.703704833984375

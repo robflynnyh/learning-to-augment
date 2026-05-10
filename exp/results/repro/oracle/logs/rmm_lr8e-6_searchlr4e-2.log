@@ -1,0 +1,6 @@
+/exp/exp4/acp21rjf/long-context-asr/lcasr/utils/general.py:44: UserWarning: No model_class specified in model config or args, defaulting to SCConformerXL
+  warnings.warn('No model_class specified in model config or args, defaulting to SCConformerXL')
+Using rollout function: cpu_rollout_search
+Using policy with class: <class 'l2augment.modelling.models.MixedMaskingRanker'>
+Index 1/11 - 0
+--- BillGates_2010 ---
