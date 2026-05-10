@@ -77,5 +77,5 @@ Instruction map:
   `symphony/instructions/work-loop.md`
 - Mimas, Stanage, GPU queueing, detached jobs, and callbacks:
   `symphony/instructions/experiment-execution.md`
-- Validation, GitHub PR handoff, Linear completion, and `Done` state rules:
+- Validation, GitHub PR handoff, Linear review handoff, and final state rules:
   `symphony/instructions/validation-and-handoff.md`
