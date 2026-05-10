@@ -16,6 +16,8 @@ from typing import Any, Dict, Optional
 
 
 LINEAR_API_URL = "https://api.linear.app/graphql"
+DEFAULT_MAX_COMMENT_CHARS = 10000
+DEFAULT_MAX_LOG_CHARS = 6000
 
 
 class LinearError(RuntimeError):
@@ -114,7 +116,27 @@ def move_issue(api_key: str, issue_id: str, target_state_id: str) -> None:
         raise LinearError("Linear issueUpdate returned success=false")
 
 
-def tail(path: Optional[str], lines: int) -> str:
+def cap_text(text: str, max_chars: int, label: str) -> str:
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text
+    marker = f"\n\n[{label} truncated to {max_chars} characters]\n"
+    keep = max_chars - len(marker)
+    if keep <= 0:
+        return marker[-max_chars:]
+    return marker + text[-keep:]
+
+
+def cap_comment(text: str, max_chars: int) -> str:
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text
+    marker = f"\n\n[Linear callback comment truncated to {max_chars} characters]"
+    keep = max_chars - len(marker)
+    if keep <= 0:
+        return marker[:max_chars]
+    return text[:keep].rstrip() + marker
+
+
+def tail(path: Optional[str], lines: int, max_chars: int) -> str:
     if not path:
         return ""
     file_path = Path(path)
@@ -125,7 +147,7 @@ def tail(path: Optional[str], lines: int) -> str:
     except OSError as error:
         return f"Could not read log file `{path}`: {error}"
     selected = content[-lines:]
-    return "\n".join(selected)
+    return cap_text("\n".join(selected), max_chars, "log tail")
 
 
 def existing_path_status(path: Optional[str]) -> str:
@@ -146,7 +168,7 @@ def build_comment(args: argparse.Namespace, issue: Dict[str, Any]) -> str:
         runner_label = f"screen:{screen_name}"
     if not runner_label:
         runner_label = "not provided"
-    log_tail = tail(args.log, args.tail_lines)
+    log_tail = tail(args.log, args.tail_lines, args.max_log_chars)
 
     parts = [
         f"Queued experiment {outcome}.",
@@ -165,7 +187,7 @@ def build_comment(args: argparse.Namespace, issue: Dict[str, Any]) -> str:
         parts.extend(["", args.note])
     if log_tail:
         parts.extend(["", f"Last {args.tail_lines} log lines:", "```text", log_tail, "```"])
-    return "\n".join(parts)
+    return cap_comment("\n".join(parts), args.max_comment_chars)
 
 
 def parse_args() -> argparse.Namespace:
@@ -182,6 +204,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target-state", default="Todo", help="Linear state to move the issue to")
     parser.add_argument("--note", help="Extra Markdown note to include in the Linear comment")
     parser.add_argument("--tail-lines", type=int, default=80, help="Number of log lines to include")
+    parser.add_argument(
+        "--max-log-chars",
+        type=int,
+        default=DEFAULT_MAX_LOG_CHARS,
+        help="Maximum characters of log tail to include in the comment",
+    )
+    parser.add_argument(
+        "--max-comment-chars",
+        type=int,
+        default=DEFAULT_MAX_COMMENT_CHARS,
+        help="Maximum characters to post to Linear",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print the comment and skip Linear mutations")
     parser.add_argument(
         "--check-only",
