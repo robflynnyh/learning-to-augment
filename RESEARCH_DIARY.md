@@ -8,8 +8,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Added Symphony project wiring for the Learn-to-Augment Linear project,
   including split instruction files, detached-job callbacks, wrapper templates,
   and a blocked follow-up issue helper.
-- Added ROB-62 standard 16384 RMM/RFM evaluation scaffolding under
-  `exp/results/repro/policy/ROB-62_standard_16384/`. The checked-in
-  `RMM_eval/multiepoch` configs were confirmed unsafe because they still use
-  `FrequencyMaskingRanker`, `5e-6`, and RFM save paths; use
-  `scripts/launch_rob62_standard_eval.sh` for the corrected `9e-5` run.
+- Replaced the superseded ROB-62 `16384` / `9e-5` scaffold with the corrected
+  result-repo setup under
+  `exp/results/repro/policy/ROB-62_result_repo_2048_1epoch/`. This uses the
+  mirrored Spotify 2048 checkpoint, `5e-6`, one evaluation epoch, RFM
+  `FrequencyMaskingRanker`, and RMM `MixedMaskingRanker`; use
+  `scripts/launch_rob62_result_repo_eval.sh` for the queued run.

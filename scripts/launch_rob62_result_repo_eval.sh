@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Queue-safe ROB-62 standard 16384 RMM/RFM eval wrapper.
+# Queue-safe ROB-62 result-repo 2048 single-epoch RMM/RFM eval wrapper.
 
 set -uo pipefail
 
@@ -13,14 +13,14 @@ if [ -f /exp/exp4/acp21rjf/symphony-config/.env ]; then
 fi
 
 LINEAR_ISSUE="${LINEAR_ISSUE:-ROB-62}"
-RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/policy/ROB-62_standard_16384}"
+RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/policy/ROB-62_result_repo_2048_1epoch}"
 LOG_PATH="${LOG_PATH:-${RESULT_ROOT}/logs/run.log}"
-SCREEN_NAME="${SCREEN_NAME:-rob62_rmm_standard_16384}"
+SCREEN_NAME="${SCREEN_NAME:-rob62_rmm_result_repo_2048_1epoch}"
 RUNNER_LABEL="${RUNNER_LABEL:-screen:${SCREEN_NAME}}"
-QUEUED_COMMAND="${QUEUED_COMMAND:-/store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob62_standard_eval.sh}"
+QUEUED_COMMAND="${QUEUED_COMMAND:-/store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob62_result_repo_eval.sh}"
 GIT_BRANCH="${GIT_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || printf 'unknown')}"
 GIT_COMMIT="${GIT_COMMIT:-$(git rev-parse HEAD 2>/dev/null || printf 'unknown')}"
-ASR_CKPT="${ASR_CKPT:-/store/store5/data/acp21rjf_checkpoints/SAP_LCASR/n_seq_sched_16384_rp_1/step_105360.pt}"
+ASR_CKPT="${ASR_CKPT:-/store/store5/data/acp21rjf_checkpoints/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt}"
 
 on_exit() {
   status=$?
@@ -40,7 +40,7 @@ on_exit() {
     --branch "${GIT_BRANCH}"
     --commit "${GIT_COMMIT}"
     --target-state "${CALLBACK_TARGET_STATE:-Todo}"
-    --note "${CALLBACK_NOTE:-ROB-62 standard 16384 RMM/RFM eval wrapper exited.}"
+    --note "${CALLBACK_NOTE:-ROB-62 result-repo 2048 single-epoch RMM/RFM eval wrapper exited.}"
     --tail-lines "${CALLBACK_TAIL_LINES:-80}"
     --max-log-chars "${CALLBACK_MAX_LOG_CHARS:-6000}"
     --max-comment-chars "${CALLBACK_MAX_COMMENT_CHARS:-10000}"
@@ -124,16 +124,16 @@ training:
   epochs: 100
 
 evaluation:
-  id: 'ROB-62-standard-16384-rp1-9e-5-{method}-{tag}'
+  id: 'ROB-62-result-repo-2048-1epoch-5e-6-{method}-{tag}'
   dataset: '{dataset}'
   split: '{split}'
   use_cer: false
-  epochs: 5
+  epochs: 1
   augmentation_config:
     repeats: 1
     use_random: true
   optim_args:
-    lr: 9e-5
+    lr: 5e-6
   save_path: {save_path}
 
 policy:
@@ -192,5 +192,9 @@ for method in ${METHODS}; do
 done
 
 cd "${REPO_DIR}"
-python3 exp/results/repro/policy/ROB-62_standard_16384/summarize_results.py
+if [ "${ROB62_SMOKE:-0}" = "1" ]; then
+  echo "[rob62] smoke mode: skipping final comparison table generation"
+else
+  python3 "${RESULT_ROOT}/summarize_results.py"
+fi
 echo "[rob62] finished"
