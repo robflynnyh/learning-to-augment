@@ -18,3 +18,6 @@ reproduce results, interpret metrics, or avoid known failure modes.
   beside it. The missing matching UFMR segmented policy eval was run at
   `lr=8e-6`, giving `9.041%` WER versus no-adaptation `9.586%`, RFM oracle
   best `8.941%`, and RMM oracle best `8.732%`.
+- Regenerated the ROB-60 newer/default oracle plot with a log-scaled repeat
+  axis after review feedback that the linear-axis version was visually
+  compressed.

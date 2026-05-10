@@ -12,6 +12,7 @@ from pathlib import Path
 os.environ.setdefault("MPLCONFIGDIR", str(Path.home() / ".scratch" / "matplotlib-cache"))
 
 import matplotlib.pyplot as plt
+from matplotlib.ticker import ScalarFormatter
 
 
 RESULT_RE = re.compile(
@@ -88,6 +89,7 @@ def plot(
     output_path: Path,
     ufmr_rows: list[dict[str, object]] | None = None,
     ufmr_label: str = "UFMR",
+    log_x: bool = False,
 ) -> None:
     if not series or not series[0][1]:
         raise ValueError("No oracle results were parsed.")
@@ -96,7 +98,7 @@ def plot(
     all_repeats = sorted({row["repeats"] for _, rows in series for row in rows})
     original_wer = 100.0 * series[0][1][0]["original_wer"]
 
-    fig, ax = plt.subplots(figsize=(6.2, 3.6))
+    fig, ax = plt.subplots(figsize=(6.8, 3.6))
     colors = ["#0072B2", "#D55E00", "#009E73", "#CC79A7"]
     for idx, (label, rows) in enumerate(series):
         if not rows:
@@ -116,8 +118,13 @@ def plot(
     if ufmr_rows:
         ufmr_wer = 100.0 * ufmr_rows[-1]["updated_wer"]
         ax.axhline(ufmr_wer, color="#666666", linestyle=":", linewidth=1.2, label=ufmr_label)
+    if log_x:
+        ax.set_xscale("log")
+        ax.set_xlim(min(all_repeats) * 0.9, max(all_repeats) * 1.1)
+        ax.xaxis.set_major_formatter(ScalarFormatter())
+        ax.minorticks_off()
     ax.set_xticks(all_repeats)
-    ax.set_xlabel("Oracle search repeats")
+    ax.set_xlabel("Oracle search repeats" + (" (log scale)" if log_x else ""))
     ax.set_ylabel("WER (%)")
     ax.grid(True, which="both", linewidth=0.5, color="gray", alpha=0.3)
     ax.legend(frameon=False)
@@ -140,13 +147,14 @@ def main() -> None:
     parser.add_argument("--ufmr-label", default="UFMR")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--csv", type=Path, default=DEFAULT_CSV)
+    parser.add_argument("--log-x", action="store_true", help="Use a log-scaled repeat axis.")
     args = parser.parse_args()
 
     series_specs = args.series if args.series else [(args.label, args.input)]
     series = [(label, parse_results(path)) for label, path in series_specs]
     ufmr_rows = parse_results(args.ufmr_input) if args.ufmr_input.exists() else []
     write_csv(series + ([(args.ufmr_label, ufmr_rows)] if ufmr_rows else []), args.csv)
-    plot(series, args.output, ufmr_rows=ufmr_rows, ufmr_label=args.ufmr_label)
+    plot(series, args.output, ufmr_rows=ufmr_rows, ufmr_label=args.ufmr_label, log_x=args.log_x)
     print(f"Wrote {args.csv}")
     print(f"Wrote {args.output}")
     for label, path in series_specs:

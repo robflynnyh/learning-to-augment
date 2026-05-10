@@ -57,6 +57,8 @@ segmented policy eval was run with `lr=8e-6`, 15 policy repeats, and produced:
 
 The plot shows that the newer/default RMM oracle remains best, while the RFM
 oracle only narrowly beats the matching UFMR line at its best repeat.
+After review, the plot was regenerated with a log-scaled repeat axis to make the
+early-repeat region easier to read across repeats `1` through `50`.
 
 Artifacts:
 
