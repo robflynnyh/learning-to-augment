@@ -1,0 +1,32 @@
+# Validation And Handoff
+
+Run the most targeted command or test that demonstrates the task is complete.
+
+For documentation-only changes, run `git diff --check` and inspect the diff.
+
+For code changes, run the narrowest relevant script or test. Prefer small smoke
+configs before launching full experiments.
+
+If validation cannot run, document the exact blocker and the command that should
+be run later.
+
+Commit completed changes on the issue branch.
+
+Push the branch to `origin`.
+
+Open a GitHub pull request using `/exp/exp4/acp21rjf/scripts/github-create-pr.sh`,
+using the issue `Branch/ref` as the PR base when provided, otherwise the
+repository default branch.
+
+Include the PR URL in the Linear completion comment.
+
+If pushing or PR creation fails, do not move the issue to `Done`; post a blocker
+comment with the exact failing command and error.
+
+Use the `linear_graphql` tool for Linear updates.
+
+Post one completion comment summarizing files changed, validation, output paths
+if any, GitHub PR URL, and residual risk.
+
+Move the issue to `Done` only when the requested work is complete and the GitHub
+handoff has succeeded.
