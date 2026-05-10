@@ -125,3 +125,28 @@ LINEAR_ENV_FILE=~/.config/learning-to-augment/linear.env bash -lc \
 
 Do not put `LINEAR_API_KEY` in command arguments, Slurm scripts, logs, Git,
 Linear comments, or shell history.
+
+## Multi-run arrays and finalizer callbacks
+
+For sweeps or other multi-run jobs submitted as Slurm arrays, do not require
+each GPU array task to post a Linear callback. A cleaner pattern is:
+
+1. Submit the GPU array job.
+2. Submit a lightweight finalizer job with a dependency on the array:
+
+   ```bash
+   finalizer_id="$(
+     sbatch --parsable \
+       --dependency=afterany:<array_job_id> \
+       <finalizer-callback-wrapper>.sbatch
+   )"
+   ```
+
+3. In the finalizer, inspect the array logs/results, decide the overall status,
+   and call `scripts/callbacks/linear_experiment_callback.py` once.
+4. In the Linear queue comment, record the array job ID, finalizer job ID, log
+   paths, expected result paths, and the exact completion-check command.
+
+Use `afterany` when Symphony should wake up after success or failure. The
+finalizer should summarize failed cells rather than hiding them behind a
+successful finalizer exit.

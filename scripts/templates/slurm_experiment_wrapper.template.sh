@@ -3,6 +3,10 @@
 # Copy this file to an issue-specific path, fill in the variables and command,
 # and keep the EXIT trap intact so Linear wakes Symphony when the job ends.
 # Submit from Stanage with: sbatch <issue-specific-wrapper>.sh
+#
+# For sweeps or GPU arrays, prefer a separate lightweight finalizer job submitted
+# with --dependency=afterany:<array_job_id>. That finalizer can inspect all array
+# logs/results and call scripts/callbacks/linear_experiment_callback.py once.
 
 #SBATCH --job-name=l2a-example
 #SBATCH --partition=gpu-h100-nvl

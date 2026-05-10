@@ -59,6 +59,15 @@ point for Mimas launch wrappers. Use
 `scripts/templates/slurm_experiment_wrapper.template.sh` as the starting point
 for Stanage Slurm launch wrappers. Keep the `EXIT` trap intact.
 
+For multi-run Stanage jobs such as sweeps or GPU job arrays, the callback can
+be implemented as a separate lightweight Slurm finalizer job instead of a
+callback in every array task. Submit the finalizer with a dependency on the GPU
+array, for example `--dependency=afterany:<array_job_id>`, and have that
+finalizer inspect the array logs/results, compute an overall status, call
+`scripts/callbacks/linear_experiment_callback.py`, and move the issue back to
+`Todo`. Record both the array job ID and finalizer job ID in the Linear queue
+comment.
+
 Do not queue a long GPU or CPU experiment if the launched code lacks this
 completion callback. First add or fix the hook, then validate the actual wrapper
 `EXIT` trap with the smallest practical smoke test or callback-only dry run.
