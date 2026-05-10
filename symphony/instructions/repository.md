@@ -17,6 +17,9 @@ relevant launcher before changing a run or starting a long job.
 experiment jobs. `scripts/templates/` contains wrapper templates for long Mimas
 and Stanage runs.
 
+`scripts/linear/` contains Linear helpers for issue-management tasks that need
+to work from detached or scripted contexts without Codex-only tools.
+
 `exp/results/` contains historical outputs, reproduction outputs, summaries,
 plotting inputs, and result notes. Prefer programmatic aggregation or parsing
 over hand-editing metrics.

@@ -17,6 +17,23 @@ the checked-out base branch. Do not commit directly to the base branch.
 
 Keep edits narrowly scoped to the issue.
 
+If you notice a separate concrete problem that is out of scope for the current
+issue, do not expand the current task to cover it. If it is actionable and worth
+tracking, create a new Linear issue with
+`scripts/linear/create_blocked_issue.py` and make it blocked by the current
+issue. Include concise evidence, the relevant path or command, and why it is
+separate from the current work. Mention the new issue in a Linear comment on the
+current issue. Do not create speculative or low-confidence issues.
+
+Example:
+
+```bash
+python3 scripts/linear/create_blocked_issue.py \
+  --blocked-by <current-issue-identifier> \
+  --title "Fix separate problem discovered during <current issue>" \
+  --description-file /tmp/followup.md
+```
+
 Prefer existing experiment configs, launchers, result directories, and helper
 functions over new abstractions.
 
