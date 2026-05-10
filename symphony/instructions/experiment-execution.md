@@ -40,11 +40,21 @@ shell error, timeout-wrapper exit, or manual termination where the shell can
 still run traps.
 
 Prefer an `EXIT` trap or equivalent wrapper-level hook that records the
-experiment exit status, then calls a real repo script that uses `LINEAR_API_KEY`
-to post a Linear comment with success or failure evidence, log path, output
-path, and residual risk. The callback should move the issue back to the Linear
-state named `Todo` so Symphony can resume finalization. Detached experiment
-processes cannot use Codex-only tools such as `linear_graphql`.
+experiment exit status, then calls `scripts/callbacks/linear_experiment_callback.py`.
+The callback uses `LINEAR_API_KEY` to post a Linear comment with success or
+failure evidence, log path, output path, and residual risk. It should move the
+issue back to the Linear state named `Todo` so Symphony can resume finalization.
+Detached experiment processes cannot use Codex-only tools such as
+`linear_graphql`.
+
+The wrapper should pass at least `--issue`, `--status-code`, `--log`,
+`--results`, `--runner-label`, `--queued-command`, `--branch`, and `--commit` to
+the callback when those values are known.
+
+Use `scripts/templates/queued_experiment_wrapper.template.sh` as the starting
+point for Mimas launch wrappers. Use
+`scripts/templates/slurm_experiment_wrapper.template.sh` as the starting point
+for Stanage Slurm launch wrappers. Keep the `EXIT` trap intact.
 
 Do not queue a long GPU or CPU experiment if the launched code lacks this
 completion callback. First add or fix the hook, then validate the actual wrapper

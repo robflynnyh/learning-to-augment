@@ -13,6 +13,10 @@ contains paper-faithful reproduction configs.
 `exp/launch_scripts/` contains cluster and local launch helpers. Read the
 relevant launcher before changing a run or starting a long job.
 
+`scripts/callbacks/` contains Linear callback helpers used by detached Symphony
+experiment jobs. `scripts/templates/` contains wrapper templates for long Mimas
+and Stanage runs.
+
 `exp/results/` contains historical outputs, reproduction outputs, summaries,
 plotting inputs, and result notes. Prefer programmatic aggregation or parsing
 over hand-editing metrics.
