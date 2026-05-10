@@ -44,6 +44,27 @@ Increasing repeat count generally helps, but the optimum does not always occur
 at repeat 50. RMM peaked at repeat 20 in both setups; RFM peaked at repeat 10
 for the newer/default setup and repeat 50 for the historical setup.
 
+## Newer/default Oracle Plot
+
+Robert requested an updated plot for the newer/default setup with RMM and RFM
+oracle curves plus no-adaptation and UFMR references. The missing matching UFMR
+segmented policy eval was run with `lr=8e-6`, 15 policy repeats, and produced:
+
+- No adaptation: `9.586%` WER
+- UFMR `lr=8e-6`: `9.041%` WER
+- RFM oracle best: `8.941%` WER at repeat 10
+- RMM oracle best: `8.732%` WER at repeat 20
+
+The plot shows that the newer/default RMM oracle remains best, while the RFM
+oracle only narrowly beats the matching UFMR line at its best repeat.
+
+Artifacts:
+
+- `exp/results/repro/oracle/newer_default_oracle_vs_ufmr.pdf`
+- `exp/results/repro/oracle/newer_default_oracle_vs_ufmr.csv`
+- `exp/results/repro/policy/UFMR_segmented/tedlium_lr8e-6.txt`
+- `exp/results/repro/policy/UFMR_segmented/logs/tedlium_lr8e-6.log`
+
 ## Evidence
 
 Result files:

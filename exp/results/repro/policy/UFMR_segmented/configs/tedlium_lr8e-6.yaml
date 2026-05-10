@@ -19,7 +19,7 @@ evaluation:
     use_random: false
   optim_args:
     lr: 8.0e-06
-  save_path: /exp/exp4/acp21rjf/learning-to-augment/exp/results/repro/policy/UFMR_segmented/tedlium_lr8e-6.txt
+  save_path: exp/results/repro/policy/UFMR_segmented/tedlium_lr8e-6.txt
 
 policy:
   lr: 0.0001

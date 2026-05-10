@@ -13,3 +13,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   completed for RMM/RFM at `1e-6/4e-2` and `8e-6/9e-2`; best result was RMM
   `lr=8e-6`, `search_lr=9e-2`, repeat 20, at `8.732%` WER on TEDLIUM3
   segmented test.
+- Added the ROB-60 newer/default oracle plot at
+  `exp/results/repro/oracle/newer_default_oracle_vs_ufmr.pdf` with source CSV
+  beside it. The missing matching UFMR segmented policy eval was run at
+  `lr=8e-6`, giving `9.041%` WER versus no-adaptation `9.586%`, RFM oracle
+  best `8.941%`, and RMM oracle best `8.732%`.

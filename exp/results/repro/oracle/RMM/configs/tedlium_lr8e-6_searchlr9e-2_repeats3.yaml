@@ -19,7 +19,7 @@ evaluation:
   optim_args:
     lr: 8.0e-06
     single_step_lr: 9.0e-02
-  save_path: /exp/exp4/acp21rjf/learning-to-augment/exp/results/repro/oracle/RMM/tedlium_lr8e-6_searchlr9e-2.txt
+  save_path: exp/results/repro/oracle/RMM/tedlium_lr8e-6_searchlr9e-2.txt
 
 policy:
   lr: 0.0001

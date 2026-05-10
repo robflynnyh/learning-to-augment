@@ -11,6 +11,8 @@ RESULTS_ROOT = REPO_ROOT / "exp/results"
 REPRO_ROOT = RESULTS_ROOT / "repro"
 ORACLE_REPRO_ROOT = REPRO_ROOT / "oracle"
 POLICY_REPRO_ROOT = REPRO_ROOT / "policy"
+ORACLE_REPRO_RESULT_DIR = "exp/results/repro/oracle"
+POLICY_REPRO_RESULT_DIR = "exp/results/repro/policy"
 ASR_MODEL = "/store/store5/data/acp21rjf_checkpoints/l2augment/asr/step_105360.pt"
 UFMR_MODEL = "/store/store5/data/acp21rjf_checkpoints/l2augment/ufmr/mseloss/model.pt"
 PYTHON = "PYTHONDONTWRITEBYTECODE=1 python3"
@@ -57,7 +59,7 @@ evaluation:
   optim_args:
     lr: {lr:.1e}
     single_step_lr: {single_step_lr:.1e}
-  save_path: {ORACLE_REPRO_ROOT}/RMM/tedlium_lr{lr_name}_searchlr{search_lr_name}.txt
+  save_path: {ORACLE_REPRO_RESULT_DIR}/RMM/tedlium_lr{lr_name}_searchlr{search_lr_name}.txt
 
 policy:
   lr: 0.0001
@@ -96,7 +98,7 @@ evaluation:
   optim_args:
     lr: {lr:.1e}
     single_step_lr: {single_step_lr:.1e}
-  save_path: {ORACLE_REPRO_ROOT}/RFM/tedlium_lr{lr_name}_searchlr{search_lr_name}.txt
+  save_path: {ORACLE_REPRO_RESULT_DIR}/RFM/tedlium_lr{lr_name}_searchlr{search_lr_name}.txt
 
 policy:
   lr: 0.0001
@@ -127,7 +129,7 @@ evaluation:
     use_random: false
   optim_args:
     lr: {lr:.1e}
-  save_path: {POLICY_REPRO_ROOT}/UFMR_segmented/tedlium_lr{lr_name}.txt
+  save_path: {POLICY_REPRO_RESULT_DIR}/UFMR_segmented/tedlium_lr{lr_name}.txt
 
 policy:
   lr: 0.0001
