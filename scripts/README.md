@@ -44,6 +44,11 @@ point for Mimas screen jobs. Use
 `scripts/templates/slurm_experiment_wrapper.template.sh` as a starting point for
 Stanage Slurm jobs. Keep the `EXIT` trap intact.
 
+Before queueing a long job, smoke test the exact wrapper or Slurm finalizer that
+will be launched. A helper-level `--check-only` proves Linear access; it does
+not prove that the real shell trap, environment, log path, and callback
+arguments work together.
+
 ## Blocked Follow-Up Issues
 
 Use `scripts/linear/create_blocked_issue.py` when Symphony finds a concrete,

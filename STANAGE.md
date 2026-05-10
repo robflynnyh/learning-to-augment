@@ -126,6 +126,11 @@ LINEAR_ENV_FILE=~/.config/learning-to-augment/linear.env bash -lc \
 Do not put `LINEAR_API_KEY` in command arguments, Slurm scripts, logs, Git,
 Linear comments, or shell history.
 
+This check only validates Linear API access. Before submitting the real long
+job, also smoke test the actual Slurm wrapper or finalizer that will be launched
+so the `EXIT` trap, environment loading, log path, and callback arguments are
+exercised together.
+
 ## Multi-run arrays and finalizer callbacks
 
 For sweeps or other multi-run jobs submitted as Slurm arrays, do not require
@@ -150,3 +155,6 @@ each GPU array task to post a Linear callback. A cleaner pattern is:
 Use `afterany` when Symphony should wake up after success or failure. The
 finalizer should summarize failed cells rather than hiding them behind a
 successful finalizer exit.
+
+Before submitting the real array, smoke test the finalizer callback path with a
+tiny no-op or callback-only dependency chain.

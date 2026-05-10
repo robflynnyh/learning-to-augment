@@ -71,6 +71,11 @@ comment.
 Do not queue a long GPU or CPU experiment if the launched code lacks this
 completion callback. First add or fix the hook, then validate the actual wrapper
 `EXIT` trap with the smallest practical smoke test or callback-only dry run.
+Always smoke test the real callback path before queueing the long job. This
+means testing the wrapper or finalizer that will actually be launched, not just
+syntax-checking the script or running the callback helper in isolation. For
+Slurm array finalizers, smoke test the finalizer submission/callback path before
+submitting the real array.
 
 When Symphony relaunches from a callback comment, inspect the log and results
 before deciding whether to finalize, diagnose, or rerun. If a run failed, fix
