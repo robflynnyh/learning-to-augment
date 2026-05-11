@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_RESULTS_DIR = SCRIPT_DIR.parent
+DEFAULT_RESULTS_DIR = SCRIPT_DIR.parent / "historical_results"
 
 
 def load_distribution(path: Path) -> tuple[list[int], list[float]]:

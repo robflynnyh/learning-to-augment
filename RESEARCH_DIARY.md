@@ -34,3 +34,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Extended the ROB-73 render to 10 unconditional VQ mask LM samples with an
   overview grid, per-sample PNG/PDF masks, toy-spectrogram visualizations, and
   per-sample VQ-code metadata.
+- Reorganized `exp/results/` for ROB-74: older reference artifacts now live
+  under `exp/results/historical_results/`, while newer resumed-work outputs
+  remain under `exp/results/repro/`. Treat the historical numbers as reference
+  material until they are reverified.

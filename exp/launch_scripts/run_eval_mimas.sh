@@ -5,7 +5,7 @@
 #   ./run_eval_mimas.sh <path/to/config.yaml> [test_wer|test_cer]
 #
 # - Rewrites the YAML to point at the local /store/store5 checkpoints and
-#   a results path under exp/results/UFMR_mimas/.
+#   a results path under exp/results/historical_results/UFMR_mimas/.
 # - Sets L2A_*_DIR env vars so l2augment.utils.data resolves datasets
 #   under /store/store4/data on this box.
 # - Activates the flash_attn_pytorch2 conda env and runs exp/eval.py.
@@ -55,7 +55,7 @@ REPO_DIR="$(cd "$EXP_DIR/.." && pwd)"
 CONFIG_ABS="$(cd "$(dirname "$CONFIG")" && pwd)/$(basename "$CONFIG")"
 TAG="$(basename "$CONFIG_ABS" .yaml)"
 PARENT="$(basename "$(dirname "$CONFIG_ABS")")"
-OUT_DIR="$EXP_DIR/results/UFMR_mimas/$UFMR_VARIANT/$PARENT"
+OUT_DIR="$EXP_DIR/results/historical_results/UFMR_mimas/$UFMR_VARIANT/$PARENT"
 mkdir -p "$OUT_DIR"
 PATCHED="$OUT_DIR/${TAG}.yaml"
 SAVE_PATH="$OUT_DIR/${TAG}.txt"

@@ -97,7 +97,7 @@ So the two are functionally near-identical — both train the same WER-only rank
 
 - **Save destination** — separate folders so the two runs don't overwrite each other.
 - **Defaulted vs. explicit reward weighting** — `UFMR_wer.yaml` makes the WER-only objective explicit; `UFMR.yaml` just inherits it from `CustomDataset`'s defaults.
-- **Reference eval** — `UFMR.yaml` is set up to eval on Earnings-22 test (10 repeats) while `UFMR_wer.yaml` evals on TEDLIUM dev (15 repeats). This is the metric you'd see in `results/UFMR/single_epoch/{e22,tedlium_dev,...}.txt`.
+- **Reference eval** — `UFMR.yaml` is set up to eval on Earnings-22 test (10 repeats) while `UFMR_wer.yaml` evals on TEDLIUM dev (15 repeats). This is the metric you'd see in `results/historical_results/UFMR/single_epoch/{e22,tedlium_dev,...}.txt`.
 
 > Note: the `model_save_path` for `UFMR.yaml` is named `test_cer/model.pt` despite the run being WER-only; the directory name is misleading. The actual CER+WER joint-objective config is `UFMR_wer_cer.yaml` (`cer_weight: 0.5, wer_weight: 0.5`), which writes to a separate folder.
 

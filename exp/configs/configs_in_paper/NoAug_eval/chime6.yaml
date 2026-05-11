@@ -22,7 +22,7 @@ evaluation:
     use_random: true
   optim_args:
     lr: 8e-7
-  save_path: /users/acp21rjf/learning-to-augment/exp/results/NoAug/chime6.txt
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/historical_results/NoAug/chime6.txt
 
 policy:
   lr: 1e-4
