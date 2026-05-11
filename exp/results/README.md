@@ -12,10 +12,10 @@ Historical result directories remain at the top level, for example `RMM/`, `RFM/
 repro/
   oracle/
     RMM/
-      configs/
+      tedlium_grid.yaml
       tedlium_lr*_searchlr*.txt
     RFM/
-      configs/
+      tedlium_grid.yaml
       tedlium_lr*_searchlr*.txt
     jobs/
       rmm_historical_then_recent.sh
@@ -24,8 +24,8 @@ repro/
     launch_single_sequential.sh
   policy/
     UFMR_segmented/
-      configs/
       run_lr_sweep_cpu.sh
+      tedlium_grid.yaml
       tedlium_lr*.txt
 ```
 
@@ -76,10 +76,13 @@ Each setup evaluates candidate counts:
 1, 2, 3, 4, 5, 10, 20, 50
 ```
 
-Generated configs live under:
+Grid configs live under:
 
-- `repro/oracle/RMM/configs/`
-- `repro/oracle/RFM/configs/`
+- `repro/oracle/RMM/tedlium_grid.yaml`
+- `repro/oracle/RFM/tedlium_grid.yaml`
+
+The launch scripts materialize ordinary one-run YAMLs under ignored
+`.generated/` directories next to each grid YAML.
 
 The policy stream scripts live under:
 

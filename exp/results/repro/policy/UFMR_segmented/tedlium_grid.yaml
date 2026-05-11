@@ -18,9 +18,19 @@ evaluation:
     repeats: 15
     use_random: false
   optim_args:
-    lr: 1.0e-06
-  save_path: /exp/exp4/acp21rjf/learning-to-augment/exp/results/repro/policy/UFMR_segmented/tedlium_lr1e-6.txt
+    lr: 1e-6
+  save_path: /exp/exp4/acp21rjf/learning-to-augment/exp/results/repro/policy/UFMR_segmented/tedlium_lr{grid_label:evaluation.optim_args.lr}.txt
 
 policy:
-  lr: 0.0001
+  lr: 1e-4
   class: UnconditionalFrequencyMaskingRanker
+
+grid:
+  name: ufmr_segmented_repro_tedlium_test
+  id_template: "tedlium_lr{grid_label:evaluation.optim_args.lr}"
+  axes:
+    evaluation.optim_args.lr:
+      - value: 1e-6
+        label: "1e-6"
+      - value: 8e-6
+        label: "8e-6"
