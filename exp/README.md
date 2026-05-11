@@ -41,6 +41,7 @@ All scripts take `--config path/to/file.yaml` and load the YAML with OmegaConf.
 | `eval.py` | Loads a trained policy and an ASR checkpoint, runs the configured rollout function (`singlestep` / `multistep`), reports WER / CER. |
 | `oracle_eval.py` | Same evaluation framework but uses an oracle (ground-truth-aware) policy — gives the upper bound that learnt policies are compared against. |
 | `run_sweep.py` | Launches a wandb sweep using one of the YAMLs in `sweep_configs/`. |
+| `run_config_grid.py` | Expands one grid-style YAML into ordinary per-run configs and launches them sequentially, with Mimas `with-gpu`, or through Slurm. |
 | `segment.py` | Pre-segments long audio for evaluation / generation. |
 
 ## Configs
@@ -68,6 +69,64 @@ dataset:              # rollout dataset options (load_audio, clamping, …)
 policy:               # policy class (must match a name in models.py) + lr
 generation:           # save_dir for rollouts produced by generate.py
 ```
+
+Grid-style configs are supported for runs that only differ by a small number of
+parameters. Put shared settings at the top level and add a `grid:` block:
+
+```yaml
+evaluation:
+  search_repeats: 1
+  optim_args:
+    lr: 1e-6
+
+grid:
+  name: oracle_repeats
+  id_template: "repeats_{evaluation.search_repeats}"
+  id_path: evaluation.id
+  axes:
+    evaluation.search_repeats: [1, 2, 3, 4]
+```
+
+Materialize and inspect the per-run YAMLs without launching:
+
+```bash
+python exp/run_config_grid.py \
+  --grid-config exp/configs/configs_in_paper/oracle_eval/RMM/tedlium_grid.yaml \
+  --materialize-only
+```
+
+Launch sequentially on the current machine:
+
+```bash
+python exp/run_config_grid.py \
+  --grid-config exp/configs/configs_in_paper/oracle_eval/RMM/tedlium_grid.yaml \
+  --entrypoint "python oracle_eval.py --config {config}" \
+  --workdir exp
+```
+
+Launch separate queued jobs on Mimas:
+
+```bash
+python exp/run_config_grid.py \
+  --grid-config exp/configs/configs_in_paper/oracle_eval/RMM/tedlium_grid.yaml \
+  --mode mimas \
+  --parallel \
+  --gpu-pool 1,2 \
+  --entrypoint "python oracle_eval.py --config {config}" \
+  --workdir exp
+```
+
+Launch separate Slurm jobs on Stanage or another Slurm cluster:
+
+```bash
+python exp/run_config_grid.py \
+  --grid-config exp/configs/configs_in_paper/oracle_eval/RMM/tedlium_grid.yaml \
+  --mode slurm \
+  --sbatch-script exp/launch_scripts/run_eval_oracle_cpu.sh
+```
+
+Generated one-run configs are written under `.generated/` next to the grid YAML
+by default and are intentionally ignored by Git.
 
 ### `configs/configs_in_paper/`
 

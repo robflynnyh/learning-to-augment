@@ -1,7 +1,5 @@
 checkpointing:
   asr_model: "/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt"
-  #asr_model: "/mnt/parscratch/users/acp21rjf/spotify/checkpoints_seq_scheduler_rb/n_seq_sched_2048_rp_1/step_105360.pt" 
-  #"/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_4096_rp_1/step_105360.pt"
 
 training:
   device: 'cuda'
@@ -11,9 +9,9 @@ training:
   model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/UMLM/tmp_modelgpu.pt
   tmp_model_save_path: /mnt/parscratch/users/acp21rjf/l2augment_model/UMLM/tmp_modelgpu.pt
 
-evaluation: 
+evaluation:
   rollout_setting: 'search'
-  search_repeats: 10
+  search_repeats: 5
   dataset: 'tedlium'
   split: 'test'
   use_cer: false
@@ -36,4 +34,24 @@ policy:
       codebook_size: 2048
       use_vq: true
 
-
+grid:
+  name: uvqlm_oracle_tedlium_idx1_repeats
+  cases:
+    - id: tedlium_5_no_save
+      values:
+        evaluation.search_repeats: 5
+        evaluation.save_path: ""
+    - id: tedlium_5_2
+      evaluation.search_repeats: 5
+    - id: tedlium_5_3
+      evaluation.search_repeats: 5
+    - id: tedlium_5_4
+      evaluation.search_repeats: 5
+    - id: tedlium_10
+      evaluation.search_repeats: 10
+    - id: tedlium_10_2
+      evaluation.search_repeats: 10
+    - id: tedlium_10_3
+      evaluation.search_repeats: 10
+    - id: tedlium_10_4
+      evaluation.search_repeats: 10

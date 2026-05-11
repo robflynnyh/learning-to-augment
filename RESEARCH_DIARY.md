@@ -21,3 +21,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   Earnings-22, Rev16, and CHiME-6. Small result summaries and comparison tables
   are under `exp/results/repro/policy/ROB-62_result_repo_2048_1epoch/`; TAL
   remains missing because it was not mirrored on this host.
+- Added ROB-71 grid-style config support via `exp/run_config_grid.py` and
+  converted the repetitive oracle eval YAML fanout to `tedlium_grid.yaml`
+  configs that materialize one-run YAMLs under ignored `.generated/`
+  directories at launch time.
