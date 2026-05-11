@@ -29,7 +29,7 @@ evaluation:
   epochs: 1
   optim_args:
     lr: 5e-6
-  save_path: /users/acp21rjf/learning-to-augment/exp/results/multistep_FM_ranker/e22.txt
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/historical_results/multistep_FM_ranker/e22.txt
 
 # dataset:
 #   load_audio: true

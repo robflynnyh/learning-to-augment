@@ -202,7 +202,12 @@ Each `.sh` is a SLURM batch script: it activates the conda env, `cd`s into `exp/
 
 ## Results (`results/`)
 
-Per-method directories (`UFMR`, `RFM`, `RMM`, `NoAug`, `UVQLM`, `CMultiStepVQLM`, `multistep_FM_ranker`) hold checkpoints / metric dumps written by training and evaluation runs. Aggregate plots and the figure notebook live in `results/figures/` and `results/vis.ipynb`.
+Older per-method directories (`UFMR`, `RFM`, `RMM`, `NoAug`, `UVQLM`,
+`CMultiStepVQLM`, `multistep_FM_ranker`) now live under
+`results/historical_results/` and hold reference checkpoints / metric dumps
+written by earlier training and evaluation runs. Newer resumed-work outputs live
+under `results/repro/`. Aggregate historical plots and the figure notebook live
+in `results/historical_results/figures/` and `results/historical_results/vis.ipynb`.
 
 ## Typical workflow
 
@@ -210,6 +215,8 @@ Per-method directories (`UFMR`, `RFM`, `RMM`, `NoAug`, `UVQLM`, `CMultiStepVQLM`
 2. If the policy needs offline data, run `generate.py` (and optionally `generate_teacher_logits.py`) to populate `generation.save_dir`.
 3. Train: `python train_freq_mask.py --config <cfg>` (or the appropriate `train_*.py`).
 4. Evaluate: `python eval.py --config <eval_cfg>`; compare to `oracle_eval.py` for an upper bound and to `NoAug_eval/` for a lower bound.
-5. Inspect results in `results/<method>/` and `results/vis.ipynb`.
+5. Inspect older reference results in `results/historical_results/<method>/`,
+newer reproduction outputs in `results/repro/`, and the historical figure
+notebook at `results/historical_results/vis.ipynb`.
 
 On the cluster, replace step 3/4 with `sbatch launch_scripts/<script>.sh`.

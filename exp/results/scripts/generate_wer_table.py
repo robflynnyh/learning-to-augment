@@ -37,7 +37,7 @@ DATASETS = [
 ]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_RESULTS_DIR = SCRIPT_DIR.parent
+DEFAULT_RESULTS_DIR = SCRIPT_DIR.parent / "historical_results"
 DEFAULT_OUTPUT = DEFAULT_RESULTS_DIR / "figures/learnt_self_training_wer_table.txt"
 
 

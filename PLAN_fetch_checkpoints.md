@@ -92,4 +92,4 @@ These steps were used on `mimas`, ssh-ing to Stanage. Adapt paths if running fro
 exp/launch_scripts/run_eval_mimas.sh <config.yaml> [variant]
 ```
 
-`<config.yaml>` is one of `exp/configs/configs_in_paper/UFRM/UFRM_eval/{singlestep,singleepoch,multiepoch}/*.yaml`. `[variant]` is any subdirectory of `ufmr/` (defaults to `test_wer`); the script falls back to `tmp_model.pt` automatically when no `model.pt` exists (the `test/` variant). Results land at `exp/results/UFMR_mimas/<variant>/<regime>/<dataset>.txt`.
+`<config.yaml>` is one of `exp/configs/configs_in_paper/UFRM/UFRM_eval/{singlestep,singleepoch,multiepoch}/*.yaml`. `[variant]` is any subdirectory of `ufmr/` (defaults to `test_wer`); the script falls back to `tmp_model.pt` automatically when no `model.pt` exists (the `test/` variant). Results land at `exp/results/historical_results/UFMR_mimas/<variant>/<regime>/<dataset>.txt`.

@@ -49,7 +49,7 @@ DATASETS = [
 
 METHODS = ["UFMR", "Random FM"]
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_RESULTS_DIR = SCRIPT_DIR.parent
+DEFAULT_RESULTS_DIR = SCRIPT_DIR.parent / "historical_results"
 
 
 def result_specs(results_dir: Path, epoch: int) -> list[ResultSpec]:

@@ -26,7 +26,7 @@ RESULT_RE = re.compile(
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_RESULTS_DIR = SCRIPT_DIR.parent
+DEFAULT_RESULTS_DIR = SCRIPT_DIR.parent / "historical_results"
 DEFAULT_INPUT = DEFAULT_RESULTS_DIR / "RMM/oracle/tedlium.txt"
 DEFAULT_UFMR_INPUT = DEFAULT_RESULTS_DIR / "UFMR_segmented/tedlium.txt"
 DEFAULT_OUTPUT = DEFAULT_RESULTS_DIR / "figures/oracle_wer.pdf"
