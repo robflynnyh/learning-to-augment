@@ -71,6 +71,54 @@ grid:
         self.assertEqual(no_save.evaluation.save_path, "")
         self.assertEqual(saved_repeat.evaluation.search_repeats, 10)
 
+    def test_cases_can_product_with_axes_and_labeled_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "grid.yaml"
+            output_dir = Path(tmp) / "generated"
+            config_path.write_text(
+                """
+evaluation:
+  search_repeats: 1
+  optim_args:
+    lr: 1e-6
+    single_step_lr: 4e-2
+  save_path: "results/lr{grid_label:evaluation.optim_args.lr}_searchlr{grid_label:evaluation.optim_args.single_step_lr}.txt"
+grid:
+  name: paired
+  combine: product
+  id_template: "lr{grid_label:evaluation.optim_args.lr}_searchlr{grid_label:evaluation.optim_args.single_step_lr}_repeats{evaluation.search_repeats}"
+  axes:
+    evaluation.search_repeats: [1, 2]
+  cases:
+    - id: historical
+      values:
+        evaluation.optim_args.lr:
+          value: 1e-6
+          label: "1e-6"
+        evaluation.optim_args.single_step_lr:
+          value: 4e-2
+          label: "4e-2"
+    - id: recent
+      values:
+        evaluation.optim_args.lr:
+          value: 8e-6
+          label: "8e-6"
+        evaluation.optim_args.single_step_lr:
+          value: 9e-2
+          label: "9e-2"
+""".lstrip()
+            )
+
+            specs = materialize_grid_configs(config_path, output_dir)
+            recent = OmegaConf.load(output_dir / "lr8e-6_searchlr9e-2_repeats2.yaml")
+
+            self.assertEqual(len(specs), 4)
+            self.assertTrue((output_dir / "lr1e-6_searchlr4e-2_repeats1.yaml").exists())
+            self.assertTrue((output_dir / "lr8e-6_searchlr9e-2_repeats2.yaml").exists())
+        self.assertEqual(recent.evaluation.search_repeats, 2)
+        self.assertEqual(recent.evaluation.optim_args.lr, 8e-6)
+        self.assertTrue(recent.evaluation.save_path.endswith("lr8e-6_searchlr9e-2.txt"))
+
 
 if __name__ == "__main__":
     unittest.main()

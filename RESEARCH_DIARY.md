@@ -25,3 +25,6 @@ reproduce results, interpret metrics, or avoid known failure modes.
   converted the repetitive oracle eval YAML fanout to `tedlium_grid.yaml`
   configs that materialize one-run YAMLs under ignored `.generated/`
   directories at launch time.
+- Followed up ROB-71 by converting the remaining repro configs under
+  `exp/results/repro/` to grid YAMLs and adding paired-case/product grid support
+  for runs that sweep repeats over matched `lr` / `single_step_lr` settings.

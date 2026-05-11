@@ -87,6 +87,35 @@ grid:
     evaluation.search_repeats: [1, 2, 3, 4]
 ```
 
+Axis values can also carry labels for stable file names while preserving numeric
+types in the generated config. Use `combine: product` when a small set of named
+cases should be crossed with one or more axes:
+
+```yaml
+evaluation:
+  search_repeats: 1
+  optim_args:
+    lr: 1e-6
+    single_step_lr: 4e-2
+  save_path: "results/lr{grid_label:evaluation.optim_args.lr}_searchlr{grid_label:evaluation.optim_args.single_step_lr}.txt"
+
+grid:
+  name: oracle_search
+  combine: product
+  id_template: "lr{grid_label:evaluation.optim_args.lr}_searchlr{grid_label:evaluation.optim_args.single_step_lr}_repeats{evaluation.search_repeats}"
+  axes:
+    evaluation.search_repeats: [1, 2, 3, 4]
+  cases:
+    - id: historical
+      values:
+        evaluation.optim_args.lr:
+          value: 1e-6
+          label: "1e-6"
+        evaluation.optim_args.single_step_lr:
+          value: 4e-2
+          label: "4e-2"
+```
+
 Materialize and inspect the per-run YAMLs without launching:
 
 ```bash

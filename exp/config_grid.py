@@ -32,26 +32,40 @@ def _get_by_path(config, dotted_path, default=""):
         return default
 
 
-def _render_template(template, config, run_id, index):
+def _decode_grid_value(value):
+    if isinstance(value, dict) and "value" in value:
+        label = value.get("label", value["value"])
+        return value["value"], str(label)
+    return value, str(value)
+
+
+def _render_template(template, config, run_id, index, labels=None, case_id=""):
+    labels = labels or {}
+
     def replace(match):
         key = match.group(1)
         if key == "grid_id":
             return run_id
         if key == "grid_index":
             return str(index)
+        if key == "grid_case_id":
+            return case_id
+        if key.startswith("grid_label:"):
+            path = key.split(":", 1)[1]
+            return labels.get(path, str(_get_by_path(config, path, match.group(0))))
         return str(_get_by_path(config, key, match.group(0)))
 
     return re.sub(r"\{([^{}]+)\}", replace, template)
 
 
-def _render_strings(value, config, run_id, index):
+def _render_strings(value, config, run_id, index, labels=None, case_id=""):
     if isinstance(value, str):
-        return _render_template(value, config, run_id, index)
+        return _render_template(value, config, run_id, index, labels, case_id)
     if isinstance(value, list):
-        return [_render_strings(item, config, run_id, index) for item in value]
+        return [_render_strings(item, config, run_id, index, labels, case_id) for item in value]
     if isinstance(value, dict):
         return {
-            key: _render_strings(item, config, run_id, index)
+            key: _render_strings(item, config, run_id, index, labels, case_id)
             for key, item in value.items()
         }
     return value
@@ -67,10 +81,13 @@ def _axis_combinations(axes):
         axis_values = plain_axes[key]
         if not isinstance(axis_values, list) or len(axis_values) == 0:
             raise ValueError(f"grid.axes.{key} must be a non-empty list")
-        values.append(axis_values)
+        values.append([_decode_grid_value(value) for value in axis_values])
 
     for combination in itertools.product(*values):
-        yield dict(zip(keys, combination))
+        yield {
+            "values": dict((key, value) for key, (value, label) in zip(keys, combination)),
+            "labels": dict((key, label) for key, (value, label) in zip(keys, combination)),
+        }
 
 
 def _case_combinations(cases):
@@ -80,11 +97,35 @@ def _case_combinations(cases):
     for case in plain_cases:
         if not isinstance(case, dict):
             raise ValueError("Every grid.cases entry must be a mapping")
-        values = deepcopy(case.get("values", {}))
+        raw_values = deepcopy(case.get("values", {}))
         for key, value in case.items():
             if key not in RESERVED_CASE_KEYS:
-                values[key] = value
-        yield case.get("id") or case.get("label"), values
+                raw_values[key] = value
+        values = {}
+        labels = {}
+        for key, value in raw_values.items():
+            decoded_value, label = _decode_grid_value(value)
+            values[key] = decoded_value
+            labels[key] = label
+        yield {
+            "id": case.get("id") or case.get("label"),
+            "values": values,
+            "labels": labels,
+        }
+
+
+def _merge_runs(case_run, axis_run):
+    values = {}
+    labels = {}
+    case_id = ""
+    if case_run:
+        values.update(case_run["values"])
+        labels.update(case_run["labels"])
+        case_id = str(case_run.get("id") or "")
+    if axis_run:
+        values.update(axis_run["values"])
+        labels.update(axis_run["labels"])
+    return {"id": case_id, "values": values, "labels": labels}
 
 
 def expand_grid_config(path):
@@ -98,9 +139,13 @@ def expand_grid_config(path):
     base_container.pop(GRID_KEY, None)
 
     run_specs = []
-    axis_runs = [(None, values) for values in _axis_combinations(grid.get("axes"))]
+    axis_runs = list(_axis_combinations(grid.get("axes")))
     case_runs = list(_case_combinations(grid.get("cases")))
-    runs = axis_runs + case_runs
+    if grid.get("combine") == "product" and axis_runs and case_runs:
+        runs = [_merge_runs(case_run, axis_run) for case_run in case_runs for axis_run in axis_runs]
+    else:
+        runs = [_merge_runs(None, axis_run) for axis_run in axis_runs]
+        runs.extend(_merge_runs(case_run, None) for case_run in case_runs)
     if not runs:
         raise ValueError("Grid config must define grid.axes or grid.cases")
 
@@ -108,17 +153,20 @@ def expand_grid_config(path):
     id_path = grid.get("id_path")
     grid_name = grid.get("name", source_path.stem)
 
-    for index, (case_id, values) in enumerate(runs, start=1):
+    for index, run in enumerate(runs, start=1):
+        case_id = run["id"]
+        values = run["values"]
+        labels = run["labels"]
         run_config = OmegaConf.create(deepcopy(base_container))
         for dotted_path, value in values.items():
             _set_by_path(run_config, dotted_path, value)
 
-        if case_id:
+        if id_template:
+            run_id = _render_template(str(id_template), run_config, "", index, labels, str(case_id))
+        elif case_id:
             run_id = str(case_id)
-        elif id_template:
-            run_id = _render_template(str(id_template), run_config, "", index)
         else:
-            parts = [f"{key}={_sanitize(value)}" for key, value in values.items()]
+            parts = [f"{key}={_sanitize(labels.get(key, value))}" for key, value in values.items()]
             run_id = "__".join(parts)
         run_id = _sanitize(run_id)
 
@@ -131,6 +179,7 @@ def expand_grid_config(path):
             "index": index,
             "source": str(source_path),
             "parameters": values,
+            "labels": labels,
         }
 
         rendered_container = _render_strings(
@@ -138,6 +187,8 @@ def expand_grid_config(path):
             run_config,
             run_id,
             index,
+            labels,
+            str(case_id),
         )
         run_config = OmegaConf.create(rendered_container)
         run_specs.append(
