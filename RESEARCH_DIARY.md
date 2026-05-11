@@ -14,3 +14,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
   mirrored Spotify 2048 checkpoint, `5e-6`, one evaluation epoch, RFM
   `FrequencyMaskingRanker`, and RMM `MixedMaskingRanker`; use
   `scripts/launch_rob62_result_repo_eval.sh` for the queued run.
+
+## 2026-05-11
+
+- Completed the ROB-62 corrected result-repo comparison on Mimas for TED-LIUM,
+  Earnings-22, Rev16, and CHiME-6. Small result summaries and comparison tables
+  are under `exp/results/repro/policy/ROB-62_result_repo_2048_1epoch/`; TAL
+  remains missing because it was not mirrored on this host.

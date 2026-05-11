@@ -73,7 +73,7 @@ def main() -> int:
     csv_path = ROOT / "comparison.csv"
     md_path = ROOT / "comparison.md"
     with csv_path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 

@@ -44,3 +44,11 @@ After results are available, generate the comparison table with:
 ```bash
 python3 exp/results/repro/policy/ROB-62_result_repo_2048_1epoch/summarize_results.py
 ```
+
+Completed outputs from the 2026-05-11 Mimas run:
+
+- Raw result summaries: `RFM/{tedlium,e22,rev16,chime6}.txt` and
+  `RMM/{tedlium,e22,rev16,chime6}.txt`.
+- Comparison tables: `comparison.csv` and `comparison.md`.
+- Local run logs, not committed: `logs/run.log` and `logs/queued-screen.log`.
+- TAL status: not run because TAL was not mirrored on this Mimas host.
