@@ -1,7 +1,7 @@
 # Oracle Reproduction Outcome
 
 Issue: ROB-60
-Date: 2026-05-10
+Date: 2026-05-11
 
 ## Scope
 
@@ -21,6 +21,10 @@ The empty files `tedlium_lr1e-6_searchlr9e-2.txt` and
 `tedlium_lr8e-6_searchlr4e-2.txt` under both `RMM/` and `RFM/` are inactive
 cross-combination leftovers and are not part of this sweep.
 
+A follow-up Mimas GPU sweep requested by Robert also completed for both RMM and
+RFM at `lr=1e-5`, `search_lr=2e-1`, using the same repeats
+`1, 2, 3, 4, 5, 10, 20, 50`.
+
 ## Summary
 
 Baseline original WER was `9.586%` for all rows.
@@ -31,6 +35,28 @@ Baseline original WER was `9.586%` for all rows.
 | RFM | `lr=8e-6`, `search_lr=9e-2` | 10 | 8.941% | 0.645 pp | 6.7% | 9.005% |
 | RMM | `lr=1e-6`, `search_lr=4e-2` | 20 | 8.991% | 0.595 pp | 6.2% | 9.069% |
 | RFM | `lr=1e-6`, `search_lr=4e-2` | 50 | 9.186% | 0.400 pp | 4.2% | 9.186% |
+
+## Follow-up GPU Sweep
+
+Robert requested one additional oracle sweep at `lr=1e-5`, `search_lr=2e-1`.
+The detached GPU run completed successfully on 2026-05-11. The baseline
+original WER is approximately `9.586%`; the exact original WER varies slightly
+between repeated rows in the generated text files.
+
+| Method | Setup | Best repeat | Best WER | Abs. gain | Relative gain | Repeat 50 WER |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| RMM | `lr=1e-5`, `search_lr=2e-1` | 50 | 8.569% | 1.014 pp | 10.6% | 8.569% |
+| RFM | `lr=1e-5`, `search_lr=2e-1` | 50 | 8.842% | 0.742 pp | 7.7% | 8.842% |
+
+The follow-up sweep improved over the previous newer/default oracle setup:
+
+| Method | Previous best `8e-6/9e-2` | Follow-up best `1e-5/2e-1` | Delta |
+| --- | ---: | ---: | ---: |
+| RMM | 8.732% | 8.569% | -0.163 pp |
+| RFM | 8.941% | 8.842% | -0.099 pp |
+
+Both follow-up curves continued to improve through repeat 50, unlike the
+previous RMM `8e-6/9e-2` result, which peaked at repeat 20.
 
 ## Interpretation
 
@@ -60,6 +86,13 @@ oracle only narrowly beats the matching UFMR line at its best repeat.
 After review, the plot was regenerated with a log-scaled repeat axis to make the
 early-repeat region easier to read across repeats `1` through `50`.
 
+A second log-scaled comparison plot now includes the follow-up `1e-5/2e-1`
+RMM/RFM curves alongside the previous `8e-6/9e-2` curves and the same UFMR/no
+adaptation references:
+
+- `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.pdf`
+- `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.csv`
+
 Artifacts:
 
 - `exp/results/repro/oracle/newer_default_oracle_vs_ufmr.pdf`
@@ -73,10 +106,15 @@ Result files:
 
 - `exp/results/repro/oracle/RMM/tedlium_lr1e-6_searchlr4e-2.txt`
 - `exp/results/repro/oracle/RMM/tedlium_lr8e-6_searchlr9e-2.txt`
+- `exp/results/repro/oracle/RMM/tedlium_lr1e-5_searchlr2e-1.txt`
 - `exp/results/repro/oracle/RFM/tedlium_lr1e-6_searchlr4e-2.txt`
 - `exp/results/repro/oracle/RFM/tedlium_lr8e-6_searchlr9e-2.txt`
+- `exp/results/repro/oracle/RFM/tedlium_lr1e-5_searchlr2e-1.txt`
 
 Launcher and log:
 
 - `exp/results/repro/oracle/launch_single_sequential.sh`
 - `exp/results/repro/oracle/logs/single_sequential.log`
+- `exp/results/repro/oracle/jobs/lr1e-5_searchlr2e-1_gpu.sh`
+- `exp/results/repro/oracle/logs/lr1e-5_searchlr2e-1_gpu.log`
+- `exp/results/repro/oracle/logs/lr1e-5_searchlr2e-1_queue.log`

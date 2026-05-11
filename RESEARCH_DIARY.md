@@ -25,3 +25,13 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `lr=1e-5`, `search_lr=2e-1` setting. The sweep adds RMM/RFM configs for
   repeats `1 2 3 4 5 10 20 50` and uses a Mimas `with-gpu` screen wrapper with
   a Linear completion callback.
+
+## 2026-05-11
+
+- Finalized the ROB-60 follow-up GPU oracle sweep at `lr=1e-5`,
+  `search_lr=2e-1`. RMM reached `8.569%` WER at repeat 50 and RFM reached
+  `8.842%` WER at repeat 50, improving over the previous `8e-6/9e-2` oracle
+  bests by `0.163` pp and `0.099` pp respectively. Added the small result text
+  files plus `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.{csv,pdf}`;
+  large screen/GPU logs remain uncommitted and are referenced from
+  `exp/results/repro/oracle/OUTCOME.md`.
