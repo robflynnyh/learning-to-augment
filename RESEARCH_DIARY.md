@@ -46,3 +46,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/oracle/OUTCOME.md` and regenerated
   `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.{csv,pdf}` to include the
   completed curves; large screen/GPU logs remain uncommitted.
+- Prepared a third ROB-60 follow-up oracle sweep for Robert's requested
+  `lr=1e-5`, `search_lr=9e-2` setting after confirming that no completed
+  artifacts existed for that cell. Added RMM/RFM configs for repeats
+  `1 2 3 4 5 10 20 50` and a Mimas `with-gpu` screen wrapper with a Linear
+  completion callback.

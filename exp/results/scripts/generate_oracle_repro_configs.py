@@ -267,7 +267,13 @@ echo "[$(date -Iseconds)] completed ROB-60 oracle sweep lr={lr_name} search_lr={
 def main() -> None:
     search_repeats = [1, 2, 3, 4, 5, 10, 20, 50]
     search_repeats_arg = " ".join(str(repeats) for repeats in search_repeats)
-    oracle_combos = [(1e-6, 4e-2), (8e-6, 9e-2), (1e-5, 2e-1), (8e-6, 2e-1)]
+    oracle_combos = [
+        (1e-6, 4e-2),
+        (8e-6, 9e-2),
+        (1e-5, 2e-1),
+        (8e-6, 2e-1),
+        (1e-5, 9e-2),
+    ]
     ufmr_lrs = [1e-6, 8e-6]
 
     rmm_config_dir = ORACLE_REPRO_ROOT / "RMM/configs"
@@ -302,6 +308,7 @@ def main() -> None:
 
     write(job_dir / "lr1e-5_searchlr2e-1_gpu.sh", gpu_wrapper(1e-5, 2e-1, search_repeats_arg))
     write(job_dir / "lr8e-6_searchlr2e-1_gpu.sh", gpu_wrapper(8e-6, 2e-1, search_repeats_arg))
+    write(job_dir / "lr1e-5_searchlr9e-2_gpu.sh", gpu_wrapper(1e-5, 9e-2, search_repeats_arg))
 
     for lr in ufmr_lrs:
         write(ufmr_config_dir / f"tedlium_lr{fmt_lr(lr)}.yaml", ufmr_policy_config(lr))
