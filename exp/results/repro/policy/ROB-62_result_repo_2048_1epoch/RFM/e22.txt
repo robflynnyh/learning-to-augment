@@ -1,1 +1,0 @@
-ID: ROB-62-result-repo-2048-1epoch-5e-6-RFM-e22 - Dataset: earnings22 - Split: test - Epochs: 1 - Original_WER: 0.2352184302432449 - Updated_WER: 0.19833343545125912

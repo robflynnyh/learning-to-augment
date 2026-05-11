@@ -1,1 +1,0 @@
-ID: ROB-62-result-repo-2048-1epoch-5e-6-RMM-tedlium - Dataset: tedlium - Split: test - Epochs: 1 - Original_WER: 0.08534467481835903 - Updated_WER: 0.07772461456671984
