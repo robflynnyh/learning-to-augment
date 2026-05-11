@@ -31,3 +31,6 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Added ROB-73 unconditional VQ mask LM sample rendering under
   `exp/results/repro/unconditional_lm/ROB-73_sample/`, using the trained UMLM
   and BVAE checkpoints cached from Stanage into the local Mimas checkpoint cache.
+- Extended the ROB-73 render to 10 unconditional VQ mask LM samples with an
+  overview grid, per-sample PNG/PDF masks, toy-spectrogram visualizations, and
+  per-sample VQ-code metadata.

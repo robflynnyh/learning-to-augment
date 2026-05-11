@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render one unconditional VQ mask LM sample as viewable artifacts."""
+"""Render unconditional VQ mask LM samples as viewable artifacts."""
 
 from __future__ import annotations
 
@@ -56,6 +56,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--frames", type=int, default=512)
     parser.add_argument("--seed", type=int, default=73)
     parser.add_argument(
+        "--num-samples",
+        type=int,
+        default=10,
+        help="Number of unconditional mask samples to render.",
+    )
+    parser.add_argument(
         "--deterministic",
         action="store_true",
         help="Use argmax decoding instead of multinomial sampling.",
@@ -101,8 +107,39 @@ def save_mask_figure(mask: np.ndarray, path_base: Path) -> None:
     plt.close(fig)
 
 
-def save_masked_toy_spectrogram(mask: np.ndarray, path_base: Path) -> None:
-    rng = np.random.default_rng(0)
+def save_mask_grid(masks: list[np.ndarray], path_base: Path) -> None:
+    cols = min(5, len(masks))
+    rows = int(np.ceil(len(masks) / cols))
+    fig, axes = plt.subplots(
+        rows,
+        cols,
+        figsize=(3.2 * cols, 2.0 * rows),
+        constrained_layout=True,
+    )
+    axes = np.asarray(axes).reshape(-1)
+    for idx, ax in enumerate(axes):
+        if idx >= len(masks):
+            ax.axis("off")
+            continue
+        ax.imshow(
+            masks[idx],
+            aspect="auto",
+            origin="lower",
+            interpolation="nearest",
+            cmap="gray",
+            vmin=0,
+            vmax=1,
+        )
+        ax.set_title(f"sample {idx:02d}")
+        ax.set_xlabel("time")
+        ax.set_ylabel("mel")
+    for suffix in (".png", ".pdf"):
+        fig.savefig(path_base.with_suffix(suffix), dpi=180)
+    plt.close(fig)
+
+
+def save_masked_toy_spectrogram(mask: np.ndarray, path_base: Path, seed: int) -> None:
+    rng = np.random.default_rng(seed)
     frames = mask.shape[1]
     time = np.linspace(0, 1, frames, dtype=np.float32)[None, :]
     mel = np.linspace(0, 1, mask.shape[0], dtype=np.float32)[:, None]
@@ -127,38 +164,69 @@ def main() -> None:
     args = parse_args()
     if args.frames <= 0:
         raise ValueError("--frames must be positive")
+    if args.num_samples <= 0:
+        raise ValueError("--num-samples must be positive")
 
     torch.manual_seed(args.seed)
     model = load_model(args.umlm_checkpoint, args.bvae_checkpoint)
     lengths = torch.tensor([args.frames], dtype=torch.long)
     prediction_steps = int(model.mask_enc.calc_downsampled_length(lengths)[0].item())
 
-    with torch.no_grad():
-        mask_pred, generation = model.generate(
-            sample=not args.deterministic,
-            target_output_length=args.frames,
-            target_prediction_steps=prediction_steps,
-            device="cpu",
-        )
-
-    mask = mask_pred.squeeze(0).cpu().numpy().astype(np.float32)
-    codes = generation.cpu().tolist()
-
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    save_mask_figure(mask, args.output_dir / "unconditional_vq_mask_sample")
-    save_masked_toy_spectrogram(mask, args.output_dir / "toy_spectrogram_masked")
+    samples_dir = args.output_dir / "samples"
+    samples_dir.mkdir(parents=True, exist_ok=True)
+
+    masks = []
+    sample_metadata = []
+    with torch.no_grad():
+        for sample_idx in range(args.num_samples):
+            mask_pred, generation = model.generate(
+                sample=not args.deterministic,
+                target_output_length=args.frames,
+                target_prediction_steps=prediction_steps,
+                device="cpu",
+            )
+
+            mask = mask_pred.squeeze(0).cpu().numpy().astype(np.float32)
+            codes = generation.cpu().tolist()
+            masks.append(mask)
+
+            sample_stem = f"sample_{sample_idx:02d}"
+            save_mask_figure(mask, samples_dir / f"{sample_stem}_mask")
+            save_masked_toy_spectrogram(
+                mask,
+                samples_dir / f"{sample_stem}_toy_spectrogram_masked",
+                seed=args.seed + sample_idx,
+            )
+            sample_metadata.append(
+                {
+                    "sample_index": sample_idx,
+                    "mask_path_png": f"samples/{sample_stem}_mask.png",
+                    "mask_path_pdf": f"samples/{sample_stem}_mask.pdf",
+                    "toy_spectrogram_path_png": (
+                        f"samples/{sample_stem}_toy_spectrogram_masked.png"
+                    ),
+                    "toy_spectrogram_path_pdf": (
+                        f"samples/{sample_stem}_toy_spectrogram_masked.pdf"
+                    ),
+                    "generated_code_count": len(codes),
+                    "mask_keep_fraction": float(mask.mean()),
+                    "generated_vq_codes": codes,
+                }
+            )
+
+    save_mask_grid(masks, args.output_dir / "unconditional_vq_mask_samples_grid")
 
     metadata = {
         "seed": args.seed,
+        "num_samples": args.num_samples,
         "frames": args.frames,
-        "mel_bins": int(mask.shape[0]),
+        "mel_bins": int(masks[0].shape[0]),
         "prediction_steps": prediction_steps,
-        "generated_code_count": len(codes),
-        "mask_keep_fraction": float(mask.mean()),
         "decoding": "argmax" if args.deterministic else "multinomial_sample",
         "umlm_checkpoint": str(args.umlm_checkpoint),
         "bvae_checkpoint": str(args.bvae_checkpoint),
-        "generated_vq_codes": codes,
+        "samples": sample_metadata,
     }
     (args.output_dir / "metadata.json").write_text(
         json.dumps(metadata, indent=2) + "\n",
@@ -167,18 +235,21 @@ def main() -> None:
     (args.output_dir / "README.md").write_text(
         "\n".join(
             [
-                "# ROB-73 Unconditional VQ Mask LM Sample",
+                "# ROB-73 Unconditional VQ Mask LM Samples",
                 "",
                 "Generated by `exp/results/scripts/render_unconditional_lm_sample.py`.",
                 "",
                 "Artifacts:",
                 "",
-                "- `unconditional_vq_mask_sample.png` / `.pdf`: the sampled binary mask",
-                "  decoded by the trained unconditional VQ mask LM.",
-                "- `toy_spectrogram_masked.png` / `.pdf`: the same mask applied to a",
-                "  synthetic spectrogram only to make the kept/dropped regions easier to view.",
+                "- `unconditional_vq_mask_samples_grid.png` / `.pdf`: overview of all",
+                "  sampled binary masks decoded by the trained unconditional VQ mask LM.",
+                "- `samples/sample_XX_mask.png` / `.pdf`: each individual sampled binary",
+                "  mask.",
+                "- `samples/sample_XX_toy_spectrogram_masked.png` / `.pdf`: the same mask",
+                "  applied to a synthetic spectrogram only to make the kept/dropped regions",
+                "  easier to view.",
                 "- `metadata.json`: seed, frame count, checkpoint paths, keep fraction, and",
-                "  sampled VQ code sequence.",
+                "  sampled VQ code sequence for each sample.",
                 "",
                 "The model output itself is the binary 80-by-time mask. The toy spectrogram",
                 "is not model-generated audio; it is a visualization aid.",
@@ -189,8 +260,12 @@ def main() -> None:
     )
 
     print(f"Wrote artifacts to {args.output_dir}")
-    print(f"mask_shape={mask.shape} keep_fraction={metadata['mask_keep_fraction']:.4f}")
-    print(f"generated_code_count={len(codes)} prediction_steps={prediction_steps}")
+    keep_fractions = [sample["mask_keep_fraction"] for sample in sample_metadata]
+    print(
+        f"num_samples={args.num_samples} mask_shape={masks[0].shape} "
+        f"keep_fraction_range={min(keep_fractions):.4f}-{max(keep_fractions):.4f}"
+    )
+    print(f"prediction_steps={prediction_steps}")
 
 
 if __name__ == "__main__":
