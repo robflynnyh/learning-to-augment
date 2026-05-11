@@ -99,7 +99,16 @@ def plot(
     original_wer = 100.0 * series[0][1][0]["original_wer"]
 
     fig, ax = plt.subplots(figsize=(6.8, 3.6))
-    colors = ["#0072B2", "#D55E00", "#009E73", "#CC79A7"]
+    colors = [
+        "#0072B2",
+        "#D55E00",
+        "#009E73",
+        "#CC79A7",
+        "#F0E442",
+        "#56B4E9",
+        "#E69F00",
+        "#000000",
+    ]
     for idx, (label, rows) in enumerate(series):
         if not rows:
             continue
