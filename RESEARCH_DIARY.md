@@ -28,6 +28,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Followed up ROB-71 by converting the remaining repro configs under
   `exp/results/repro/` to grid YAMLs and adding paired-case/product grid support
   for runs that sweep repeats over matched `lr` / `single_step_lr` settings.
+- Added ROB-73 unconditional VQ mask LM sample rendering under
+  `exp/results/repro/unconditional_lm/ROB-73_sample/`, using the trained UMLM
+  and BVAE checkpoints cached from Stanage into the local Mimas checkpoint cache.
+- Extended the ROB-73 render to 10 unconditional VQ mask LM samples with an
+  overview grid, per-sample PNG/PDF masks, toy-spectrogram visualizations, and
+  per-sample VQ-code metadata.
 - Reorganized `exp/results/` for ROB-74: older reference artifacts now live
   under `exp/results/historical_results/`, while newer resumed-work outputs
   remain under `exp/results/repro/`. Treat the historical numbers as reference
