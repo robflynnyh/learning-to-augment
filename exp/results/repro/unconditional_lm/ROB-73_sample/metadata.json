@@ -1,0 +1,26 @@
+{
+  "seed": 73,
+  "frames": 512,
+  "mel_bins": 80,
+  "prediction_steps": 13,
+  "generated_code_count": 13,
+  "mask_keep_fraction": 0.508715808391571,
+  "decoding": "multinomial_sample",
+  "umlm_checkpoint": "/store/store5/data/acp21rjf_checkpoints/l2augment/models/UMLM/modelgpu.pt",
+  "bvae_checkpoint": "/store/store5/data/acp21rjf_checkpoints/l2augment/models/bvae/bvae_USINGTHISFORNOW_2048gpu.pt",
+  "generated_vq_codes": [
+    539,
+    1453,
+    821,
+    1724,
+    1198,
+    1125,
+    10,
+    1835,
+    889,
+    1923,
+    1857,
+    1396,
+    1923
+  ]
+}
