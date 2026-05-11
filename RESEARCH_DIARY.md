@@ -35,3 +35,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   files plus `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.{csv,pdf}`;
   large screen/GPU logs remain uncommitted and are referenced from
   `exp/results/repro/oracle/OUTCOME.md`.
+- Prepared a second ROB-60 follow-up oracle sweep for Robert's requested
+  `lr=8e-6`, `search_lr=2e-1` setting. Added RMM/RFM configs for repeats
+  `1 2 3 4 5 10 20 50` and a Mimas `with-gpu` screen wrapper with a Linear
+  completion callback.

@@ -165,7 +165,18 @@ run_combo 8e-6 9e-2
 """
 
 
-def lr1e5_searchlr2e1_gpu_wrapper(repeats_arg: str) -> str:
+def screen_safe_lr_name(lr_name: str) -> str:
+    return lr_name.replace("-", "")
+
+
+def gpu_wrapper(lr: float, single_step_lr: float, repeats_arg: str) -> str:
+    lr_name = fmt_lr(lr)
+    search_lr_name = fmt_lr(single_step_lr)
+    screen_lr_name = screen_safe_lr_name(lr_name)
+    screen_search_lr_name = screen_safe_lr_name(search_lr_name)
+    screen_name = f"l2a_oracle_lr{screen_lr_name}_searchlr{screen_search_lr_name}"
+    log_stem = f"lr{lr_name}_searchlr{search_lr_name}"
+    script_name = f"{log_stem}_gpu.sh"
     return f"""#!/usr/bin/env bash
 set -uo pipefail
 
@@ -178,11 +189,11 @@ if [ -f /exp/exp4/acp21rjf/symphony-config/.env ]; then
 fi
 
 LINEAR_ISSUE="${{LINEAR_ISSUE:-ROB-60}}"
-SCREEN_NAME="${{SCREEN_NAME:-l2a_oracle_lr1e5_searchlr2e1}}"
+SCREEN_NAME="${{SCREEN_NAME:-{screen_name}}}"
 RUNNER_LABEL="${{RUNNER_LABEL:-screen:${{SCREEN_NAME}}}}"
-LOG_PATH="${{LOG_PATH:-exp/results/repro/oracle/logs/lr1e-5_searchlr2e-1_gpu.log}}"
+LOG_PATH="${{LOG_PATH:-exp/results/repro/oracle/logs/{log_stem}_gpu.log}}"
 RESULTS_PATH="${{RESULTS_PATH:-exp/results/repro/oracle}}"
-QUEUED_COMMAND="${{QUEUED_COMMAND:-screen -L -Logfile exp/results/repro/oracle/logs/lr1e-5_searchlr2e-1_queue.log -dmS l2a_oracle_lr1e5_searchlr2e1 bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-60 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- bash exp/results/repro/oracle/jobs/lr1e-5_searchlr2e-1_gpu.sh'}}"
+QUEUED_COMMAND="${{QUEUED_COMMAND:-screen -L -Logfile exp/results/repro/oracle/logs/{log_stem}_queue.log -dmS {screen_name} bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-60 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- bash exp/results/repro/oracle/jobs/{script_name}'}}"
 GIT_BRANCH="${{GIT_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || printf 'unknown')}}"
 GIT_COMMIT="${{GIT_COMMIT:-$(git rev-parse HEAD 2>/dev/null || printf 'unknown')}}"
 
@@ -208,7 +219,7 @@ on_exit() {{
     --queued-command "${{QUEUED_COMMAND}}" \\
     --branch "${{GIT_BRANCH}}" \\
     --commit "${{GIT_COMMIT}}" \\
-    --note "ROB-60 lr=1e-5/search_lr=2e-1 oracle sweep finished. Inspect RMM/RFM text files and update OUTCOME/plot before final handoff." \\
+    --note "ROB-60 lr={lr_name}/search_lr={search_lr_name} oracle sweep finished. Inspect RMM/RFM text files and update OUTCOME/plot before final handoff." \\
     "${{callback_args[@]}}"
   callback_status=$?
   if [ "${{callback_status}}" -ne 0 ]; then
@@ -227,7 +238,7 @@ mkdir -p "${{MPLCONFIGDIR}}" "$(dirname "${{LOG_PATH}}")" \\
 
 exec > >(tee -a "${{LOG_PATH}}") 2>&1
 
-echo "[$(date -Iseconds)] ROB-60 oracle sweep lr=1e-5 search_lr=2e-1"
+echo "[$(date -Iseconds)] ROB-60 oracle sweep lr={lr_name} search_lr={search_lr_name}"
 echo "branch=${{GIT_BRANCH}} commit=${{GIT_COMMIT}} CUDA_VISIBLE_DEVICES=${{CUDA_VISIBLE_DEVICES:-unset}}"
 
 if [ "${{L2A_CALLBACK_SMOKE_TEST:-0}}" = "1" ]; then
@@ -237,26 +248,26 @@ fi
 
 run_combo() {{
   local method="$1"
-  local result="exp/results/repro/oracle/${{method}}/tedlium_lr1e-5_searchlr2e-1.txt"
+  local result="exp/results/repro/oracle/${{method}}/tedlium_lr{lr_name}_searchlr{search_lr_name}.txt"
   : > "${{result}}"
   for repeats in {repeats_arg}; do
     echo "[$(date -Iseconds)] running ${{method}} repeats=${{repeats}}"
     PYTHONDONTWRITEBYTECODE=1 python3 exp/oracle_eval.py \\
-      --config "exp/results/repro/oracle/${{method}}/configs/tedlium_lr1e-5_searchlr2e-1_repeats${{repeats}}.yaml"
+      --config "exp/results/repro/oracle/${{method}}/configs/tedlium_lr{lr_name}_searchlr{search_lr_name}_repeats${{repeats}}.yaml"
   done
 }}
 
 run_combo RMM
 run_combo RFM
 
-echo "[$(date -Iseconds)] completed ROB-60 oracle sweep lr=1e-5 search_lr=2e-1"
+echo "[$(date -Iseconds)] completed ROB-60 oracle sweep lr={lr_name} search_lr={search_lr_name}"
 """
 
 
 def main() -> None:
     search_repeats = [1, 2, 3, 4, 5, 10, 20, 50]
     search_repeats_arg = " ".join(str(repeats) for repeats in search_repeats)
-    oracle_combos = [(1e-6, 4e-2), (8e-6, 9e-2), (1e-5, 2e-1)]
+    oracle_combos = [(1e-6, 4e-2), (8e-6, 9e-2), (1e-5, 2e-1), (8e-6, 2e-1)]
     ufmr_lrs = [1e-6, 8e-6]
 
     rmm_config_dir = ORACLE_REPRO_ROOT / "RMM/configs"
@@ -289,10 +300,8 @@ def main() -> None:
             oracle_stream_script(method, search_repeats_arg),
         )
 
-    write(
-        job_dir / "lr1e-5_searchlr2e-1_gpu.sh",
-        lr1e5_searchlr2e1_gpu_wrapper(search_repeats_arg),
-    )
+    write(job_dir / "lr1e-5_searchlr2e-1_gpu.sh", gpu_wrapper(1e-5, 2e-1, search_repeats_arg))
+    write(job_dir / "lr8e-6_searchlr2e-1_gpu.sh", gpu_wrapper(8e-6, 2e-1, search_repeats_arg))
 
     for lr in ufmr_lrs:
         write(ufmr_config_dir / f"tedlium_lr{fmt_lr(lr)}.yaml", ufmr_policy_config(lr))
