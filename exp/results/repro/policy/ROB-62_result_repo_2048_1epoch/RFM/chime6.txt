@@ -1,0 +1,1 @@
+ID: ROB-62-result-repo-2048-1epoch-5e-6-RFM-chime6 - Dataset: chime6 - Split: test - Epochs: 1 - Original_WER: 0.8435847726471625 - Updated_WER: 0.664152273528375
