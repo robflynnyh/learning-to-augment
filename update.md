@@ -9,7 +9,7 @@ tmux session:
 - `ufmr-gpu3`
 
 Log file:
-- `exp/results/UFMR_mimas/logs/ufmr-gpu3.log`
+- `exp/results/historical_results/UFMR_mimas/logs/ufmr-gpu3.log`
 
 Current run:
 - `mseloss/multiepoch/chime6.yaml`
@@ -19,4 +19,4 @@ Fixes already in place:
 - `run_eval_mimas.sh` exports `PYTHONPATH` to the repo root
 
 Outputs will land under:
-- `exp/results/UFMR_mimas/<variant>/<regime>/<dataset>.txt`
+- `exp/results/historical_results/UFMR_mimas/<variant>/<regime>/<dataset>.txt`

@@ -19,7 +19,7 @@ evaluation:
     use_random: true
   optim_args:
     lr: 5e-6
-  save_path: /users/acp21rjf/learning-to-augment/exp/results/RMM/singleepoch/tedlium_dev.txt
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/historical_results/RMM/singleepoch/tedlium_dev.txt
 
 policy:
   lr: 1e-4

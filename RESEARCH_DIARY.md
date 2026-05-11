@@ -28,3 +28,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Followed up ROB-71 by converting the remaining repro configs under
   `exp/results/repro/` to grid YAMLs and adding paired-case/product grid support
   for runs that sweep repeats over matched `lr` / `single_step_lr` settings.
+- Reorganized `exp/results/` for ROB-74: older reference artifacts now live
+  under `exp/results/historical_results/`, while newer resumed-work outputs
+  remain under `exp/results/repro/`. Treat the historical numbers as reference
+  material until they are reverified.

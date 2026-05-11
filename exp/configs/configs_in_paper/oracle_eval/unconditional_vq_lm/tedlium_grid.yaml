@@ -22,7 +22,7 @@ evaluation:
   optim_args:
     lr: 1e-6
     single_step_lr: 8e-2
-  save_path: /users/acp21rjf/learning-to-augment/exp/results/UVQLM/oracle/tedlium8e2_idx1.txt
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/historical_results/UVQLM/oracle/tedlium8e2_idx1.txt
 
 policy:
   lr: 6e-4

@@ -19,7 +19,7 @@ evaluation:
   optim_args:
     lr: 2e-2
   rollout_fn: singlestep
-  #save_path: /users/acp21rjf/learning-to-augment/exp/results/UFMR/tedlium.txt
+  #save_path: /users/acp21rjf/learning-to-augment/exp/results/historical_results/UFMR/tedlium.txt
 
 policy:
   class: ConditionalMaskingPolicy 
