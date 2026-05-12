@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Queue-safe ROB-80 TED-LIUM LR sweep for RFM, RMM, and UFMR.
+# Queue-safe ROB-80 TED-LIUM dev LR sweep for RFM, RMM, and UFMR.
 
 set -uo pipefail
 
@@ -42,7 +42,7 @@ on_exit() {
     --branch "${GIT_BRANCH}"
     --commit "${GIT_COMMIT}"
     --target-state "${CALLBACK_TARGET_STATE:-Todo}"
-    --note "${CALLBACK_NOTE:-ROB-80 TED-LIUM RFM/RMM/UFMR LR sweep wrapper exited. See exp/results/repro/sweeps/ROB-80_OUTCOME.md for the result table when complete.}"
+    --note "${CALLBACK_NOTE:-ROB-80 TED-LIUM dev RFM/RMM/UFMR LR sweep wrapper exited. See exp/results/repro/sweeps/ROB-80_OUTCOME.md for the result table when complete.}"
     --tail-lines "${CALLBACK_TAIL_LINES:-80}"
     --max-log-chars "${CALLBACK_MAX_LOG_CHARS:-6000}"
     --max-comment-chars "${CALLBACK_MAX_COMMENT_CHARS:-10000}"
@@ -107,6 +107,8 @@ asr_ckpt = sys.argv[2]
 ufmr_ckpt = sys.argv[3]
 lrs = ("5e-6", "1e-5", "2e-5")
 epochs = (1, 5)
+dataset = "tedlium"
+split = "dev"
 methods = {
     "RFM": ("FrequencyMaskingRanker", None, 1, True),
     "RMM": ("MixedMaskingRanker", None, 1, True),
@@ -116,7 +118,7 @@ for method, (policy_class, policy_ckpt, repeats, use_random) in methods.items():
     (root / method / "configs").mkdir(parents=True, exist_ok=True)
     for epoch_count in epochs:
         for lr in lrs:
-            tag = f"tedlium_epoch{epoch_count}_lr{lr}"
+            tag = f"{dataset}_{split}_epoch{epoch_count}_lr{lr}"
             save_path = root / method / f"{tag}.txt"
             config_path = root / method / "configs" / f"{tag}.yaml"
             training_extra = ""
@@ -136,9 +138,9 @@ training:
   epochs: 100
 {training_extra}
 evaluation:
-  id: 'ROB-80-tedlium-{method}-epoch{epoch_count}-lr{lr}'
-  dataset: 'tedlium'
-  split: 'test'
+  id: 'ROB-80-{dataset}-{split}-{method}-epoch{epoch_count}-lr{lr}'
+  dataset: '{dataset}'
+  split: '{split}'
   use_cer: false
   epochs: {epoch_count}
   augmentation_config:
@@ -155,6 +157,11 @@ policy:
             )
             print(f"[rob80] wrote config {config_path}")
 PY
+
+if [ "${ROB80_CONFIG_ONLY:-0}" = "1" ]; then
+  echo "[rob80] config-only smoke path requested; exiting before eval."
+  exit 0
+fi
 
 source /store/store4/software/bin/anaconda3/etc/profile.d/conda.sh
 conda activate /store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2
@@ -178,7 +185,7 @@ cd "${REPO_DIR}/exp"
 for method in ${METHODS}; do
   for epoch_count in ${EPOCHS}; do
     for lr in ${LRS}; do
-      tag="tedlium_epoch${epoch_count}_lr${lr}"
+      tag="tedlium_dev_epoch${epoch_count}_lr${lr}"
       config="${RESULT_ROOT}/${method}/configs/${tag}.yaml"
       save_path="${RESULT_ROOT}/${method}/${tag}.txt"
       if [ ! -f "${config}" ]; then

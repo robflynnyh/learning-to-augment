@@ -3,9 +3,9 @@
 This directory is for issue-specific reproduction sweeps that are separate from
 the historical paper-result tree.
 
-## ROB-80 TED-LIUM Policy LR Sweep
+## ROB-80 TED-LIUM Dev Policy LR Sweep
 
-`scripts/launch_rob80_tedlium_policy_sweep.sh` runs the TED-LIUM test sweep for
+`scripts/launch_rob80_tedlium_policy_sweep.sh` runs the TED-LIUM dev sweep for
 `RFM`, `RMM`, and `UFMR` under:
 
 - `exp/results/repro/sweeps/RFM/`

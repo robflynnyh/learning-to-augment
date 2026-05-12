@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize ROB-80 TED-LIUM policy LR sweep results."""
+"""Summarize ROB-80 TED-LIUM dev policy LR sweep results."""
 
 from __future__ import annotations
 
@@ -20,6 +20,8 @@ RESULT_RE = re.compile(
 METHODS = ("RFM", "RMM", "UFMR")
 EPOCHS = (1, 5)
 LRS = ("5e-6", "1e-5", "2e-5")
+DATASET = "tedlium"
+SPLIT = "dev"
 
 
 def parse_result(path: Path, expected_epochs: int) -> tuple[float, float] | None:
@@ -30,7 +32,9 @@ def parse_result(path: Path, expected_epochs: int) -> tuple[float, float] | None
         match = RESULT_RE.search(line)
         if not match:
             continue
-        if match.group("dataset") != "tedlium":
+        if match.group("dataset") != DATASET:
+            continue
+        if match.group("split") != SPLIT:
             continue
         if int(match.group("epochs")) != expected_epochs:
             continue
@@ -43,7 +47,7 @@ def collect_rows(result_root: Path) -> list[dict[str, str]]:
     for method in METHODS:
         for epochs in EPOCHS:
             for lr in LRS:
-                result_path = result_root / method / f"tedlium_epoch{epochs}_lr{lr}.txt"
+                result_path = result_root / method / f"{DATASET}_{SPLIT}_epoch{epochs}_lr{lr}.txt"
                 parsed = parse_result(result_path, epochs)
                 row = {
                     "method": method,
@@ -89,7 +93,7 @@ def write_csv(rows: list[dict[str, str]], path: Path) -> None:
 def write_markdown(rows: list[dict[str, str]], path: Path) -> None:
     complete = sum(row["status"] == "complete" for row in rows)
     lines = [
-        "# ROB-80 TED-LIUM Policy LR Sweep",
+        "# ROB-80 TED-LIUM Dev Policy LR Sweep",
         "",
         f"Completed cells: {complete}/{len(rows)}",
         "",
