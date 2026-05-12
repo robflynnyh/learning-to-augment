@@ -38,3 +38,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   under `exp/results/historical_results/`, while newer resumed-work outputs
   remain under `exp/results/repro/`. Treat the historical numbers as reference
   material until they are reverified.
+
+## 2026-05-12
+
+- Added the ROB-80 TED-LIUM policy LR sweep wrapper for RFM, RMM, and UFMR under
+  `scripts/launch_rob80_tedlium_policy_sweep.sh`. It writes generated configs
+  and results under `exp/results/repro/sweeps/`, covers adaptation LRs `5e-6`,
+  `1e-5`, and `2e-5` for `1` and `5` epochs, and summarizes completed cells via
+  `scripts/summarize_rob80_tedlium_sweep.py`.
