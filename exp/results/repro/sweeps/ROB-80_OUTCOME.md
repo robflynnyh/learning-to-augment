@@ -2,7 +2,7 @@
 
 UFMR includes higher-LR follow-up cells requested after the initial sweep: `4e-5`, `8e-5`, and `1.6e-4`.
 
-Completed cells: 18/24
+Completed cells: 24/24
 
 | Method | Epochs | LR | Original WER | Updated WER | Abs Delta | Rel Delta % | Status |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
@@ -21,12 +21,12 @@ Completed cells: 18/24
 | UFMR | 1 | `5e-6` | 0.100088 | 0.088648 | -0.011440 | -11.43 | complete |
 | UFMR | 1 | `1e-5` | 0.100088 | 0.088703 | -0.011385 | -11.37 | complete |
 | UFMR | 1 | `2e-5` | 0.100088 | 0.089146 | -0.010943 | -10.93 | complete |
-| UFMR | 1 | `4e-5` |  |  |  |  | missing |
-| UFMR | 1 | `8e-5` |  |  |  |  | missing |
-| UFMR | 1 | `1.6e-4` |  |  |  |  | missing |
+| UFMR | 1 | `4e-5` | 0.100088 | 0.089146 | -0.010943 | -10.93 | complete |
+| UFMR | 1 | `8e-5` | 0.100088 | 0.090804 | -0.009285 | -9.28 | complete |
+| UFMR | 1 | `1.6e-4` | 0.100088 | 0.100420 | 0.000332 | 0.33 | complete |
 | UFMR | 5 | `5e-6` | 0.100088 | 0.088151 | -0.011938 | -11.93 | complete |
 | UFMR | 5 | `1e-5` | 0.100088 | 0.088759 | -0.011330 | -11.32 | complete |
 | UFMR | 5 | `2e-5` | 0.100088 | 0.087985 | -0.012103 | -12.09 | complete |
-| UFMR | 5 | `4e-5` |  |  |  |  | missing |
-| UFMR | 5 | `8e-5` |  |  |  |  | missing |
-| UFMR | 5 | `1.6e-4` |  |  |  |  | missing |
+| UFMR | 5 | `4e-5` | 0.100088 | 0.090251 | -0.009838 | -9.83 | complete |
+| UFMR | 5 | `8e-5` | 0.100088 | 0.096938 | -0.003150 | -3.15 | complete |
+| UFMR | 5 | `1.6e-4` | 0.100088 | 0.493202 | 0.393114 | 392.77 | complete |

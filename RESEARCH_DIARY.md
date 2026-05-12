@@ -54,3 +54,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   point landed at the highest tested LR. The wrapper and summarizer now include
   UFMR `4e-5`, `8e-5`, and `1.6e-4` for both 1 and 5 epochs while leaving the
   RFM/RMM grids unchanged.
+- Completed the ROB-80 UFMR higher-LR follow-up: all 24 TED-LIUM dev cells are
+  now summarized in `exp/results/repro/sweeps/ROB-80_OUTCOME.md`. The highest
+  UFMR LR (`1.6e-4`) diverged badly at 5 epochs, so subsequent segmented-dev
+  sweeps should stay centered on the original `5e-6`, `1e-5`, `2e-5` range.
+- Added a ROB-80 TED-LIUM segmented dev wrapper,
+  `scripts/launch_rob80_tedlium_segmented_policy_sweep.sh`, which reuses the
+  policy sweep runner with `dataset: tedlium3_segmented_data`, `split: dev`,
+  and a separate result root under `exp/results/repro/sweeps/segmented_dev/`.

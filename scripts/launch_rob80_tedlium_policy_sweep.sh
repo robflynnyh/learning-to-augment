@@ -25,6 +25,14 @@ UFMR_VARIANT="${UFMR_VARIANT:-test_wer}"
 UFMR_CKPT="${UFMR_CKPT:-/store/store5/data/acp21rjf_checkpoints/l2augment/ufmr/${UFMR_VARIANT}/model.pt}"
 BASE_LRS="${ROB80_BASE_LRS:-5e-6 1e-5 2e-5}"
 UFMR_EXTRA_LRS="${ROB80_UFMR_EXTRA_LRS:-4e-5 8e-5 1.6e-4}"
+DATASET="${ROB80_DATASET:-tedlium}"
+SPLIT="${ROB80_SPLIT:-dev}"
+TAG_PREFIX="${ROB80_TAG_PREFIX:-tedlium_dev}"
+TITLE="${ROB80_TITLE:-ROB-80 TED-LIUM Dev Policy LR Sweep}"
+NOTE="${ROB80_NOTE:-UFMR includes higher-LR follow-up cells requested after the initial sweep: \`4e-5\`, \`8e-5\`, and \`1.6e-4\`.}"
+CSV_NAME="${ROB80_CSV_NAME:-rob80_tedlium_policy_sweep.csv}"
+OUTCOME_NAME="${ROB80_OUTCOME_NAME:-ROB-80_OUTCOME.md}"
+INCLUDE_UFMR_EXTRA="${ROB80_INCLUDE_UFMR_EXTRA:-1}"
 
 on_exit() {
   status=$?
@@ -72,8 +80,12 @@ echo "[rob80] result_root=${RESULT_ROOT}"
 echo "[rob80] asr_ckpt=${ASR_CKPT}"
 echo "[rob80] ufmr_variant=${UFMR_VARIANT}"
 echo "[rob80] ufmr_ckpt=${UFMR_CKPT}"
+echo "[rob80] dataset=${DATASET}"
+echo "[rob80] split=${SPLIT}"
+echo "[rob80] tag_prefix=${TAG_PREFIX}"
 echo "[rob80] base_lrs=${BASE_LRS}"
 echo "[rob80] ufmr_extra_lrs=${UFMR_EXTRA_LRS}"
+echo "[rob80] include_ufmr_extra=${INCLUDE_UFMR_EXTRA}"
 echo "[rob80] cuda_visible_devices=${CUDA_VISIBLE_DEVICES:-unset}"
 
 if [ "${ROB80_CALLBACK_ONLY:-0}" = "1" ]; then
@@ -102,7 +114,7 @@ export L2A_TEDLIUM3_LEGACY_DIR="${L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TE
 export L2A_REV16_DIR="${L2A_REV16_DIR:-/store/store4/data/rev_benchmark}"
 export L2A_CHIME6_DIR="${L2A_CHIME6_DIR:-/store/store4/data/chime6/}"
 
-python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${UFMR_CKPT}" "${BASE_LRS}" "${UFMR_EXTRA_LRS}" <<'PY'
+python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${UFMR_CKPT}" "${BASE_LRS}" "${UFMR_EXTRA_LRS}" "${DATASET}" "${SPLIT}" "${TAG_PREFIX}" "${INCLUDE_UFMR_EXTRA}" <<'PY'
 import sys
 from pathlib import Path
 
@@ -111,9 +123,12 @@ asr_ckpt = sys.argv[2]
 ufmr_ckpt = sys.argv[3]
 base_lrs = tuple(sys.argv[4].split())
 ufmr_extra_lrs = tuple(sys.argv[5].split())
+dataset = sys.argv[6]
+split = sys.argv[7]
+tag_prefix = sys.argv[8]
+include_ufmr_extra = sys.argv[9] == "1"
 epochs = (1, 5)
-dataset = "tedlium"
-split = "dev"
+ufmr_lrs = base_lrs + (ufmr_extra_lrs if include_ufmr_extra else ())
 methods = {
     "RFM": ("FrequencyMaskingRanker", None, 1, True, base_lrs),
     "RMM": ("MixedMaskingRanker", None, 1, True, base_lrs),
@@ -122,14 +137,14 @@ methods = {
         ufmr_ckpt,
         15,
         False,
-        base_lrs + ufmr_extra_lrs,
+        ufmr_lrs,
     ),
 }
 for method, (policy_class, policy_ckpt, repeats, use_random, method_lrs) in methods.items():
     (root / method / "configs").mkdir(parents=True, exist_ok=True)
     for epoch_count in epochs:
         for lr in method_lrs:
-            tag = f"{dataset}_{split}_epoch{epoch_count}_lr{lr}"
+            tag = f"{tag_prefix}_epoch{epoch_count}_lr{lr}"
             save_path = root / method / f"{tag}.txt"
             config_path = root / method / "configs" / f"{tag}.yaml"
             training_extra = ""
@@ -197,13 +212,13 @@ for method in ${METHODS}; do
   method_lrs="${OVERRIDE_LRS}"
   if [ -z "${method_lrs}" ]; then
     method_lrs="${BASE_LRS}"
-    if [ "${method}" = "UFMR" ]; then
+    if [ "${method}" = "UFMR" ] && [ "${INCLUDE_UFMR_EXTRA}" = "1" ]; then
       method_lrs="${BASE_LRS} ${UFMR_EXTRA_LRS}"
     fi
   fi
   for epoch_count in ${EPOCHS}; do
     for lr in ${method_lrs}; do
-      tag="tedlium_dev_epoch${epoch_count}_lr${lr}"
+      tag="${TAG_PREFIX}_epoch${epoch_count}_lr${lr}"
       config="${RESULT_ROOT}/${method}/configs/${tag}.yaml"
       save_path="${RESULT_ROOT}/${method}/${tag}.txt"
       if [ ! -f "${config}" ]; then
@@ -231,5 +246,20 @@ for method in ${METHODS}; do
 done
 
 cd "${REPO_DIR}"
-python3 scripts/summarize_rob80_tedlium_sweep.py --result-root "${RESULT_ROOT}"
+summary_args=(
+  --result-root "${RESULT_ROOT}"
+  --dataset "${DATASET}"
+  --split "${SPLIT}"
+  --tag-prefix "${TAG_PREFIX}"
+  --csv-name "${CSV_NAME}"
+  --outcome-name "${OUTCOME_NAME}"
+  --title "${TITLE}"
+  --note "${NOTE}"
+)
+if [ "${INCLUDE_UFMR_EXTRA}" = "1" ]; then
+  summary_args+=(--include-ufmr-extra)
+else
+  summary_args+=(--no-include-ufmr-extra)
+fi
+python3 scripts/summarize_rob80_tedlium_sweep.py "${summary_args[@]}"
 echo "[rob80] finished"

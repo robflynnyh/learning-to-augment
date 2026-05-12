@@ -18,3 +18,14 @@ The initial sweep evaluates learning rates `5e-6`, `1e-5`, and `2e-5` for both
 highest tested learning rate. The launched wrapper writes generated YAML configs
 under each method's `configs/` folder and writes the final result table to
 `exp/results/repro/sweeps/ROB-80_OUTCOME.md`.
+
+`scripts/launch_rob80_tedlium_segmented_policy_sweep.sh` runs the requested
+TED-LIUM segmented dev follow-up with the same base LR grid (`5e-6`, `1e-5`,
+`2e-5`) and epochs (`1`, `5`) under:
+
+- `exp/results/repro/sweeps/segmented_dev/RFM/`
+- `exp/results/repro/sweeps/segmented_dev/RMM/`
+- `exp/results/repro/sweeps/segmented_dev/UFMR/`
+
+The segmented follow-up summary is written to
+`exp/results/repro/sweeps/segmented_dev/ROB-80_SEGMENTED_OUTCOME.md`.

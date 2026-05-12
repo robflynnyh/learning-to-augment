@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize ROB-80 TED-LIUM dev policy LR sweep results."""
+"""Summarize ROB-80 TED-LIUM policy LR sweep results."""
 
 from __future__ import annotations
 
@@ -20,16 +20,15 @@ RESULT_RE = re.compile(
 METHODS = ("RFM", "RMM", "UFMR")
 EPOCHS = (1, 5)
 BASE_LRS = ("5e-6", "1e-5", "2e-5")
-METHOD_LRS = {
-    "RFM": BASE_LRS,
-    "RMM": BASE_LRS,
-    "UFMR": BASE_LRS + ("4e-5", "8e-5", "1.6e-4"),
-}
-DATASET = "tedlium"
-SPLIT = "dev"
+UFMR_EXTRA_LRS = ("4e-5", "8e-5", "1.6e-4")
 
 
-def parse_result(path: Path, expected_epochs: int) -> tuple[float, float] | None:
+def parse_result(
+    path: Path,
+    expected_dataset: str,
+    expected_split: str,
+    expected_epochs: int,
+) -> tuple[float, float] | None:
     if not path.exists():
         return None
 
@@ -37,9 +36,9 @@ def parse_result(path: Path, expected_epochs: int) -> tuple[float, float] | None
         match = RESULT_RE.search(line)
         if not match:
             continue
-        if match.group("dataset") != DATASET:
+        if match.group("dataset") != expected_dataset:
             continue
-        if match.group("split") != SPLIT:
+        if match.group("split") != expected_split:
             continue
         if int(match.group("epochs")) != expected_epochs:
             continue
@@ -47,18 +46,37 @@ def parse_result(path: Path, expected_epochs: int) -> tuple[float, float] | None
     return None
 
 
-def collect_rows(result_root: Path) -> list[dict[str, str]]:
+def display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(Path.cwd()))
+    except ValueError:
+        return str(path)
+
+
+def collect_rows(
+    result_root: Path,
+    dataset: str,
+    split: str,
+    tag_prefix: str,
+    include_ufmr_extra: bool,
+) -> list[dict[str, str]]:
+    ufmr_lrs = BASE_LRS + (UFMR_EXTRA_LRS if include_ufmr_extra else ())
+    method_lrs = {
+        "RFM": BASE_LRS,
+        "RMM": BASE_LRS,
+        "UFMR": ufmr_lrs,
+    }
     rows: list[dict[str, str]] = []
     for method in METHODS:
         for epochs in EPOCHS:
-            for lr in METHOD_LRS[method]:
-                result_path = result_root / method / f"{DATASET}_{SPLIT}_epoch{epochs}_lr{lr}.txt"
-                parsed = parse_result(result_path, epochs)
+            for lr in method_lrs[method]:
+                result_path = result_root / method / f"{tag_prefix}_epoch{epochs}_lr{lr}.txt"
+                parsed = parse_result(result_path, dataset, split, epochs)
                 row = {
                     "method": method,
                     "epochs": str(epochs),
                     "lr": lr,
-                    "result_path": str(result_path),
+                    "result_path": display_path(result_path),
                 }
                 if parsed is None:
                     row.update(
@@ -95,19 +113,18 @@ def write_csv(rows: list[dict[str, str]], path: Path) -> None:
         writer.writerows(rows)
 
 
-def write_markdown(rows: list[dict[str, str]], path: Path) -> None:
+def write_markdown(rows: list[dict[str, str]], path: Path, title: str, note: str) -> None:
     complete = sum(row["status"] == "complete" for row in rows)
     lines = [
-        "# ROB-80 TED-LIUM Dev Policy LR Sweep",
-        "",
-        "UFMR includes higher-LR follow-up cells requested after the initial sweep: "
-        "`4e-5`, `8e-5`, and `1.6e-4`.",
+        f"# {title}",
         "",
         f"Completed cells: {complete}/{len(rows)}",
         "",
         "| Method | Epochs | LR | Original WER | Updated WER | Abs Delta | Rel Delta % | Status |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
+    if note:
+        lines[1:1] = ["", note]
     for row in rows:
         lines.append(
             "| {method} | {epochs} | `{lr}` | {original_wer} | {updated_wer} | "
@@ -125,13 +142,40 @@ def main() -> None:
         default=Path("exp/results/repro/sweeps"),
         help="Root containing RFM/RMM/UFMR result folders.",
     )
+    parser.add_argument("--dataset", default="tedlium")
+    parser.add_argument("--split", default="dev")
+    parser.add_argument("--tag-prefix", default="tedlium_dev")
+    parser.add_argument("--csv-name", default="rob80_tedlium_policy_sweep.csv")
+    parser.add_argument("--outcome-name", default="ROB-80_OUTCOME.md")
+    parser.add_argument("--title", default="ROB-80 TED-LIUM Dev Policy LR Sweep")
+    parser.add_argument(
+        "--note",
+        default=(
+            "UFMR includes higher-LR follow-up cells requested after the initial sweep: "
+            "`4e-5`, `8e-5`, and `1.6e-4`."
+        ),
+    )
+    parser.add_argument(
+        "--include-ufmr-extra",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Include the UFMR-only higher LR follow-up cells in the expected table.",
+    )
     args = parser.parse_args()
 
-    rows = collect_rows(args.result_root)
-    write_csv(rows, args.result_root / "rob80_tedlium_policy_sweep.csv")
-    write_markdown(rows, args.result_root / "ROB-80_OUTCOME.md")
-    print(f"Wrote {args.result_root / 'ROB-80_OUTCOME.md'}")
-    print(f"Wrote {args.result_root / 'rob80_tedlium_policy_sweep.csv'}")
+    rows = collect_rows(
+        args.result_root,
+        dataset=args.dataset,
+        split=args.split,
+        tag_prefix=args.tag_prefix,
+        include_ufmr_extra=args.include_ufmr_extra,
+    )
+    csv_path = args.result_root / args.csv_name
+    outcome_path = args.result_root / args.outcome_name
+    write_csv(rows, csv_path)
+    write_markdown(rows, outcome_path, args.title, args.note)
+    print(f"Wrote {outcome_path}")
+    print(f"Wrote {csv_path}")
 
 
 if __name__ == "__main__":
