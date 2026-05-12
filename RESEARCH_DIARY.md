@@ -50,3 +50,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   updated WERs were RFM `0.087653` at `1e-5` / 5 epochs, RMM `0.086051` at
   `5e-6` / 5 epochs, and UFMR `0.087985` at `2e-5` / 5 epochs. The summary
   table and CSV are in `exp/results/repro/sweeps/`.
+- Prepared a ROB-80 UFMR-only higher-LR follow-up after the initial best UFMR
+  point landed at the highest tested LR. The wrapper and summarizer now include
+  UFMR `4e-5`, `8e-5`, and `1.6e-4` for both 1 and 5 epochs while leaving the
+  RFM/RMM grids unchanged.

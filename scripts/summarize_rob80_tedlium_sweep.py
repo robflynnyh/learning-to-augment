@@ -19,7 +19,12 @@ RESULT_RE = re.compile(
 
 METHODS = ("RFM", "RMM", "UFMR")
 EPOCHS = (1, 5)
-LRS = ("5e-6", "1e-5", "2e-5")
+BASE_LRS = ("5e-6", "1e-5", "2e-5")
+METHOD_LRS = {
+    "RFM": BASE_LRS,
+    "RMM": BASE_LRS,
+    "UFMR": BASE_LRS + ("4e-5", "8e-5", "1.6e-4"),
+}
 DATASET = "tedlium"
 SPLIT = "dev"
 
@@ -46,7 +51,7 @@ def collect_rows(result_root: Path) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for method in METHODS:
         for epochs in EPOCHS:
-            for lr in LRS:
+            for lr in METHOD_LRS[method]:
                 result_path = result_root / method / f"{DATASET}_{SPLIT}_epoch{epochs}_lr{lr}.txt"
                 parsed = parse_result(result_path, epochs)
                 row = {
@@ -94,6 +99,9 @@ def write_markdown(rows: list[dict[str, str]], path: Path) -> None:
     complete = sum(row["status"] == "complete" for row in rows)
     lines = [
         "# ROB-80 TED-LIUM Dev Policy LR Sweep",
+        "",
+        "UFMR includes higher-LR follow-up cells requested after the initial sweep: "
+        "`4e-5`, `8e-5`, and `1.6e-4`.",
         "",
         f"Completed cells: {complete}/{len(rows)}",
         "",

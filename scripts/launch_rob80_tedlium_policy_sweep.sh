@@ -23,6 +23,8 @@ GIT_COMMIT="${GIT_COMMIT:-$(git rev-parse HEAD 2>/dev/null || printf 'unknown')}
 ASR_CKPT="${ASR_CKPT:-/store/store5/data/acp21rjf_checkpoints/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt}"
 UFMR_VARIANT="${UFMR_VARIANT:-test_wer}"
 UFMR_CKPT="${UFMR_CKPT:-/store/store5/data/acp21rjf_checkpoints/l2augment/ufmr/${UFMR_VARIANT}/model.pt}"
+BASE_LRS="${ROB80_BASE_LRS:-5e-6 1e-5 2e-5}"
+UFMR_EXTRA_LRS="${ROB80_UFMR_EXTRA_LRS:-4e-5 8e-5 1.6e-4}"
 
 on_exit() {
   status=$?
@@ -70,6 +72,8 @@ echo "[rob80] result_root=${RESULT_ROOT}"
 echo "[rob80] asr_ckpt=${ASR_CKPT}"
 echo "[rob80] ufmr_variant=${UFMR_VARIANT}"
 echo "[rob80] ufmr_ckpt=${UFMR_CKPT}"
+echo "[rob80] base_lrs=${BASE_LRS}"
+echo "[rob80] ufmr_extra_lrs=${UFMR_EXTRA_LRS}"
 echo "[rob80] cuda_visible_devices=${CUDA_VISIBLE_DEVICES:-unset}"
 
 if [ "${ROB80_CALLBACK_ONLY:-0}" = "1" ]; then
@@ -98,26 +102,33 @@ export L2A_TEDLIUM3_LEGACY_DIR="${L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TE
 export L2A_REV16_DIR="${L2A_REV16_DIR:-/store/store4/data/rev_benchmark}"
 export L2A_CHIME6_DIR="${L2A_CHIME6_DIR:-/store/store4/data/chime6/}"
 
-python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${UFMR_CKPT}" <<'PY'
+python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${UFMR_CKPT}" "${BASE_LRS}" "${UFMR_EXTRA_LRS}" <<'PY'
 import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
 asr_ckpt = sys.argv[2]
 ufmr_ckpt = sys.argv[3]
-lrs = ("5e-6", "1e-5", "2e-5")
+base_lrs = tuple(sys.argv[4].split())
+ufmr_extra_lrs = tuple(sys.argv[5].split())
 epochs = (1, 5)
 dataset = "tedlium"
 split = "dev"
 methods = {
-    "RFM": ("FrequencyMaskingRanker", None, 1, True),
-    "RMM": ("MixedMaskingRanker", None, 1, True),
-    "UFMR": ("UnconditionalFrequencyMaskingRanker", ufmr_ckpt, 15, False),
+    "RFM": ("FrequencyMaskingRanker", None, 1, True, base_lrs),
+    "RMM": ("MixedMaskingRanker", None, 1, True, base_lrs),
+    "UFMR": (
+        "UnconditionalFrequencyMaskingRanker",
+        ufmr_ckpt,
+        15,
+        False,
+        base_lrs + ufmr_extra_lrs,
+    ),
 }
-for method, (policy_class, policy_ckpt, repeats, use_random) in methods.items():
+for method, (policy_class, policy_ckpt, repeats, use_random, method_lrs) in methods.items():
     (root / method / "configs").mkdir(parents=True, exist_ok=True)
     for epoch_count in epochs:
-        for lr in lrs:
+        for lr in method_lrs:
             tag = f"{dataset}_{split}_epoch{epoch_count}_lr{lr}"
             save_path = root / method / f"{tag}.txt"
             config_path = root / method / "configs" / f"{tag}.yaml"
@@ -170,21 +181,28 @@ export PYTHONPATH="${REPO_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 
 METHODS="${ROB80_METHODS:-RFM RMM UFMR}"
 EPOCHS="${ROB80_EPOCHS:-1 5}"
-LRS="${ROB80_LRS:-5e-6 1e-5 2e-5}"
+OVERRIDE_LRS="${ROB80_LRS:-}"
 
 if [ "${ROB80_SMOKE:-0}" = "1" ]; then
   METHODS="${ROB80_SMOKE_METHODS:-RFM}"
   EPOCHS="${ROB80_SMOKE_EPOCHS:-1}"
-  LRS="${ROB80_SMOKE_LRS:-5e-6}"
+  OVERRIDE_LRS="${ROB80_SMOKE_LRS:-5e-6}"
   ROB80_INDEXES="${ROB80_INDEXES:-0}"
   ROB80_DONT_SAVE="${ROB80_DONT_SAVE:-1}"
-  echo "[rob80] smoke mode: methods=${METHODS}; epochs=${EPOCHS}; lrs=${LRS}; indexes=${ROB80_INDEXES}; dont_save=${ROB80_DONT_SAVE}"
+  echo "[rob80] smoke mode: methods=${METHODS}; epochs=${EPOCHS}; lrs=${OVERRIDE_LRS}; indexes=${ROB80_INDEXES}; dont_save=${ROB80_DONT_SAVE}"
 fi
 
 cd "${REPO_DIR}/exp"
 for method in ${METHODS}; do
+  method_lrs="${OVERRIDE_LRS}"
+  if [ -z "${method_lrs}" ]; then
+    method_lrs="${BASE_LRS}"
+    if [ "${method}" = "UFMR" ]; then
+      method_lrs="${BASE_LRS} ${UFMR_EXTRA_LRS}"
+    fi
+  fi
   for epoch_count in ${EPOCHS}; do
-    for lr in ${LRS}; do
+    for lr in ${method_lrs}; do
       tag="tedlium_dev_epoch${epoch_count}_lr${lr}"
       config="${RESULT_ROOT}/${method}/configs/${tag}.yaml"
       save_path="${RESULT_ROOT}/${method}/${tag}.txt"

@@ -12,7 +12,9 @@ the historical paper-result tree.
 - `exp/results/repro/sweeps/RMM/`
 - `exp/results/repro/sweeps/UFMR/`
 
-The sweep evaluates learning rates `5e-6`, `1e-5`, and `2e-5` for both `1` and
-`5` adaptation epochs. The launched wrapper writes generated YAML configs under
-each method's `configs/` folder and writes the final result table to
+The initial sweep evaluates learning rates `5e-6`, `1e-5`, and `2e-5` for both
+`1` and `5` adaptation epochs. The UFMR follow-up extends the UFMR-only grid to
+`4e-5`, `8e-5`, and `1.6e-4` because the initial best UFMR result was at the
+highest tested learning rate. The launched wrapper writes generated YAML configs
+under each method's `configs/` folder and writes the final result table to
 `exp/results/repro/sweeps/ROB-80_OUTCOME.md`.
