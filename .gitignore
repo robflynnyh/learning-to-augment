@@ -8,6 +8,7 @@ slurm*.out
 **/wandb/
 exp/wandb/
 **/.generated/
+exp/results/repro/sweeps/logs/
 symphony/.env
 
 # Distribution / packaging

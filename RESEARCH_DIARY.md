@@ -46,3 +46,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   and results under `exp/results/repro/sweeps/`, covers adaptation LRs `5e-6`,
   `1e-5`, and `2e-5` for `1` and `5` epochs, and summarizes completed cells via
   `scripts/summarize_rob80_tedlium_sweep.py`.
+- Completed the ROB-80 TED-LIUM dev sweep: all 18 cells finished. The best
+  updated WERs were RFM `0.087653` at `1e-5` / 5 epochs, RMM `0.086051` at
+  `5e-6` / 5 epochs, and UFMR `0.087985` at `2e-5` / 5 epochs. The summary
+  table and CSV are in `exp/results/repro/sweeps/`.
