@@ -9,6 +9,7 @@ from typing import Tuple, Callable, Dict
 from einops.layers.torch import Rearrange
 from lcasr.utils.augmentation import SpecAugment 
 from contextlib import nullcontext
+import inspect
 import matplotlib.pyplot as plt
 import wandb
 
@@ -627,6 +628,15 @@ def calc_length(lengths, all_paddings, kernel_size, stride, ceil_mode, repeat_nu
 
 
 from vector_quantize_pytorch import VectorQuantize
+
+
+def vector_quantize_kwargs(**kwargs):
+    signature = inspect.signature(VectorQuantize.__init__)
+    if "rotation_trick" not in signature.parameters:
+        kwargs.pop("rotation_trick", None)
+    return kwargs
+
+
 class VQVariationalAutoEncoder(VAEBase):
     def __init__(
             self, 
@@ -649,17 +659,17 @@ class VQVariationalAutoEncoder(VAEBase):
 
         assert norm_type in ['gn', 'bn'], 'norm_type must be either "gn" or "bn"'
         
-        self.VQ = VectorQuantize(
-            dim = latent_dim, 
-            codebook_size=codebook_size, 
-            decay=0.99, 
+        self.VQ = VectorQuantize(**vector_quantize_kwargs(
+            dim=latent_dim,
+            codebook_size=codebook_size,
+            decay=0.99,
             commitment_weight=commitment_weight,
-            kmeans_init = True,   # set to True
-            kmeans_iters = 10,
-            threshold_ema_dead_code = 1.0,
-            use_cosine_sim = True,
-            rotation_trick = True,
-        ) if use_vq else PlaceholderVQ()
+            kmeans_init=True,
+            kmeans_iters=10,
+            threshold_ema_dead_code=1.0,
+            use_cosine_sim=True,
+            rotation_trick=True,
+        )) if use_vq else PlaceholderVQ()
         
         self.encoder = nn.Sequential(
             nn.Conv1d(input_dim, hidden_dim, kernel_size=1, stride=1),

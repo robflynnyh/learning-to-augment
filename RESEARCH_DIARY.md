@@ -89,3 +89,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/oracle/OUTCOME.md`, and regenerated
   `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.{csv,pdf}` to include the
   completed curves; large screen/GPU logs remain uncommitted.
+- Prepared Robert's requested UVQLM oracle follow-up after the policy-scope
+  discussion. The queued setup uses repo-local UMLM/BVAE checkpoints under
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/`, evaluates
+  `UnconditionalMaskGenerator` proposals at `lr=1e-5`, `search_lr=2e-1`, and
+  sweeps repeats `1 2 3 4 5 10 20 50` with a Mimas `with-gpu` screen wrapper
+  and Linear completion callback.
