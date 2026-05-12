@@ -139,7 +139,7 @@ dst='exp/configs/patched_eval/ufmr_test_wer_cer/tedlium.yaml'
 cfg=OmegaConf.load(src)
 cfg.training.model_save_path='/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer_cer/model.pt'
 cfg.training.tmp_model_save_path='/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer_cer/tmp_model.pt'
-cfg.evaluation.save_path='/users/acp21rjf/learning-to-augment/exp/results/UFMR/test_wer_cer/singleepoch/tedlium.txt'
+cfg.evaluation.save_path='/users/acp21rjf/learning-to-augment/exp/results/historical_results/UFMR/test_wer_cer/singleepoch/tedlium.txt'
 OmegaConf.save(cfg, dst)
 print(dst)
 PY

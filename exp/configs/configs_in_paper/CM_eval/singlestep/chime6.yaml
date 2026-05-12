@@ -21,7 +21,7 @@ evaluation:
     use_random: false
   optim_args:
     lr: 5e-6
-  save_path: /users/acp21rjf/learning-to-augment/exp/results/UFMR/chime6.txt
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/historical_results/UFMR/chime6.txt
 
 policy:
   lr: 1e-4

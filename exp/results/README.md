@@ -5,17 +5,44 @@ learnt-augmentation experiments.
 
 ## Structure
 
-Historical result directories remain at the top level, for example `RMM/`, `RFM/`, `UFMR/`, and
-`UVQLM/`. New reproduction-only artifacts are grouped under `repro/`:
+This tree now separates older reference artifacts from newer reproduction work:
+
+- `historical_results/` contains result dumps, plots, notebooks, generated
+  configs, and logs from the earlier phase of the project. These numbers are
+  kept as useful reference points, but they should be rechecked before being
+  treated as final or directly comparable to newly resumed work.
+- `repro/` contains the newer reproduction-focused runs and small issue-scoped
+  outputs created while resuming the project.
+- `scripts/` contains shared result parsing, plotting, and reproduction helpers.
+
+The historical folder preserves the previous top-level result families:
+
+```text
+historical_results/
+  CMultiStepVQLM/
+  NoAug/
+  RFM/
+  RFM_segmented/
+  RMM/
+  UFMR/
+  UFMR_mimas/
+  UFMR_segmented/
+  UVQLM/
+  figures/
+  multistep_FM_ranker/
+  vis.ipynb
+```
+
+New reproduction-only artifacts are grouped under `repro/`:
 
 ```text
 repro/
   oracle/
     RMM/
-      configs/
+      tedlium_grid.yaml
       tedlium_lr*_searchlr*.txt
     RFM/
-      configs/
+      tedlium_grid.yaml
       tedlium_lr*_searchlr*.txt
     jobs/
       rmm_historical_then_recent.sh
@@ -24,21 +51,22 @@ repro/
     launch_single_sequential.sh
   policy/
     UFMR_segmented/
-      configs/
       run_lr_sweep_cpu.sh
+      tedlium_grid.yaml
       tedlium_lr*.txt
 ```
 
 `repro/oracle/` is for oracle mask-selection experiments where candidates are scored by a local
 single-step reward before the actual adaptation step is applied. `repro/policy/` is for direct policy
-rollouts without oracle candidate search, currently the UFMR segmented policy baseline.
+rollouts without oracle candidate search, including the issue-scoped policy reproduction summaries.
 
 ## Oracle Reproduction Notes
 
-The historical file `RMM/oracle/tedlium.txt` should not be interpreted as a clean random frequency
-masking (RFM) oracle. Git history shows that it was added in the same commit as a hardcoded mixed-mask
-candidate generator in `l2augment/rollout/cpu_multistep_oracle.py`. That generator sampled one of
-three mask types for each candidate: time masking, frequency masking, or time+frequency masking.
+The historical file `historical_results/RMM/oracle/tedlium.txt` should not be interpreted as a clean
+random frequency masking (RFM) oracle. Git history shows that it was added in the same commit as a
+hardcoded mixed-mask candidate generator in `l2augment/rollout/cpu_multistep_oracle.py`. That
+generator sampled one of three mask types for each candidate: time masking, frequency masking, or
+time+frequency masking.
 
 The old hardcoded behaviour has now been moved into the normal policy abstraction. Reproduction configs
 use:
@@ -76,10 +104,13 @@ Each setup evaluates candidate counts:
 1, 2, 3, 4, 5, 10, 20, 50
 ```
 
-Generated configs live under:
+Grid configs live under:
 
-- `repro/oracle/RMM/configs/`
-- `repro/oracle/RFM/configs/`
+- `repro/oracle/RMM/tedlium_grid.yaml`
+- `repro/oracle/RFM/tedlium_grid.yaml`
+
+The launch scripts materialize ordinary one-run YAMLs under ignored
+`.generated/` directories next to each grid YAML.
 
 The policy stream scripts live under:
 

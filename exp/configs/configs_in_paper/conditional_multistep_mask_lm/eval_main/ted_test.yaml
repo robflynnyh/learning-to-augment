@@ -30,7 +30,7 @@ evaluation:
   epochs: 1
   optim_args:
     lr: 5e-6
-  save_path: /users/acp21rjf/learning-to-augment/exp/results/CMultiStepVQLM/tedlium_test.txt
+  save_path: /users/acp21rjf/learning-to-augment/exp/results/historical_results/CMultiStepVQLM/tedlium_test.txt
 
 # dataset:
 #   load_audio: true

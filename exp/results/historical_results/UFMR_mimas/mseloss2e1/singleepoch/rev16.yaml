@@ -1,0 +1,23 @@
+checkpointing:
+  asr_model: /store/store5/data/acp21rjf_checkpoints/l2augment/asr/step_105360.pt
+training:
+  device: cuda
+  random_seed: 1234
+  batch_size: 84
+  epochs: 100
+  model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/ufmr/mseloss2e1/model.pt
+  tmp_model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/ufmr/mseloss2e1/model.pt
+evaluation:
+  dataset: rev16
+  split: test
+  use_cer: false
+  epochs: 1
+  augmentation_config:
+    repeats: 15
+    use_random: false
+  optim_args:
+    lr: 5.0e-06
+  save_path: /exp/exp4/acp21rjf/learning-to-augment/exp/results/historical_results/UFMR_mimas/mseloss2e1/singleepoch/rev16.txt
+policy:
+  lr: 0.0001
+  class: UnconditionalFrequencyMaskingRanker

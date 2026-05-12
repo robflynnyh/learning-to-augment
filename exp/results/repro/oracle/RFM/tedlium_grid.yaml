@@ -1,0 +1,74 @@
+checkpointing:
+  asr_model: /store/store5/data/acp21rjf_checkpoints/l2augment/asr/step_105360.pt
+
+training:
+  device: cpu
+  random_seed: 1234
+  batch_size: 84
+  epochs: 100
+
+evaluation:
+  rollout_setting: search
+  search_repeats: 1
+  split: test
+  use_cer: false
+  epochs: 1
+  augmentation_config:
+    repeats: 1
+    use_random: true
+  optim_args:
+    lr: 1e-6
+    single_step_lr: 4e-2
+  save_path: /exp/exp4/acp21rjf/learning-to-augment/exp/results/repro/oracle/RFM/tedlium_lr{grid_label:evaluation.optim_args.lr}_searchlr{grid_label:evaluation.optim_args.single_step_lr}.txt
+
+policy:
+  lr: 1e-4
+  class: FrequencyMaskingRanker
+
+grid:
+  name: rfm_repro_oracle_tedlium_test
+  combine: product
+  id_template: "tedlium_lr{grid_label:evaluation.optim_args.lr}_searchlr{grid_label:evaluation.optim_args.single_step_lr}_repeats{evaluation.search_repeats}"
+  axes:
+    evaluation.search_repeats: [1, 2, 3, 4, 5, 10, 20, 50]
+  cases:
+    - id: historical
+      values:
+        evaluation.optim_args.lr:
+          value: 1e-6
+          label: "1e-6"
+        evaluation.optim_args.single_step_lr:
+          value: 4e-2
+          label: "4e-2"
+    - id: recent
+      values:
+        evaluation.optim_args.lr:
+          value: 8e-6
+          label: "8e-6"
+        evaluation.optim_args.single_step_lr:
+          value: 9e-2
+          label: "9e-2"
+    - id: lr1e-5_searchlr2e-1
+      values:
+        evaluation.optim_args.lr:
+          value: 1e-5
+          label: "1e-5"
+        evaluation.optim_args.single_step_lr:
+          value: 2e-1
+          label: "2e-1"
+    - id: lr8e-6_searchlr2e-1
+      values:
+        evaluation.optim_args.lr:
+          value: 8e-6
+          label: "8e-6"
+        evaluation.optim_args.single_step_lr:
+          value: 2e-1
+          label: "2e-1"
+    - id: lr1e-5_searchlr9e-2
+      values:
+        evaluation.optim_args.lr:
+          value: 1e-5
+          label: "1e-5"
+        evaluation.optim_args.single_step_lr:
+          value: 9e-2
+          label: "9e-2"

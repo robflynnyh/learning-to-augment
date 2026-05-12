@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Generate reproducible configs for RFM and RMM oracle experiments."""
+"""Generate reproducible grid configs for oracle and UFMR repro experiments."""
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 
@@ -11,11 +12,10 @@ RESULTS_ROOT = REPO_ROOT / "exp/results"
 REPRO_ROOT = RESULTS_ROOT / "repro"
 ORACLE_REPRO_ROOT = REPRO_ROOT / "oracle"
 POLICY_REPRO_ROOT = REPRO_ROOT / "policy"
-ORACLE_REPRO_RESULT_DIR = "exp/results/repro/oracle"
-POLICY_REPRO_RESULT_DIR = "exp/results/repro/policy"
+REPRO_OUTPUT_ROOT = "/exp/exp4/acp21rjf/learning-to-augment/exp/results/repro"
 ASR_MODEL = "/store/store5/data/acp21rjf_checkpoints/l2augment/asr/step_105360.pt"
 UFMR_MODEL = "/store/store5/data/acp21rjf_checkpoints/l2augment/ufmr/mseloss/model.pt"
-PYTHON = "PYTHONDONTWRITEBYTECODE=1 python3"
+REPEATS = "1, 2, 3, 4, 5, 10, 20, 50"
 
 
 def write(path: Path, text: str) -> None:
@@ -25,45 +25,15 @@ def write(path: Path, text: str) -> None:
         path.chmod(0o755)
 
 
-def clean_yaml_dir(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-    for yaml_path in path.glob("*.yaml"):
-        yaml_path.unlink()
+def remove_old_config_dir(path: Path) -> None:
+    if path.exists():
+        shutil.rmtree(path)
 
 
-def fmt_lr(lr: float) -> str:
-    return f"{lr:.0e}".replace("e-0", "e-").replace("e+0", "e")
-
-
-def rmm_config(repeats: int, lr: float, single_step_lr: float) -> str:
-    lr_name = fmt_lr(lr)
-    search_lr_name = fmt_lr(single_step_lr)
-    return f"""checkpointing:
-  asr_model: {ASR_MODEL}
-
-training:
-  device: cpu
-  random_seed: 1234
-  batch_size: 84
-  epochs: 100
-
-evaluation:
-  rollout_setting: search
-  search_repeats: {repeats}
-  split: test
-  use_cer: false
-  epochs: 1
-  augmentation_config:
-    repeats: 1
-    use_random: true
-  optim_args:
-    lr: {lr:.1e}
-    single_step_lr: {single_step_lr:.1e}
-  save_path: {ORACLE_REPRO_RESULT_DIR}/RMM/tedlium_lr{lr_name}_searchlr{search_lr_name}.txt
-
-policy:
-  lr: 0.0001
-  class: MixedMaskingRanker
+def oracle_grid_config(method: str) -> str:
+    class_block = {
+        "RFM": "  class: FrequencyMaskingRanker\n",
+        "RMM": """  class: MixedMaskingRanker
   config:
     time_masks_min: 3
     time_masks_max: 16
@@ -71,12 +41,8 @@ policy:
     freq_masks_max: 7
     freq_mask_param_min: 34
     freq_mask_param_max: 34
-"""
-
-
-def rfm_config(repeats: int, lr: float, single_step_lr: float) -> str:
-    lr_name = fmt_lr(lr)
-    search_lr_name = fmt_lr(single_step_lr)
+""",
+    }[method]
     return f"""checkpointing:
   asr_model: {ASR_MODEL}
 
@@ -88,7 +54,7 @@ training:
 
 evaluation:
   rollout_setting: search
-  search_repeats: {repeats}
+  search_repeats: 1
   split: test
   use_cer: false
   epochs: 1
@@ -96,18 +62,64 @@ evaluation:
     repeats: 1
     use_random: true
   optim_args:
-    lr: {lr:.1e}
-    single_step_lr: {single_step_lr:.1e}
-  save_path: {ORACLE_REPRO_RESULT_DIR}/RFM/tedlium_lr{lr_name}_searchlr{search_lr_name}.txt
+    lr: 1e-6
+    single_step_lr: 4e-2
+  save_path: {REPRO_OUTPUT_ROOT}/oracle/{method}/tedlium_lr{{grid_label:evaluation.optim_args.lr}}_searchlr{{grid_label:evaluation.optim_args.single_step_lr}}.txt
 
 policy:
-  lr: 0.0001
-  class: FrequencyMaskingRanker
+  lr: 1e-4
+{class_block}
+grid:
+  name: {method.lower()}_repro_oracle_tedlium_test
+  combine: product
+  id_template: "tedlium_lr{{grid_label:evaluation.optim_args.lr}}_searchlr{{grid_label:evaluation.optim_args.single_step_lr}}_repeats{{evaluation.search_repeats}}"
+  axes:
+    evaluation.search_repeats: [{REPEATS}]
+  cases:
+    - id: historical
+      values:
+        evaluation.optim_args.lr:
+          value: 1e-6
+          label: "1e-6"
+        evaluation.optim_args.single_step_lr:
+          value: 4e-2
+          label: "4e-2"
+    - id: recent
+      values:
+        evaluation.optim_args.lr:
+          value: 8e-6
+          label: "8e-6"
+        evaluation.optim_args.single_step_lr:
+          value: 9e-2
+          label: "9e-2"
+    - id: lr1e-5_searchlr2e-1
+      values:
+        evaluation.optim_args.lr:
+          value: 1e-5
+          label: "1e-5"
+        evaluation.optim_args.single_step_lr:
+          value: 2e-1
+          label: "2e-1"
+    - id: lr8e-6_searchlr2e-1
+      values:
+        evaluation.optim_args.lr:
+          value: 8e-6
+          label: "8e-6"
+        evaluation.optim_args.single_step_lr:
+          value: 2e-1
+          label: "2e-1"
+    - id: lr1e-5_searchlr9e-2
+      values:
+        evaluation.optim_args.lr:
+          value: 1e-5
+          label: "1e-5"
+        evaluation.optim_args.single_step_lr:
+          value: 9e-2
+          label: "9e-2"
 """
 
 
-def ufmr_policy_config(lr: float) -> str:
-    lr_name = fmt_lr(lr)
+def ufmr_grid_config() -> str:
     return f"""checkpointing:
   asr_model: {ASR_MODEL}
 
@@ -128,17 +140,26 @@ evaluation:
     repeats: 15
     use_random: false
   optim_args:
-    lr: {lr:.1e}
-  save_path: {POLICY_REPRO_RESULT_DIR}/UFMR_segmented/tedlium_lr{lr_name}.txt
+    lr: 1e-6
+  save_path: {REPRO_OUTPUT_ROOT}/policy/UFMR_segmented/tedlium_lr{{grid_label:evaluation.optim_args.lr}}.txt
 
 policy:
-  lr: 0.0001
+  lr: 1e-4
   class: UnconditionalFrequencyMaskingRanker
+
+grid:
+  name: ufmr_segmented_repro_tedlium_test
+  id_template: "tedlium_lr{{grid_label:evaluation.optim_args.lr}}"
+  axes:
+    evaluation.optim_args.lr:
+      - value: 1e-6
+        label: "1e-6"
+      - value: 8e-6
+        label: "8e-6"
 """
 
 
-def oracle_stream_script(method: str, repeats_arg: str) -> str:
-    result_dir = method
+def oracle_stream_script(method: str) -> str:
     return f"""#!/usr/bin/env bash
 set -euo pipefail
 
@@ -146,20 +167,26 @@ cd "$(dirname "$0")/../../../../.."
 export CUDA_VISIBLE_DEVICES=""
 export MPLCONFIGDIR="${{MPLCONFIGDIR:-/exp/exp4/acp21rjf/.scratch/matplotlib-cache}}"
 export L2A_TEDLIUM3_LEGACY_DIR="${{L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TEDLIUM_release-3/legacy}}"
-mkdir -p "${{MPLCONFIGDIR}}" "exp/results/repro/oracle/{result_dir}/logs"
+mkdir -p "${{MPLCONFIGDIR}}" "exp/results/repro/oracle/{method}/logs"
+
+: > "exp/results/repro/oracle/{method}/tedlium_lr1e-6_searchlr4e-2.txt"
+: > "exp/results/repro/oracle/{method}/tedlium_lr8e-6_searchlr9e-2.txt"
+
+PYTHONDONTWRITEBYTECODE=1 python3 exp/run_config_grid.py \\
+  --grid-config "exp/results/repro/oracle/{method}/tedlium_grid.yaml" \\
+  --materialize-only
+
+config_dir="exp/results/repro/oracle/{method}/.generated/tedlium_grid"
 
 run_combo() {{
   local lr="$1"
   local search_lr="$2"
-  local result="exp/results/repro/oracle/{result_dir}/tedlium_lr${{lr}}_searchlr${{search_lr}}.txt"
-  : > "${{result}}"
-  for repeats in {repeats_arg}; do
+  for repeats in 1 2 3 4 5 10 20 50; do
     PYTHONDONTWRITEBYTECODE=1 python3 exp/oracle_eval.py \\
-      --config "exp/results/repro/oracle/{result_dir}/configs/tedlium_lr${{lr}}_searchlr${{search_lr}}_repeats${{repeats}}.yaml"
+      --config "${{config_dir}}/tedlium_lr${{lr}}_searchlr${{search_lr}}_repeats${{repeats}}.yaml"
   done
 }}
 
-# Historical matched setup, followed by the newer/default setup.
 run_combo 1e-6 4e-2
 run_combo 8e-6 9e-2
 """
@@ -169,9 +196,7 @@ def screen_safe_lr_name(lr_name: str) -> str:
     return lr_name.replace("-", "")
 
 
-def gpu_wrapper(lr: float, single_step_lr: float, repeats_arg: str) -> str:
-    lr_name = fmt_lr(lr)
-    search_lr_name = fmt_lr(single_step_lr)
+def gpu_wrapper(lr_name: str, search_lr_name: str) -> str:
     screen_lr_name = screen_safe_lr_name(lr_name)
     screen_search_lr_name = screen_safe_lr_name(search_lr_name)
     screen_name = f"l2a_oracle_lr{screen_lr_name}_searchlr{screen_search_lr_name}"
@@ -249,11 +274,15 @@ fi
 run_combo() {{
   local method="$1"
   local result="exp/results/repro/oracle/${{method}}/tedlium_lr{lr_name}_searchlr{search_lr_name}.txt"
+  local config_dir="exp/results/repro/oracle/${{method}}/.generated/tedlium_grid"
   : > "${{result}}"
-  for repeats in {repeats_arg}; do
+  PYTHONDONTWRITEBYTECODE=1 python3 exp/run_config_grid.py \\
+    --grid-config "exp/results/repro/oracle/${{method}}/tedlium_grid.yaml" \\
+    --materialize-only
+  for repeats in 1 2 3 4 5 10 20 50; do
     echo "[$(date -Iseconds)] running ${{method}} repeats=${{repeats}}"
     PYTHONDONTWRITEBYTECODE=1 python3 exp/oracle_eval.py \\
-      --config "exp/results/repro/oracle/${{method}}/configs/tedlium_lr{lr_name}_searchlr{search_lr_name}_repeats${{repeats}}.yaml"
+      --config "${{config_dir}}/tedlium_lr{lr_name}_searchlr{search_lr_name}_repeats${{repeats}}.yaml"
   done
 }}
 
@@ -265,53 +294,28 @@ echo "[$(date -Iseconds)] completed ROB-60 oracle sweep lr={lr_name} search_lr={
 
 
 def main() -> None:
-    search_repeats = [1, 2, 3, 4, 5, 10, 20, 50]
-    search_repeats_arg = " ".join(str(repeats) for repeats in search_repeats)
-    oracle_combos = [
-        (1e-6, 4e-2),
-        (8e-6, 9e-2),
-        (1e-5, 2e-1),
-        (8e-6, 2e-1),
-        (1e-5, 9e-2),
-    ]
-    ufmr_lrs = [1e-6, 8e-6]
-
-    rmm_config_dir = ORACLE_REPRO_ROOT / "RMM/configs"
-    rfm_config_dir = ORACLE_REPRO_ROOT / "RFM/configs"
-    ufmr_config_dir = POLICY_REPRO_ROOT / "UFMR_segmented/configs"
     job_dir = ORACLE_REPRO_ROOT / "jobs"
-    clean_yaml_dir(rmm_config_dir)
-    clean_yaml_dir(rfm_config_dir)
-    clean_yaml_dir(ufmr_config_dir)
     job_dir.mkdir(parents=True, exist_ok=True)
+    for config_dir in [
+        ORACLE_REPRO_ROOT / "RMM/configs",
+        ORACLE_REPRO_ROOT / "RFM/configs",
+        POLICY_REPRO_ROOT / "UFMR_segmented/configs",
+    ]:
+        remove_old_config_dir(config_dir)
     for script_path in job_dir.glob("*.sh"):
         script_path.unlink()
     for script_path in ORACLE_REPRO_ROOT.glob("launch_*.sh"):
         script_path.unlink()
 
-    for lr, single_step_lr in oracle_combos:
-        for repeats in search_repeats:
-            write(
-                rmm_config_dir / f"tedlium_lr{fmt_lr(lr)}_searchlr{fmt_lr(single_step_lr)}_repeats{repeats}.yaml",
-                rmm_config(repeats, lr, single_step_lr),
-            )
-            write(
-                rfm_config_dir / f"tedlium_lr{fmt_lr(lr)}_searchlr{fmt_lr(single_step_lr)}_repeats{repeats}.yaml",
-                rfm_config(repeats, lr, single_step_lr),
-            )
-
     for method in ["RMM", "RFM"]:
-        write(
-            job_dir / f"{method.lower()}_historical_then_recent.sh",
-            oracle_stream_script(method, search_repeats_arg),
-        )
+        write(ORACLE_REPRO_ROOT / method / "tedlium_grid.yaml", oracle_grid_config(method))
+        write(job_dir / f"{method.lower()}_historical_then_recent.sh", oracle_stream_script(method))
 
-    write(job_dir / "lr1e-5_searchlr2e-1_gpu.sh", gpu_wrapper(1e-5, 2e-1, search_repeats_arg))
-    write(job_dir / "lr8e-6_searchlr2e-1_gpu.sh", gpu_wrapper(8e-6, 2e-1, search_repeats_arg))
-    write(job_dir / "lr1e-5_searchlr9e-2_gpu.sh", gpu_wrapper(1e-5, 9e-2, search_repeats_arg))
+    write(job_dir / "lr1e-5_searchlr2e-1_gpu.sh", gpu_wrapper("1e-5", "2e-1"))
+    write(job_dir / "lr8e-6_searchlr2e-1_gpu.sh", gpu_wrapper("8e-6", "2e-1"))
+    write(job_dir / "lr1e-5_searchlr9e-2_gpu.sh", gpu_wrapper("1e-5", "9e-2"))
 
-    for lr in ufmr_lrs:
-        write(ufmr_config_dir / f"tedlium_lr{fmt_lr(lr)}.yaml", ufmr_policy_config(lr))
+    write(POLICY_REPRO_ROOT / "UFMR_segmented/tedlium_grid.yaml", ufmr_grid_config())
 
     write(
         ORACLE_REPRO_ROOT / "launch_single_sequential.sh",
@@ -340,12 +344,14 @@ export MPLCONFIGDIR="${MPLCONFIGDIR:-/exp/exp4/acp21rjf/.scratch/matplotlib-cach
 export L2A_TEDLIUM3_LEGACY_DIR="${L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TEDLIUM_release-3/legacy}"
 mkdir -p "${MPLCONFIGDIR}"
 
-for lr in 1e-6 8e-6; do
-  result="exp/results/repro/policy/UFMR_segmented/tedlium_lr${lr}.txt"
-  : > "${result}"
-  PYTHONDONTWRITEBYTECODE=1 python3 exp/oracle_eval.py \\
-    --config "exp/results/repro/policy/UFMR_segmented/configs/tedlium_lr${lr}.yaml"
-done
+: > "exp/results/repro/policy/UFMR_segmented/tedlium_lr1e-6.txt"
+: > "exp/results/repro/policy/UFMR_segmented/tedlium_lr8e-6.txt"
+
+PYTHONDONTWRITEBYTECODE=1 python3 exp/run_config_grid.py \\
+  --grid-config "exp/results/repro/policy/UFMR_segmented/tedlium_grid.yaml" \\
+  --entrypoint "PYTHONDONTWRITEBYTECODE=1 python3 exp/oracle_eval.py --config {config}" \\
+  --workdir . \\
+  --stop-on-error
 """,
     )
 

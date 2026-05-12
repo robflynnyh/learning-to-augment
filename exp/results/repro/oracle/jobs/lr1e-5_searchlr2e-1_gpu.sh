@@ -70,11 +70,15 @@ fi
 run_combo() {
   local method="$1"
   local result="exp/results/repro/oracle/${method}/tedlium_lr1e-5_searchlr2e-1.txt"
+  local config_dir="exp/results/repro/oracle/${method}/.generated/tedlium_grid"
   : > "${result}"
+  PYTHONDONTWRITEBYTECODE=1 python3 exp/run_config_grid.py \
+    --grid-config "exp/results/repro/oracle/${method}/tedlium_grid.yaml" \
+    --materialize-only
   for repeats in 1 2 3 4 5 10 20 50; do
     echo "[$(date -Iseconds)] running ${method} repeats=${repeats}"
     PYTHONDONTWRITEBYTECODE=1 python3 exp/oracle_eval.py \
-      --config "exp/results/repro/oracle/${method}/configs/tedlium_lr1e-5_searchlr2e-1_repeats${repeats}.yaml"
+      --config "${config_dir}/tedlium_lr1e-5_searchlr2e-1_repeats${repeats}.yaml"
   done
 }
 

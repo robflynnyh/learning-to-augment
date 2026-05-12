@@ -18,8 +18,8 @@ import torch
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[2]
 DEFAULT_CHECKPOINT = Path("/store/store5/data/acp21rjf_checkpoints/l2augment/ufmr/test_wer/model.pt")
-DEFAULT_OUTPUT = SCRIPT_DIR.parent / "UFMR/UFMR_mask.pdf"
-DEFAULT_CSV = SCRIPT_DIR.parent / "UFMR/UFMR_mask.csv"
+DEFAULT_OUTPUT = SCRIPT_DIR.parent / "historical_results/UFMR/UFMR_mask.pdf"
+DEFAULT_CSV = SCRIPT_DIR.parent / "historical_results/UFMR/UFMR_mask.csv"
 
 sys.path.insert(0, str(REPO_ROOT))
 

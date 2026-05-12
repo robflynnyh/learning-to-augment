@@ -1,0 +1,31 @@
+checkpointing:
+  asr_model: "/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt"
+
+training:
+  device: 'cuda'
+  random_seed: 1234
+  batch_size: 84
+  epochs: 100
+
+evaluation:
+  rollout_setting: 'search'
+  search_repeats: 2
+  dataset: 'tedlium'
+  split: 'dev'
+  use_cer: false
+  epochs: 1
+  augmentation_config:
+    repeats: 1
+    use_random: true
+  optim_args:
+    lr: 5e-6
+
+policy:
+  lr: 1e-4
+  class: FrequencyMaskingRanker
+
+grid:
+  name: rfm_oracle_tedlium_dev
+  id_template: "tedlium_repeats_{evaluation.search_repeats}"
+  axes:
+    evaluation.search_repeats: [2, 10]
