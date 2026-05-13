@@ -118,3 +118,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/oracle/OUTCOME.md`, and regenerated
   `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.{csv,pdf}` to include the
   completed curves; large screen/GPU logs remain uncommitted.
+- Prepared a higher-LR ROB-60 oracle follow-up after Robert noted that
+  `3e-5` is the best setting so far. Added a reproducible `lr=1e-4`,
+  `search_lr=2e-1` cell for RMM, RFM, and UVQLM, plus a Mimas `with-gpu`
+  screen wrapper with a Linear completion callback.
