@@ -22,5 +22,6 @@ export ROB80_TITLE="${ROB80_TITLE:-ROB-80 TED-LIUM Segmented Dev Policy LR Sweep
 export ROB80_NOTE="${ROB80_NOTE:-Segmented follow-up requested after the non-segmented dev sweep; LR grid is centered on the non-segmented sweep scale.}"
 export CALLBACK_NOTE="${CALLBACK_NOTE:-ROB-80 TED-LIUM segmented dev RFM/RMM/UFMR LR sweep wrapper exited. See exp/results/repro/sweeps/segmented_dev/ROB-80_SEGMENTED_OUTCOME.md for the result table when complete.}"
 export QUEUED_COMMAND="${QUEUED_COMMAND:-/store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob80_tedlium_segmented_policy_sweep.sh}"
+export ROB80_EVAL_SCRIPT="${ROB80_EVAL_SCRIPT:-oracle_eval.py}"
 
 exec scripts/launch_rob80_tedlium_policy_sweep.sh

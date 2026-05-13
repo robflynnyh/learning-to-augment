@@ -62,3 +62,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `scripts/launch_rob80_tedlium_segmented_policy_sweep.sh`, which reuses the
   policy sweep runner with `dataset: tedlium3_segmented_data`, `split: dev`,
   and a separate result root under `exp/results/repro/sweeps/segmented_dev/`.
+
+## 2026-05-13
+
+- Investigated the failed ROB-80 segmented dev queue. The wrapper did start on
+  Mimas and acquired GPU 2, but `exp/eval.py` could not consume
+  `tedlium3_segmented_data` utterance-list outputs, and the failure callback
+  resolved `scripts/callbacks/...` relative to `exp/`. The segmented wrapper now
+  runs `oracle_eval.py` with `rollout_setting: policy`, and the callback path is
+  rooted at the repository directory.

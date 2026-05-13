@@ -60,7 +60,7 @@ on_exit() {
   if [ "${ROB80_CALLBACK_CHECK_ONLY:-0}" = "1" ]; then
     callback_args+=(--check-only)
   fi
-  python3 scripts/callbacks/linear_experiment_callback.py "${callback_args[@]}"
+  python3 "${REPO_DIR}/scripts/callbacks/linear_experiment_callback.py" "${callback_args[@]}"
   callback_status=$?
   if [ "${callback_status}" -ne 0 ]; then
     echo "Linear completion callback failed with status ${callback_status}" >&2
@@ -167,6 +167,7 @@ evaluation:
   id: 'ROB-80-{dataset}-{split}-{method}-epoch{epoch_count}-lr{lr}'
   dataset: '{dataset}'
   split: '{split}'
+  rollout_setting: policy
   use_cer: false
   epochs: {epoch_count}
   augmentation_config:
@@ -197,6 +198,7 @@ export PYTHONPATH="${REPO_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 METHODS="${ROB80_METHODS:-RFM RMM UFMR}"
 EPOCHS="${ROB80_EPOCHS:-1 5}"
 OVERRIDE_LRS="${ROB80_LRS:-}"
+EVAL_SCRIPT="${ROB80_EVAL_SCRIPT:-eval.py}"
 
 if [ "${ROB80_SMOKE:-0}" = "1" ]; then
   METHODS="${ROB80_SMOKE_METHODS:-RFM}"
@@ -232,7 +234,7 @@ for method in ${METHODS}; do
       if [ "${FORCE_RERUN:-0}" = "1" ]; then
         rm -f "${save_path}"
       fi
-      args=(python eval.py --config "${config}")
+      args=(python "${EVAL_SCRIPT}" --config "${config}")
       if [ -n "${ROB80_INDEXES:-}" ]; then
         args+=(--indexes ${ROB80_INDEXES})
       fi
