@@ -71,3 +71,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   resolved `scripts/callbacks/...` relative to `exp/`. The segmented wrapper now
   runs `oracle_eval.py` with `rollout_setting: policy`, and the callback path is
   rooted at the repository directory.
+- Completed the ROB-80 TED-LIUM segmented dev follow-up: all 18 RFM/RMM/UFMR
+  cells finished for `5e-6`, `1e-5`, and `2e-5` at 1 and 5 epochs. The best
+  segmented updated WERs were RFM `0.097601` at `5e-6` / 5 epochs, RMM
+  `0.097325` at `1e-5` / 5 epochs, and UFMR `0.096717` at `1e-5` / 5 epochs;
+  the table and CSV are under `exp/results/repro/sweeps/segmented_dev/`.

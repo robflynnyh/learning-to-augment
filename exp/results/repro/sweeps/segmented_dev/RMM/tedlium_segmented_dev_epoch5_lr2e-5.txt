@@ -1,0 +1,1 @@
+ID: ROB-80-tedlium3_segmented_data-dev-RMM-epoch5-lr2e-5 - Dataset: tedlium3_segmented_data - Split: dev - Epochs: 5 - Original_WER: 0.10633359124571681 - Updated_WER: 0.09809881728749861 - Repeats: 1 - Rollout Type: cpu_rollout_policy
