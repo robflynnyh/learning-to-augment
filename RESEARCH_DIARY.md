@@ -38,3 +38,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
   under `exp/results/historical_results/`, while newer resumed-work outputs
   remain under `exp/results/repro/`. Treat the historical numbers as reference
   material until they are reverified.
+
+## 2026-05-13
+
+- Updated Symphony rules for ROB-83 to forbid `/tmp` on Mimas for working files,
+  logs, downloads, result staging, callbacks, and experiment scratch space. Use
+  durable repo-local paths, `exp/results/`, or suitable `/store/...` locations
+  for artifacts that later Symphony turns may need to inspect.
