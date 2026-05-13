@@ -110,3 +110,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   existed for that cell. Added the grid case to the reproducible oracle configs,
   kept new result paths workspace-relative, and added a Mimas `with-gpu` screen
   wrapper with a Linear completion callback.
+- Finalized the ROB-60 `lr=3e-5`, `search_lr=2e-1` oracle follow-up. RMM
+  reached `8.428%` WER at repeat 50, UVQLM reached `8.467%`, and RFM reached
+  `8.817%`; all three curves were best at repeat 50. The new best overall
+  oracle result is RMM `3e-5/2e-1`, improving over the previous UVQLM
+  `1e-5/2e-1` best by `0.060` pp. Added the small result text files, updated
+  `exp/results/repro/oracle/OUTCOME.md`, and regenerated
+  `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.{csv,pdf}` to include the
+  completed curves; large screen/GPU logs remain uncommitted.

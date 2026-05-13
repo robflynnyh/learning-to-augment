@@ -108,6 +108,9 @@ def plot(
         "#56B4E9",
         "#E69F00",
         "#000000",
+        "#7570B3",
+        "#A6761D",
+        "#E7298A",
     ]
     for idx, (label, rows) in enumerate(series):
         if not rows:
