@@ -95,3 +95,13 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `UnconditionalMaskGenerator` proposals at `lr=1e-5`, `search_lr=2e-1`, and
   sweeps repeats `1 2 3 4 5 10 20 50` with a Mimas `with-gpu` screen wrapper
   and Linear completion callback.
+
+## 2026-05-13
+
+- Finalized the ROB-60 UVQLM oracle follow-up at `lr=1e-5`,
+  `search_lr=2e-1`. UVQLM reached `8.488%` WER at repeat 50, improving over
+  the previous best RMM `1e-5/2e-1` oracle result by `0.081` pp and over the
+  matching RFM result by `0.354` pp. Added the small UVQLM result text file,
+  updated `exp/results/repro/oracle/OUTCOME.md`, and regenerated
+  `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.{csv,pdf}` to include the
+  completed UVQLM curve; large screen/GPU logs remain uncommitted.
