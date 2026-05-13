@@ -105,3 +105,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   updated `exp/results/repro/oracle/OUTCOME.md`, and regenerated
   `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.{csv,pdf}` to include the
   completed UVQLM curve; large screen/GPU logs remain uncommitted.
+- Prepared Robert's requested ROB-60 `lr=3e-5`, `search_lr=2e-1` oracle
+  follow-up for RMM, RFM, and UVQLM after confirming no completed artifacts
+  existed for that cell. Added the grid case to the reproducible oracle configs,
+  kept new result paths workspace-relative, and added a Mimas `with-gpu` screen
+  wrapper with a Linear completion callback.

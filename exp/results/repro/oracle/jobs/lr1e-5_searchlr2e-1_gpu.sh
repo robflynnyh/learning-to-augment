@@ -54,6 +54,7 @@ set -euo pipefail
 
 export MPLCONFIGDIR="${MPLCONFIGDIR:-/exp/exp4/acp21rjf/.scratch/matplotlib-cache}"
 export L2A_TEDLIUM3_LEGACY_DIR="${L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TEDLIUM_release-3/legacy}"
+export PYTHONPATH="$PWD:${PYTHONPATH:-}"
 mkdir -p "${MPLCONFIGDIR}" "$(dirname "${LOG_PATH}")" \
   exp/results/repro/oracle/RMM exp/results/repro/oracle/RFM
 
