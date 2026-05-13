@@ -31,7 +31,7 @@ Example:
 python3 scripts/linear/create_blocked_issue.py \
   --blocked-by <current-issue-identifier> \
   --title "Fix separate problem discovered during <current issue>" \
-  --description-file /tmp/followup.md
+  --description-file docs/followup-<current-issue-identifier>.md
 ```
 
 Prefer existing experiment configs, launchers, result directories, and helper

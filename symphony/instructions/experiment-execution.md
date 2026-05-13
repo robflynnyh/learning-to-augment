@@ -12,6 +12,11 @@ cooperative GPU allocation instead of manual polling. Prefer pool `1,2` unless
 the issue or experiment requires a different pool. Use a narrower pool only when
 the issue or an inspected launcher makes that need concrete.
 
+On Mimas, never use `/tmp` for working directories, temporary files, logs,
+downloads, callbacks, screen logs, result staging, or experiment scratch space.
+Use durable repo-local paths, `exp/results/`, or appropriate `/store/...` paths
+so queued jobs and later Symphony turns can inspect the same artifacts.
+
 Launch long-running Mimas GPU experiments in durable detached `screen` sessions
 with log files. The detached command should run
 `with-gpu <pool> -- <experiment-wrapper>` so the queue waiter survives after the
