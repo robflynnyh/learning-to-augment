@@ -123,6 +123,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `search_lr=2e-1` cell for RMM, RFM, and UVQLM, plus a Mimas `with-gpu`
   screen wrapper with a Linear completion callback.
 
+- Updated Symphony rules for ROB-83 to forbid `/tmp` on Mimas for working files,
+  logs, downloads, result staging, callbacks, and experiment scratch space. Use
+  durable repo-local paths, `exp/results/`, or suitable `/store/...` locations
+  for artifacts that later Symphony turns may need to inspect.
+
 ## 2026-05-14
 
 - Finalized the ROB-60 higher-LR `lr=1e-4`, `search_lr=2e-1` oracle follow-up.
