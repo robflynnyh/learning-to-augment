@@ -5,9 +5,9 @@ CMultiStepVQLM,fixed_1.0,1,2e-5,exp/results/repro/sweeps/no_audio_cmultistep_vql
 CMultiStepVQLM,fixed_1.0,5,5e-6,exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLM/tedlium_dev_epoch5_lr5e-6.txt,complete,0.100088,0.087488,-0.012601,-12.59
 CMultiStepVQLM,fixed_1.0,5,1e-5,exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLM/tedlium_dev_epoch5_lr1e-5.txt,complete,0.100088,0.087322,-0.012767,-12.76
 CMultiStepVQLM,fixed_1.0,5,2e-5,exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLM/tedlium_dev_epoch5_lr2e-5.txt,complete,0.100088,0.090251,-0.009838,-9.83
-CMultiStepVQLMRandomReward,uniform_0.5_1.0,1,5e-6,exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLMRandomReward/tedlium_dev_epoch1_lr5e-6.txt,missing,,,,
-CMultiStepVQLMRandomReward,uniform_0.5_1.0,1,1e-5,exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLMRandomReward/tedlium_dev_epoch1_lr1e-5.txt,missing,,,,
-CMultiStepVQLMRandomReward,uniform_0.5_1.0,1,2e-5,exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLMRandomReward/tedlium_dev_epoch1_lr2e-5.txt,missing,,,,
-CMultiStepVQLMRandomReward,uniform_0.5_1.0,5,5e-6,exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLMRandomReward/tedlium_dev_epoch5_lr5e-6.txt,missing,,,,
-CMultiStepVQLMRandomReward,uniform_0.5_1.0,5,1e-5,exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLMRandomReward/tedlium_dev_epoch5_lr1e-5.txt,missing,,,,
-CMultiStepVQLMRandomReward,uniform_0.5_1.0,5,2e-5,exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLMRandomReward/tedlium_dev_epoch5_lr2e-5.txt,missing,,,,
+CMultiStepVQLMRandomReward,uniform_0.5_1.0,1,5e-6,exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLMRandomReward/tedlium_dev_epoch1_lr5e-6.txt,complete,0.100088,0.089975,-0.010114,-10.10
+CMultiStepVQLMRandomReward,uniform_0.5_1.0,1,1e-5,exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLMRandomReward/tedlium_dev_epoch1_lr1e-5.txt,complete,0.100088,0.089809,-0.010280,-10.27
+CMultiStepVQLMRandomReward,uniform_0.5_1.0,1,2e-5,exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLMRandomReward/tedlium_dev_epoch1_lr2e-5.txt,complete,0.100088,0.087930,-0.012159,-12.15
+CMultiStepVQLMRandomReward,uniform_0.5_1.0,5,5e-6,exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLMRandomReward/tedlium_dev_epoch5_lr5e-6.txt,complete,0.100088,0.085774,-0.014314,-14.30
+CMultiStepVQLMRandomReward,uniform_0.5_1.0,5,1e-5,exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLMRandomReward/tedlium_dev_epoch5_lr1e-5.txt,complete,0.100088,0.086603,-0.013485,-13.47
+CMultiStepVQLMRandomReward,uniform_0.5_1.0,5,2e-5,exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLMRandomReward/tedlium_dev_epoch5_lr2e-5.txt,complete,0.100088,0.088096,-0.011993,-11.98

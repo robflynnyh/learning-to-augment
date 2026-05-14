@@ -103,3 +103,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   uniformly from that interval. The no-audio launcher and summarizer can compare
   this randomized variant against the existing fixed `1.0` baseline under
   `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/`.
+- Completed the ROB-80 no-audio CMultiStepVQLM random reward-conditioning
+  comparison: all 12 fixed-vs-random cells are summarized in
+  `ROB-80_NOAUDIO_REWARD_CONDITIONING_COMPARISON.md`. The best randomized row
+  reached updated WER `0.085774` at `5e-6` / 5 epochs, improving on the best
+  fixed-`1.0` row (`0.087322` at `1e-5` / 5 epochs).
