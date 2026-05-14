@@ -2140,7 +2140,7 @@ class AdditivePolicy(Policy):
         x = self.encode(x)
         return x    
     
-    def augment(self, audio, sample=True, return_probs=False, use_random=False, lengths=None):
+    def augment(self, audio, sample=True, return_probs=False, use_random=False, lengths=None, *args, **kwargs):
 
         if not use_random:
             pred = self(audio) # b, c, t

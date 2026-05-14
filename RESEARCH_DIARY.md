@@ -148,3 +148,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   Added the small result text files, updated `exp/results/repro/oracle/OUTCOME.md`,
   and regenerated `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.{csv,pdf}`;
   large screen/GPU logs remain uncommitted.
+- Prepared Robert's requested ROB-60 random additive-noise oracle follow-up at
+  `lr=3e-5`, `search_lr=2e-1`. Added an `RAN` repro grid using
+  `AdditivePolicy` with `use_random: true`, plus a Mimas `with-gpu` screen
+  wrapper with a Linear completion callback. Updated `AdditivePolicy.augment`
+  to accept rollout passthrough kwargs such as `repeats`, matching the other
+  oracle-search policies.
