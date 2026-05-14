@@ -88,3 +88,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   because that checkpoint predates the current signal-conditioned model
   modules; the queued follow-up uses the compatible
   `CMultiStepMLM/no_audio_modelsignals.pt` checkpoint.
+- Completed the ROB-80 no-audio CMultiStepVQLM TED-LIUM dev follow-up: all 6
+  cells finished for `5e-6`, `1e-5`, and `2e-5` at 1 and 5 epochs. The best
+  updated WER was `0.087322` at `1e-5` / 5 epochs; the table, CSV, generated
+  configs, and per-cell result files are under
+  `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/`.

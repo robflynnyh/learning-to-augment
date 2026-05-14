@@ -10,6 +10,7 @@ exp/wandb/
 **/.generated/
 exp/results/repro/sweeps/logs/
 exp/results/repro/sweeps/segmented_dev/logs/
+exp/results/repro/sweeps/no_audio_cmultistep_vqlm/logs/
 symphony/.env
 
 # Distribution / packaging
