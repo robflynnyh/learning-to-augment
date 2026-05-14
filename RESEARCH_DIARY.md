@@ -122,3 +122,13 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `3e-5` is the best setting so far. Added a reproducible `lr=1e-4`,
   `search_lr=2e-1` cell for RMM, RFM, and UVQLM, plus a Mimas `with-gpu`
   screen wrapper with a Linear completion callback.
+
+## 2026-05-14
+
+- Finalized the ROB-60 higher-LR `lr=1e-4`, `search_lr=2e-1` oracle follow-up.
+  The setting did not improve the best result: UVQLM reached `8.821%` WER,
+  RMM reached `8.927%`, and RFM reached `9.204%`, all at repeat 50. RMM
+  `3e-5/2e-1` remains best overall at `8.428%`. Added the small result text
+  files, updated `exp/results/repro/oracle/OUTCOME.md`, and regenerated
+  `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.{csv,pdf}` to include the
+  completed curves; large screen/GPU logs remain uncommitted.
