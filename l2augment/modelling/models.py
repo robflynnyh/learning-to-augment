@@ -626,7 +626,21 @@ def calc_length(lengths, all_paddings, kernel_size, stride, ceil_mode, repeat_nu
     return lengths.to(dtype=torch.int)
 
 
+import inspect
 from vector_quantize_pytorch import VectorQuantize
+
+
+_VECTOR_QUANTIZE_INIT_PARAMS = inspect.signature(VectorQuantize.__init__).parameters
+
+
+def vector_quantize_compat(**kwargs):
+    """Construct VectorQuantize while tolerating older installed signatures."""
+    supported_kwargs = {
+        key: value for key, value in kwargs.items() if key in _VECTOR_QUANTIZE_INIT_PARAMS
+    }
+    return VectorQuantize(**supported_kwargs)
+
+
 class VQVariationalAutoEncoder(VAEBase):
     def __init__(
             self, 
@@ -649,7 +663,7 @@ class VQVariationalAutoEncoder(VAEBase):
 
         assert norm_type in ['gn', 'bn'], 'norm_type must be either "gn" or "bn"'
         
-        self.VQ = VectorQuantize(
+        self.VQ = vector_quantize_compat(
             dim = latent_dim, 
             codebook_size=codebook_size, 
             decay=0.99, 

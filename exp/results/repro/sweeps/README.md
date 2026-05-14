@@ -29,3 +29,17 @@ TED-LIUM segmented dev follow-up with the same base LR grid (`5e-6`, `1e-5`,
 
 The segmented follow-up summary is written to
 `exp/results/repro/sweeps/segmented_dev/ROB-80_SEGMENTED_OUTCOME.md`.
+
+`scripts/launch_rob80_tedlium_noaudio_cmultistep_sweep.sh` runs the requested
+no-audio CMultiStepVQLM follow-up on TED-LIUM dev under:
+
+- `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLM/`
+
+This follow-up uses `ConditionalMultiStepMaskGenerator` with
+`condition_on_audio: false`, the locally cached
+`CMultiStepMLM/no_audio_modelsignals.pt` checkpoint, and the same centered
+learning-rate grid (`5e-6`, `1e-5`, `2e-5`) for `1` and `5` adaptation epochs.
+The older `no_audio_modelgpu_big.pt` checkpoint exists in the cache for
+provenance but does not load into the current signal-conditioned model class.
+The summary is written to
+`exp/results/repro/sweeps/no_audio_cmultistep_vqlm/ROB-80_NOAUDIO_CMULTISTEP_OUTCOME.md`.

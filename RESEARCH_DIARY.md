@@ -76,3 +76,15 @@ reproduce results, interpret metrics, or avoid known failure modes.
   segmented updated WERs were RFM `0.097601` at `5e-6` / 5 epochs, RMM
   `0.097325` at `1e-5` / 5 epochs, and UFMR `0.096717` at `1e-5` / 5 epochs;
   the table and CSV are under `exp/results/repro/sweeps/segmented_dev/`.
+
+## 2026-05-14
+
+- Prepared the ROB-80 no-audio CMultiStepVQLM follow-up after the user selected
+  that policy family. The Mimas launcher writes generated configs and results
+  under `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/`, uses
+  `ConditionalMultiStepMaskGenerator` with `condition_on_audio: false`, and
+  sweeps TED-LIUM dev learning rates `5e-6`, `1e-5`, and `2e-5` for 1 and 5
+  adaptation epochs. The initial `no_audio_modelgpu_big.pt` smoke failed
+  because that checkpoint predates the current signal-conditioned model
+  modules; the queued follow-up uses the compatible
+  `CMultiStepMLM/no_audio_modelsignals.pt` checkpoint.
