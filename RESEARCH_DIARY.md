@@ -76,6 +76,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
   segmented updated WERs were RFM `0.097601` at `5e-6` / 5 epochs, RMM
   `0.097325` at `1e-5` / 5 epochs, and UFMR `0.096717` at `1e-5` / 5 epochs;
   the table and CSV are under `exp/results/repro/sweeps/segmented_dev/`.
+- Updated Symphony rules for ROB-83 to forbid `/tmp` on Mimas for working files,
+  logs, downloads, result staging, callbacks, and experiment scratch space. Use
+  durable repo-local paths, `exp/results/`, or suitable `/store/...` locations
+  for artifacts that later Symphony turns may need to inspect.
 
 ## 2026-05-14
 

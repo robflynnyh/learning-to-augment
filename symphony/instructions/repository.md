@@ -39,7 +39,10 @@ by the experiment harness. Verify the active environment before launching or
 validating long experiments.
 
 Keep credentials, large checkpoints, raw audio, W&B output, and bulky temporary
-files out of Git.
+files out of Git. On Mimas, never use `/tmp` for Symphony work, including
+notes, scratch files, logs, downloads, generated artifacts, or experiment
+intermediates; use a durable repo-local path, `exp/results/`, or an appropriate
+`/store/...` path instead.
 
 Commit small, meaningful result artifacts when they are part of the requested
 deliverable and are reasonable for Git. For large generated artifacts, commit a
