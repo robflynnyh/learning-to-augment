@@ -1,0 +1,8 @@
+ID: 0 - Dataset: tedlium3_segmented_data - Split: test - Epochs: 1 - Original_WER: 0.09582875571464011 - Updated_WER: 0.09660842754367935 - Repeats: 1 - Rollout Type: cpu_rollout_search
+ID: 0 - Dataset: tedlium3_segmented_data - Split: test - Epochs: 1 - Original_WER: 0.09582875571464011 - Updated_WER: 0.0935606194847078 - Repeats: 2 - Rollout Type: cpu_rollout_search
+ID: 0 - Dataset: tedlium3_segmented_data - Split: test - Epochs: 1 - Original_WER: 0.09582875571464011 - Updated_WER: 0.09395045539922742 - Repeats: 3 - Rollout Type: cpu_rollout_search
+ID: 0 - Dataset: tedlium3_segmented_data - Split: test - Epochs: 1 - Original_WER: 0.09582875571464011 - Updated_WER: 0.09161143991210972 - Repeats: 4 - Rollout Type: cpu_rollout_search
+ID: 0 - Dataset: tedlium3_segmented_data - Split: test - Epochs: 1 - Original_WER: 0.09582875571464011 - Updated_WER: 0.09242655136974165 - Repeats: 5 - Rollout Type: cpu_rollout_search
+ID: 0 - Dataset: tedlium3_segmented_data - Split: test - Epochs: 1 - Original_WER: 0.09582875571464011 - Updated_WER: 0.09224935322677819 - Repeats: 10 - Rollout Type: cpu_rollout_search
+ID: 0 - Dataset: tedlium3_segmented_data - Split: test - Epochs: 1 - Original_WER: 0.09582875571464011 - Updated_WER: 0.09054825105432895 - Repeats: 20 - Rollout Type: cpu_rollout_search
+ID: 0 - Dataset: tedlium3_segmented_data - Split: test - Epochs: 1 - Original_WER: 0.09582875571464011 - Updated_WER: 0.08905978665343588 - Repeats: 50 - Rollout Type: cpu_rollout_search

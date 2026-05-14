@@ -28,10 +28,9 @@ RFM at `lr=1e-5`, `search_lr=2e-1`; `lr=8e-6`, `search_lr=2e-1`; and
 
 The follow-up UVQLM oracle sweep also completed on Mimas at `lr=1e-5`,
 `search_lr=2e-1`, using `UnconditionalMaskGenerator` proposals and the same
-repeat grid. A later multi-policy follow-up completed for RMM, RFM, and UVQLM
-at `lr=3e-5`, `search_lr=2e-1`, again using the same repeat grid. A higher-LR
-follow-up also completed for RMM, RFM, and UVQLM at `lr=1e-4`,
-`search_lr=2e-1`.
+repeat grid. Later multi-policy follow-ups completed for RMM, RFM, and UVQLM
+at `lr=3e-5`, `lr=6e-5`, and `lr=1e-4`, all with `search_lr=2e-1` and the
+same repeat grid.
 
 ## Summary
 
@@ -48,24 +47,28 @@ Baseline original WER was `9.586%` for all rows.
 
 Robert requested additional oracle sweeps at `lr=1e-5`, `search_lr=2e-1`;
 `lr=8e-6`, `search_lr=2e-1`; `lr=1e-5`, `search_lr=9e-2`; and `lr=3e-5`,
-`search_lr=2e-1`. After `3e-5/2e-1` became the strongest setting, a higher-LR
-`1e-4/2e-1` follow-up was also run for RMM, RFM, and UVQLM. The detached GPU
-runs completed successfully between 2026-05-11 and 2026-05-14. The baseline
-original WER is approximately `9.586%`; the exact original WER varies slightly
-between repeated rows in the generated text files.
+`search_lr=2e-1`. After `3e-5/2e-1` became the strongest setting, higher-LR
+`1e-4/2e-1` and intermediate `6e-5/2e-1` follow-ups were also run for RMM,
+RFM, and UVQLM. The detached GPU runs completed successfully between
+2026-05-11 and 2026-05-14. The baseline original WER is approximately `9.586%`;
+the exact original WER varies slightly between repeated rows in the generated
+text files.
 
 | Method | Setup | Best repeat | Best WER | Abs. gain | Relative gain | Repeat 50 WER |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | RMM | `lr=3e-5`, `search_lr=2e-1` | 50 | 8.428% | 1.155 pp | 12.1% | 8.428% |
 | UVQLM | `lr=3e-5`, `search_lr=2e-1` | 50 | 8.467% | 1.116 pp | 11.6% | 8.467% |
 | UVQLM | `lr=1e-5`, `search_lr=2e-1` | 50 | 8.488% | 1.095 pp | 11.4% | 8.488% |
+| UVQLM | `lr=6e-5`, `search_lr=2e-1` | 50 | 8.555% | 1.028 pp | 10.7% | 8.555% |
 | RMM | `lr=1e-5`, `search_lr=2e-1` | 50 | 8.569% | 1.014 pp | 10.6% | 8.569% |
+| RMM | `lr=6e-5`, `search_lr=2e-1` | 50 | 8.580% | 1.003 pp | 10.5% | 8.580% |
 | RMM | `lr=1e-5`, `search_lr=9e-2` | 10 | 8.612% | 0.971 pp | 10.1% | 8.665% |
 | RMM | `lr=8e-6`, `search_lr=2e-1` | 50 | 8.626% | 0.960 pp | 10.0% | 8.626% |
 | RFM | `lr=3e-5`, `search_lr=2e-1` | 50 | 8.817% | 0.769 pp | 8.0% | 8.817% |
 | UVQLM | `lr=1e-4`, `search_lr=2e-1` | 50 | 8.821% | 0.762 pp | 8.0% | 8.821% |
 | RFM | `lr=1e-5`, `search_lr=2e-1` | 50 | 8.842% | 0.744 pp | 7.8% | 8.842% |
 | RFM | `lr=8e-6`, `search_lr=2e-1` | 50 | 8.892% | 0.691 pp | 7.2% | 8.892% |
+| RFM | `lr=6e-5`, `search_lr=2e-1` | 50 | 8.906% | 0.677 pp | 7.1% | 8.906% |
 | RMM | `lr=1e-4`, `search_lr=2e-1` | 50 | 8.927% | 0.659 pp | 6.9% | 8.927% |
 | RFM | `lr=1e-5`, `search_lr=9e-2` | 10 | 8.977% | 0.606 pp | 6.3% | 8.995% |
 | RFM | `lr=1e-4`, `search_lr=2e-1` | 50 | 9.204% | 0.383 pp | 4.0% | 9.204% |
@@ -75,9 +78,11 @@ RMM reaches `8.428%` WER at repeat 50, beating UVQLM at the same setting by
 `0.039` pp, the previous UVQLM `1e-5/2e-1` best by `0.060` pp, and the matching
 RFM `3e-5/2e-1` result by `0.390` pp. The higher `1e-4/2e-1` follow-up did not
 improve any method: best WERs were UVQLM `8.821%`, RMM `8.927%`, and RFM
-`9.204%`, all at repeat 50. The `search_lr=2e-1` RMM/RFM sweeps
-improved over the previous newer/default oracle setup for both methods. The
-later `1e-5/9e-2` cell
+`9.204%`, all at repeat 50. The intermediate `6e-5/2e-1` follow-up improved
+over `1e-4/2e-1` for all three methods, but did not recover the `3e-5/2e-1`
+best: RMM was worse by `0.152` pp, UVQLM by `0.089` pp, and RFM by `0.089` pp.
+The `search_lr=2e-1` RMM/RFM sweeps improved over the previous newer/default
+oracle setup for both methods. The later `1e-5/9e-2` cell
 improved RMM versus `8e-6/9e-2`, but did not improve RFM and did not beat the
 `1e-5/2e-1` setting:
 
@@ -87,11 +92,11 @@ improved RMM versus `8e-6/9e-2`, but did not improve RFM and did not beat the
 | RFM | 8.941% | 8.892% | -0.049 pp | 8.977% | +0.036 pp | 8.842% | -0.099 pp |
 
 All `search_lr=2e-1` follow-up curves reached their best result at repeat 50,
-including the `3e-5/2e-1` and `1e-4/2e-1` RMM, RFM, and UVQLM curves. This
-differs from the
-previous RMM `8e-6/9e-2` result, which peaked at repeat 20, and the
-`1e-5/9e-2` RMM/RFM curves, which peaked at repeat 10. The best overall
-completed setting is RMM at `lr=3e-5`, `search_lr=2e-1`, repeat 50.
+including the `3e-5/2e-1`, `6e-5/2e-1`, and `1e-4/2e-1` RMM, RFM, and UVQLM
+curves. This differs from the previous RMM `8e-6/9e-2` result, which peaked at
+repeat 20, and the `1e-5/9e-2` RMM/RFM curves, which peaked at repeat 10. The
+best overall completed setting is RMM at `lr=3e-5`, `search_lr=2e-1`, repeat
+50.
 
 ## Interpretation
 
@@ -124,9 +129,10 @@ After review, the plot was regenerated with a log-scaled repeat axis to make the
 early-repeat region easier to read across repeats `1` through `50`.
 
 A second log-scaled comparison plot now includes the follow-up `1e-5/2e-1`,
-`8e-6/2e-1`, `1e-5/9e-2`, `3e-5/2e-1`, and `1e-4/2e-1` RMM/RFM curves, the
-`1e-5/2e-1`, `3e-5/2e-1`, and `1e-4/2e-1` UVQLM curves, the previous
-`8e-6/9e-2` curves, and the same UFMR/no-adaptation references:
+`8e-6/2e-1`, `1e-5/9e-2`, `3e-5/2e-1`, `6e-5/2e-1`, and `1e-4/2e-1` RMM/RFM
+curves, the `1e-5/2e-1`, `3e-5/2e-1`, `6e-5/2e-1`, and `1e-4/2e-1` UVQLM
+curves, the previous `8e-6/9e-2` curves, and the same UFMR/no-adaptation
+references:
 
 - `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.pdf`
 - `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.csv`
@@ -148,6 +154,7 @@ Result files:
 - `exp/results/repro/oracle/RMM/tedlium_lr1e-5_searchlr9e-2.txt`
 - `exp/results/repro/oracle/RMM/tedlium_lr8e-6_searchlr2e-1.txt`
 - `exp/results/repro/oracle/RMM/tedlium_lr3e-5_searchlr2e-1.txt`
+- `exp/results/repro/oracle/RMM/tedlium_lr6e-5_searchlr2e-1.txt`
 - `exp/results/repro/oracle/RMM/tedlium_lr1e-4_searchlr2e-1.txt`
 - `exp/results/repro/oracle/RFM/tedlium_lr1e-6_searchlr4e-2.txt`
 - `exp/results/repro/oracle/RFM/tedlium_lr8e-6_searchlr9e-2.txt`
@@ -155,9 +162,11 @@ Result files:
 - `exp/results/repro/oracle/RFM/tedlium_lr1e-5_searchlr9e-2.txt`
 - `exp/results/repro/oracle/RFM/tedlium_lr8e-6_searchlr2e-1.txt`
 - `exp/results/repro/oracle/RFM/tedlium_lr3e-5_searchlr2e-1.txt`
+- `exp/results/repro/oracle/RFM/tedlium_lr6e-5_searchlr2e-1.txt`
 - `exp/results/repro/oracle/RFM/tedlium_lr1e-4_searchlr2e-1.txt`
 - `exp/results/repro/oracle/UVQLM/tedlium_lr1e-5_searchlr2e-1.txt`
 - `exp/results/repro/oracle/UVQLM/tedlium_lr3e-5_searchlr2e-1.txt`
+- `exp/results/repro/oracle/UVQLM/tedlium_lr6e-5_searchlr2e-1.txt`
 - `exp/results/repro/oracle/UVQLM/tedlium_lr1e-4_searchlr2e-1.txt`
 
 Launcher and log:
@@ -182,3 +191,6 @@ Launcher and log:
 - `exp/results/repro/oracle/jobs/lr1e-4_searchlr2e-1_all_policies_gpu.sh`
 - `exp/results/repro/oracle/logs/lr1e-4_searchlr2e-1_all_policies_gpu.log`
 - `exp/results/repro/oracle/logs/lr1e-4_searchlr2e-1_all_policies_queue.log`
+- `exp/results/repro/oracle/jobs/lr6e-5_searchlr2e-1_all_policies_gpu.sh`
+- `exp/results/repro/oracle/logs/lr6e-5_searchlr2e-1_all_policies_gpu.log`
+- `exp/results/repro/oracle/logs/lr6e-5_searchlr2e-1_all_policies_queue.log`

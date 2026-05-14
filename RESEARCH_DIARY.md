@@ -136,3 +136,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
   the completed `1e-4/2e-1` cell was worse than `3e-5/2e-1`. Added reproducible
   RMM/RFM/UVQLM grid cases and a Mimas `with-gpu` all-policies wrapper with a
   Linear completion callback.
+- Finalized the ROB-60 intermediate `lr=6e-5`, `search_lr=2e-1` oracle
+  follow-up. UVQLM reached `8.555%` WER, RMM reached `8.580%`, and RFM reached
+  `8.906%`, all at repeat 50. This improved over `1e-4/2e-1` for all three
+  methods, but did not beat the existing RMM `3e-5/2e-1` best at `8.428%`.
+  Added the small result text files, updated `exp/results/repro/oracle/OUTCOME.md`,
+  and regenerated `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.{csv,pdf}`;
+  large screen/GPU logs remain uncommitted.
