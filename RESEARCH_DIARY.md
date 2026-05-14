@@ -132,3 +132,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   files, updated `exp/results/repro/oracle/OUTCOME.md`, and regenerated
   `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.{csv,pdf}` to include the
   completed curves; large screen/GPU logs remain uncommitted.
+- Prepared Robert's conditional `lr=6e-5`, `search_lr=2e-1` follow-up because
+  the completed `1e-4/2e-1` cell was worse than `3e-5/2e-1`. Added reproducible
+  RMM/RFM/UVQLM grid cases and a Mimas `with-gpu` all-policies wrapper with a
+  Linear completion callback.

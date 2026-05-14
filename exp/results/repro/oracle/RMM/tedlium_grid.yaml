@@ -95,3 +95,11 @@ grid:
         evaluation.optim_args.single_step_lr:
           value: 2e-1
           label: "2e-1"
+    - id: lr6e-5_searchlr2e-1
+      values:
+        evaluation.optim_args.lr:
+          value: 6e-5
+          label: "6e-5"
+        evaluation.optim_args.single_step_lr:
+          value: 2e-1
+          label: "2e-1"

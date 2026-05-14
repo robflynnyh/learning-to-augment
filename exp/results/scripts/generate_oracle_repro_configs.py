@@ -134,6 +134,14 @@ grid:
         evaluation.optim_args.single_step_lr:
           value: 2e-1
           label: "2e-1"
+    - id: lr6e-5_searchlr2e-1
+      values:
+        evaluation.optim_args.lr:
+          value: 6e-5
+          label: "6e-5"
+        evaluation.optim_args.single_step_lr:
+          value: 2e-1
+          label: "2e-1"
 """
 
 
@@ -201,6 +209,14 @@ grid:
         evaluation.optim_args.lr:
           value: 1e-4
           label: "1e-4"
+        evaluation.optim_args.single_step_lr:
+          value: 2e-1
+          label: "2e-1"
+    - id: lr6e-5_searchlr2e-1
+      values:
+        evaluation.optim_args.lr:
+          value: 6e-5
+          label: "6e-5"
         evaluation.optim_args.single_step_lr:
           value: 2e-1
           label: "2e-1"
@@ -596,6 +612,7 @@ def main() -> None:
     write(job_dir / "lr1e-5_searchlr9e-2_gpu.sh", gpu_wrapper("1e-5", "9e-2"))
     write(job_dir / "lr3e-5_searchlr2e-1_all_policies_gpu.sh", all_policy_gpu_wrapper("3e-5", "2e-1"))
     write(job_dir / "lr1e-4_searchlr2e-1_all_policies_gpu.sh", all_policy_gpu_wrapper("1e-4", "2e-1"))
+    write(job_dir / "lr6e-5_searchlr2e-1_all_policies_gpu.sh", all_policy_gpu_wrapper("6e-5", "2e-1"))
     write(job_dir / "uvqlm_lr1e-5_searchlr2e-1_gpu.sh", uvqlm_gpu_wrapper("1e-5", "2e-1"))
 
     write(ORACLE_REPRO_ROOT / "UVQLM/tedlium_grid.yaml", uvqlm_grid_config())
