@@ -28,12 +28,14 @@ DATASET="${ROB80_DATASET:-tedlium}"
 SPLIT="${ROB80_SPLIT:-dev}"
 TAG_PREFIX="${ROB80_TAG_PREFIX:-tedlium_dev}"
 METHOD="${ROB80_METHOD:-CMultiStepVQLM}"
+SUMMARY_METHODS="${ROB80_SUMMARY_METHODS:-${METHOD}}"
 LRS="${ROB80_LRS:-5e-6 1e-5 2e-5}"
 EPOCHS="${ROB80_EPOCHS:-1 5}"
 TITLE="${ROB80_TITLE:-ROB-80 TED-LIUM Dev No-Audio CMultiStepVQLM LR Sweep}"
 NOTE="${ROB80_NOTE:-No-audio CMultiStepVQLM uses \`ConditionalMultiStepMaskGenerator\` with \`condition_on_audio: false\`, so generation is conditioned on reward/signal inputs and recurrent mask history, not raw audio.}"
 CSV_NAME="${ROB80_CSV_NAME:-rob80_tedlium_noaudio_cmultistep_sweep.csv}"
 OUTCOME_NAME="${ROB80_OUTCOME_NAME:-ROB-80_NOAUDIO_CMULTISTEP_OUTCOME.md}"
+CONDITIONING_REWARD_RANGE="${ROB80_CONDITIONING_REWARD_RANGE:-}"
 
 on_exit() {
   status=$?
@@ -85,6 +87,9 @@ echo "[rob80-noaudio-cmultistep] decoder_layers=${DECODER_LAYERS}"
 echo "[rob80-noaudio-cmultistep] dataset=${DATASET}"
 echo "[rob80-noaudio-cmultistep] split=${SPLIT}"
 echo "[rob80-noaudio-cmultistep] tag_prefix=${TAG_PREFIX}"
+echo "[rob80-noaudio-cmultistep] method=${METHOD}"
+echo "[rob80-noaudio-cmultistep] summary_methods=${SUMMARY_METHODS}"
+echo "[rob80-noaudio-cmultistep] conditioning_reward_range=${CONDITIONING_REWARD_RANGE:-fixed:${ROB80_DEFAULT_CONDITIONING_REWARD:-1.0}}"
 echo "[rob80-noaudio-cmultistep] lrs=${LRS}"
 echo "[rob80-noaudio-cmultistep] epochs=${EPOCHS}"
 echo "[rob80-noaudio-cmultistep] cuda_visible_devices=${CUDA_VISIBLE_DEVICES:-unset}"
@@ -106,7 +111,7 @@ export L2A_TEDLIUM3_LEGACY_DIR="${L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TE
 export L2A_REV16_DIR="${L2A_REV16_DIR:-/store/store4/data/rev_benchmark}"
 export L2A_CHIME6_DIR="${L2A_CHIME6_DIR:-/store/store4/data/chime6/}"
 
-python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${POLICY_CKPT}" "${MASK_VAE_CKPT}" "${DECODER_LAYERS}" "${DATASET}" "${SPLIT}" "${TAG_PREFIX}" "${METHOD}" "${LRS}" "${EPOCHS}" <<'PY'
+python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${POLICY_CKPT}" "${MASK_VAE_CKPT}" "${DECODER_LAYERS}" "${DATASET}" "${SPLIT}" "${TAG_PREFIX}" "${METHOD}" "${LRS}" "${EPOCHS}" "${CONDITIONING_REWARD_RANGE}" "${ROB80_DEFAULT_CONDITIONING_REWARD:-1.0}" <<'PY'
 import sys
 from pathlib import Path
 
@@ -121,6 +126,14 @@ tag_prefix = sys.argv[8]
 method = sys.argv[9]
 lrs = tuple(sys.argv[10].split())
 epochs = tuple(int(item) for item in sys.argv[11].split())
+conditioning_reward_range = tuple(sys.argv[12].split())
+default_conditioning_reward = float(sys.argv[13])
+conditioning_reward_range_yaml = ""
+if conditioning_reward_range:
+    if len(conditioning_reward_range) != 2:
+        raise SystemExit("ROB80_CONDITIONING_REWARD_RANGE must contain two values, e.g. '0.5 1.0'")
+    low, high = sorted(float(item) for item in conditioning_reward_range)
+    conditioning_reward_range_yaml = f"    conditioning_reward_range: [{low}, {high}]\n"
 
 (root / method / "configs").mkdir(parents=True, exist_ok=True)
 for epoch_count in epochs:
@@ -161,8 +174,8 @@ policy:
     hidden_dim: 512
     embedding_dim: 512
     decoder_layers: {decoder_layers}
-    default_conditioning_reward: 1.0
-    condition_on_audio: false
+    default_conditioning_reward: {default_conditioning_reward}
+{conditioning_reward_range_yaml}    condition_on_audio: false
     mask_vae_state_dict_path: {mask_vae_ckpt}
     mask_vae_config:
       latent_dim: 128
@@ -230,7 +243,7 @@ done
 cd "${REPO_DIR}"
 python3 scripts/summarize_rob80_noaudio_cmultistep_sweep.py \
   --result-root "${RESULT_ROOT}" \
-  --method "${METHOD}" \
+  --methods "${SUMMARY_METHODS}" \
   --dataset "${DATASET}" \
   --split "${SPLIT}" \
   --tag-prefix "${TAG_PREFIX}" \

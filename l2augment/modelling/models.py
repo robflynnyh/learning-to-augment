@@ -1555,6 +1555,7 @@ class ConditionalMultiStepMaskGenerator(Policy):
             mask_vae_config:Dict={},
             mask_vae_state_dict_path:str=None,  
             default_conditioning_reward=1.0,
+            conditioning_reward_range=None,
             min_audio_size=160,
             condition_on_audio=True,
             decoder_layers=4,
@@ -1564,6 +1565,12 @@ class ConditionalMultiStepMaskGenerator(Policy):
 
         self.min_audio_size = min_audio_size
         self.default_conditioning_reward = default_conditioning_reward
+        self.conditioning_reward_range = conditioning_reward_range
+        if self.conditioning_reward_range is not None:
+            if len(self.conditioning_reward_range) != 2:
+                raise ValueError("conditioning_reward_range must contain exactly two values")
+            low, high = sorted(float(item) for item in self.conditioning_reward_range)
+            self.conditioning_reward_range = (low, high)
         self.audio_enc = VQVariationalAutoEncoder(**audio_vae_config) if condition_on_audio else None
         if audio_vae_state_dict_path is not None and condition_on_audio:
             audio_vae_state_dict = torch.load(audio_vae_state_dict_path, map_location='cpu')['model_state_dict']
@@ -1653,7 +1660,12 @@ class ConditionalMultiStepMaskGenerator(Policy):
         device='cpu'
     ):
         
-        score_enc = self.score_enc(torch.tensor([self.default_conditioning_reward], device=device).unsqueeze(-1)).unsqueeze(1)
+        if self.conditioning_reward_range is None:
+            conditioning_reward = torch.tensor([self.default_conditioning_reward], device=device)
+        else:
+            low, high = self.conditioning_reward_range
+            conditioning_reward = torch.empty(1, device=device).uniform_(low, high)
+        score_enc = self.score_enc(conditioning_reward.unsqueeze(-1)).unsqueeze(1)
         entropy_emb = self.entropy_embed(entropy.unsqueeze(-1))[None, None, :]
         n_losses_emb = self.n_losses_embed(n_losses.unsqueeze(-1))[None, None, :]
 

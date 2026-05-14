@@ -97,3 +97,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   updated WER was `0.087322` at `1e-5` / 5 epochs; the table, CSV, generated
   configs, and per-cell result files are under
   `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/`.
+- Prepared a ROB-80 reward-conditioning follow-up for no-audio CMultiStepVQLM.
+  The model now supports an optional `conditioning_reward_range` for inference;
+  when set to `[0.5, 1.0]`, each generated mask samples its conditioning reward
+  uniformly from that interval. The no-audio launcher and summarizer can compare
+  this randomized variant against the existing fixed `1.0` baseline under
+  `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/`.

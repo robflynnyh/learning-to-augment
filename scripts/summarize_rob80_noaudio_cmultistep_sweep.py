@@ -50,7 +50,7 @@ def display_path(path: Path) -> str:
 
 def collect_rows(
     result_root: Path,
-    method: str,
+    methods: tuple[str, ...],
     dataset: str,
     split: str,
     tag_prefix: str,
@@ -58,41 +58,51 @@ def collect_rows(
     lrs: tuple[str, ...],
 ) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
-    for epoch_count in epochs:
-        for lr in lrs:
-            result_path = result_root / method / f"{tag_prefix}_epoch{epoch_count}_lr{lr}.txt"
-            parsed = parse_result(result_path, dataset, split, epoch_count)
-            row = {
-                "method": method,
-                "epochs": str(epoch_count),
-                "lr": lr,
-                "result_path": display_path(result_path),
-            }
-            if parsed is None:
-                row.update(
-                    {
-                        "status": "missing",
-                        "original_wer": "",
-                        "updated_wer": "",
-                        "absolute_delta": "",
-                        "relative_delta_pct": "",
-                    }
-                )
-            else:
-                original, updated = parsed
-                row.update(
-                    {
-                        "status": "complete",
-                        "original_wer": f"{original:.6f}",
-                        "updated_wer": f"{updated:.6f}",
-                        "absolute_delta": f"{updated - original:.6f}",
-                        "relative_delta_pct": f"{((updated - original) / original) * 100:.2f}"
-                        if original
-                        else "",
-                    }
-                )
-            rows.append(row)
+    for method in methods:
+        for epoch_count in epochs:
+            for lr in lrs:
+                result_path = result_root / method / f"{tag_prefix}_epoch{epoch_count}_lr{lr}.txt"
+                parsed = parse_result(result_path, dataset, split, epoch_count)
+                row = {
+                    "method": method,
+                    "conditioning": conditioning_label(method),
+                    "epochs": str(epoch_count),
+                    "lr": lr,
+                    "result_path": display_path(result_path),
+                }
+                if parsed is None:
+                    row.update(
+                        {
+                            "status": "missing",
+                            "original_wer": "",
+                            "updated_wer": "",
+                            "absolute_delta": "",
+                            "relative_delta_pct": "",
+                        }
+                    )
+                else:
+                    original, updated = parsed
+                    row.update(
+                        {
+                            "status": "complete",
+                            "original_wer": f"{original:.6f}",
+                            "updated_wer": f"{updated:.6f}",
+                            "absolute_delta": f"{updated - original:.6f}",
+                            "relative_delta_pct": f"{((updated - original) / original) * 100:.2f}"
+                            if original
+                            else "",
+                        }
+                    )
+                rows.append(row)
     return rows
+
+
+def conditioning_label(method: str) -> str:
+    if method == "CMultiStepVQLM":
+        return "fixed_1.0"
+    if method == "CMultiStepVQLMRandomReward":
+        return "uniform_0.5_1.0"
+    return method
 
 
 def write_csv(rows: list[dict[str, str]], path: Path) -> None:
@@ -110,14 +120,14 @@ def write_markdown(rows: list[dict[str, str]], path: Path, title: str, note: str
         "",
         f"Completed cells: {complete}/{len(rows)}",
         "",
-        "| Method | Epochs | LR | Original WER | Updated WER | Abs Delta | Rel Delta % | Status |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| Method | Conditioning | Epochs | LR | Original WER | Updated WER | Abs Delta | Rel Delta % | Status |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
     if note:
         lines[1:1] = ["", note]
     for row in rows:
         lines.append(
-            "| {method} | {epochs} | `{lr}` | {original_wer} | {updated_wer} | "
+            "| {method} | {conditioning} | {epochs} | `{lr}` | {original_wer} | {updated_wer} | "
             "{absolute_delta} | {relative_delta_pct} | {status} |".format(**row)
         )
     lines.append("")
@@ -132,6 +142,10 @@ def parse_lrs(raw: str) -> tuple[str, ...]:
     return tuple(raw.split())
 
 
+def parse_methods(raw: str) -> tuple[str, ...]:
+    return tuple(raw.split())
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -140,7 +154,8 @@ def main() -> None:
         default=Path("exp/results/repro/sweeps/no_audio_cmultistep_vqlm"),
         help="Root containing no-audio CMultiStepVQLM result folders.",
     )
-    parser.add_argument("--method", default="CMultiStepVQLM")
+    parser.add_argument("--method", default=None, help="Single method to summarize; kept for compatibility.")
+    parser.add_argument("--methods", default="CMultiStepVQLM", help="Space-separated method folders to summarize.")
     parser.add_argument("--dataset", default="tedlium")
     parser.add_argument("--split", default="dev")
     parser.add_argument("--tag-prefix", default="tedlium_dev")
@@ -161,7 +176,7 @@ def main() -> None:
 
     rows = collect_rows(
         args.result_root,
-        method=args.method,
+        methods=parse_methods(args.method or args.methods),
         dataset=args.dataset,
         split=args.split,
         tag_prefix=args.tag_prefix,
