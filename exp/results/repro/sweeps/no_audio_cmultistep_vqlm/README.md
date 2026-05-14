@@ -13,6 +13,8 @@ This directory stores TED-LIUM dev sweeps for the no-audio
   `rob80_tedlium_noaudio_reward_conditioning_comparison.csv` compare the fixed
   and random reward-conditioning variants when the random run has completed.
 
-The launcher is `scripts/launch_rob80_tedlium_noaudio_cmultistep_sweep.sh`.
-Use `ROB80_METHOD=CMultiStepVQLMRandomReward` and
-`ROB80_CONDITIONING_REWARD_RANGE="0.5 1.0"` for the randomized variant.
+The base launcher is `scripts/launch_rob80_tedlium_noaudio_cmultistep_sweep.sh`.
+The randomized comparison is queued through
+`scripts/launch_rob80_tedlium_noaudio_random_reward_sweep.sh`, which sets
+`ROB80_METHOD=CMultiStepVQLMRandomReward` and
+`ROB80_CONDITIONING_REWARD_RANGE="0.5 1.0"`.
