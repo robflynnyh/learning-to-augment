@@ -154,3 +154,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
   wrapper with a Linear completion callback. Updated `AdditivePolicy.augment`
   to accept rollout passthrough kwargs such as `repeats`, matching the other
   oracle-search policies.
+- Finalized the ROB-60 random additive-noise oracle follow-up. RAN reached
+  `8.885%` WER at repeat 5 and `8.949%` at repeat 50. It improves over no
+  adaptation but is weaker than the matching `3e-5/2e-1` RMM, UVQLM, and RFM
+  oracle cells. Added the small RAN result text file, updated
+  `exp/results/repro/oracle/OUTCOME.md`, and regenerated
+  `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.{csv,pdf}` to include the
+  RAN curve; large screen/GPU logs remain uncommitted.
