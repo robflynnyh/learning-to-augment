@@ -108,3 +108,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `ROB-80_NOAUDIO_REWARD_CONDITIONING_COMPARISON.md`. The best randomized row
   reached updated WER `0.085774` at `5e-6` / 5 epochs, improving on the best
   fixed-`1.0` row (`0.087322` at `1e-5` / 5 epochs).
+- Prepared the ROB-80 repeat/audio CMultiStepVQLM follow-up. Repeat 2 writes
+  no-audio fixed/random reward results with `_repeat2` suffixes and rollout seed
+  `123457`; the audio-conditioned comparison uses the legacy score-conditioned
+  `CMultiStepMLM/curbest.pt` checkpoint with `condition_on_audio: true` and
+  `use_signal_inputs: false`.

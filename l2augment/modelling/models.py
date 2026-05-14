@@ -1556,6 +1556,7 @@ class ConditionalMultiStepMaskGenerator(Policy):
             mask_vae_state_dict_path:str=None,  
             default_conditioning_reward=1.0,
             conditioning_reward_range=None,
+            use_signal_inputs=True,
             min_audio_size=160,
             condition_on_audio=True,
             decoder_layers=4,
@@ -1592,13 +1593,15 @@ class ConditionalMultiStepMaskGenerator(Policy):
 
         self.condition_on_audio = condition_on_audio
         self.decoder_layers = decoder_layers
+        self.use_signal_inputs = use_signal_inputs
 
-    
-        self.score_enc = timestep_encoder(hidden_dim=hidden_dim//3)
-        self.entropy_embed = timestep_encoder(hidden_dim=hidden_dim//3)
-        self.n_losses_embed = timestep_encoder(hidden_dim=hidden_dim//3)
-   
-        self.signal_fusion = SwiGlu(self.n_losses_embed.network.weight.shape[0] * 2 * 3, hidden_dim)
+        if self.use_signal_inputs:
+            self.score_enc = timestep_encoder(hidden_dim=hidden_dim//3)
+            self.entropy_embed = timestep_encoder(hidden_dim=hidden_dim//3)
+            self.n_losses_embed = timestep_encoder(hidden_dim=hidden_dim//3)
+            self.signal_fusion = SwiGlu(self.n_losses_embed.network.weight.shape[0] * 2 * 3, hidden_dim)
+        else:
+            self.score_enc = timestep_encoder(hidden_dim=hidden_dim)
 
         self.decoder = nn.GRU(
             input_size=hidden_dim,
@@ -1666,10 +1669,12 @@ class ConditionalMultiStepMaskGenerator(Policy):
             low, high = self.conditioning_reward_range
             conditioning_reward = torch.empty(1, device=device).uniform_(low, high)
         score_enc = self.score_enc(conditioning_reward.unsqueeze(-1)).unsqueeze(1)
-        entropy_emb = self.entropy_embed(entropy.unsqueeze(-1))[None, None, :]
-        n_losses_emb = self.n_losses_embed(n_losses.unsqueeze(-1))[None, None, :]
-
-        bos_emb = self.signal_fusion(torch.cat((score_enc, entropy_emb, n_losses_emb), dim=-1))
+        if self.use_signal_inputs:
+            entropy_emb = self.entropy_embed(entropy.unsqueeze(-1))[None, None, :]
+            n_losses_emb = self.n_losses_embed(n_losses.unsqueeze(-1))[None, None, :]
+            bos_emb = self.signal_fusion(torch.cat((score_enc, entropy_emb, n_losses_emb), dim=-1))
+        else:
+            bos_emb = score_enc
       
         #score_emb = self.score_enc(torch.tensor([self.default_conditioning_reward], device=device).unsqueeze(-1)).unsqueeze(1)
         outputs = []
@@ -1796,10 +1801,12 @@ class ConditionalMultiStepMaskGenerator(Policy):
             h_n=None
         ):
         score_enc = self.score_enc(rewards.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
-        entropy_emb = self.entropy_embed(entropy.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
-        n_losses_emb = self.n_losses_embed(n_losses.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
-   
-        bos_emb = self.signal_fusion(torch.cat((score_enc, entropy_emb, n_losses_emb), dim=-1))
+        if self.use_signal_inputs:
+            entropy_emb = self.entropy_embed(entropy.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
+            n_losses_emb = self.n_losses_embed(n_losses.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
+            bos_emb = self.signal_fusion(torch.cat((score_enc, entropy_emb, n_losses_emb), dim=-1))
+        else:
+            bos_emb = score_enc
         #bos_emb = self.score_enc(rewards.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
       
         latent_seq = torch.cat((bos_emb, latent_seq), dim=1)

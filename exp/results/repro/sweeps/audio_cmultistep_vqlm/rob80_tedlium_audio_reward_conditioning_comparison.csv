@@ -1,0 +1,13 @@
+method,conditioning,repeat,seed,epochs,lr,result_path,status,original_wer,updated_wer,absolute_delta,relative_delta_pct
+CMultiStepVQLMAudio,audio_fixed_1.0,1,123456,1,5e-6,exp/results/repro/sweeps/audio_cmultistep_vqlm/CMultiStepVQLMAudio/tedlium_dev_epoch1_lr5e-6.txt,missing,,,,
+CMultiStepVQLMAudio,audio_fixed_1.0,1,123456,1,1e-5,exp/results/repro/sweeps/audio_cmultistep_vqlm/CMultiStepVQLMAudio/tedlium_dev_epoch1_lr1e-5.txt,missing,,,,
+CMultiStepVQLMAudio,audio_fixed_1.0,1,123456,1,2e-5,exp/results/repro/sweeps/audio_cmultistep_vqlm/CMultiStepVQLMAudio/tedlium_dev_epoch1_lr2e-5.txt,missing,,,,
+CMultiStepVQLMAudio,audio_fixed_1.0,1,123456,5,5e-6,exp/results/repro/sweeps/audio_cmultistep_vqlm/CMultiStepVQLMAudio/tedlium_dev_epoch5_lr5e-6.txt,missing,,,,
+CMultiStepVQLMAudio,audio_fixed_1.0,1,123456,5,1e-5,exp/results/repro/sweeps/audio_cmultistep_vqlm/CMultiStepVQLMAudio/tedlium_dev_epoch5_lr1e-5.txt,missing,,,,
+CMultiStepVQLMAudio,audio_fixed_1.0,1,123456,5,2e-5,exp/results/repro/sweeps/audio_cmultistep_vqlm/CMultiStepVQLMAudio/tedlium_dev_epoch5_lr2e-5.txt,missing,,,,
+CMultiStepVQLMAudioRandomReward,audio_uniform_0.5_1.0,1,123456,1,5e-6,exp/results/repro/sweeps/audio_cmultistep_vqlm/CMultiStepVQLMAudioRandomReward/tedlium_dev_epoch1_lr5e-6.txt,missing,,,,
+CMultiStepVQLMAudioRandomReward,audio_uniform_0.5_1.0,1,123456,1,1e-5,exp/results/repro/sweeps/audio_cmultistep_vqlm/CMultiStepVQLMAudioRandomReward/tedlium_dev_epoch1_lr1e-5.txt,missing,,,,
+CMultiStepVQLMAudioRandomReward,audio_uniform_0.5_1.0,1,123456,1,2e-5,exp/results/repro/sweeps/audio_cmultistep_vqlm/CMultiStepVQLMAudioRandomReward/tedlium_dev_epoch1_lr2e-5.txt,missing,,,,
+CMultiStepVQLMAudioRandomReward,audio_uniform_0.5_1.0,1,123456,5,5e-6,exp/results/repro/sweeps/audio_cmultistep_vqlm/CMultiStepVQLMAudioRandomReward/tedlium_dev_epoch5_lr5e-6.txt,missing,,,,
+CMultiStepVQLMAudioRandomReward,audio_uniform_0.5_1.0,1,123456,5,1e-5,exp/results/repro/sweeps/audio_cmultistep_vqlm/CMultiStepVQLMAudioRandomReward/tedlium_dev_epoch5_lr1e-5.txt,missing,,,,
+CMultiStepVQLMAudioRandomReward,audio_uniform_0.5_1.0,1,123456,5,2e-5,exp/results/repro/sweeps/audio_cmultistep_vqlm/CMultiStepVQLMAudioRandomReward/tedlium_dev_epoch5_lr2e-5.txt,missing,,,,

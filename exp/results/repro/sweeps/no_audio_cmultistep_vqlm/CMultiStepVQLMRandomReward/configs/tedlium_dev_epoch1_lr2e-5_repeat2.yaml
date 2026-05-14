@@ -3,7 +3,7 @@ checkpointing:
 
 training:
   device: 'cuda'
-  random_seed: 123456
+  random_seed: 123457
   batch_size: 1
   epochs: 100
   model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/CMultiStepMLM/no_audio_modelsignals.pt
@@ -13,16 +13,16 @@ training:
   num_workers: 0
 
 evaluation:
-  id: 'ROB-80-tedlium-dev-CMultiStepVQLM-epoch5-lr1e-5-repeat1'
+  id: 'ROB-80-tedlium-dev-CMultiStepVQLMRandomReward-epoch1-lr2e-5-repeat2'
   dataset: 'tedlium'
   split: 'dev'
   use_cer: false
-  epochs: 5
+  epochs: 1
   augmentation_config:
-    seed: 123456
+    seed: 123457
   optim_args:
-    lr: 1e-5
-  save_path: /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-80/exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLM/tedlium_dev_epoch5_lr1e-5.txt
+    lr: 2e-5
+  save_path: /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-80/exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLMRandomReward/tedlium_dev_epoch1_lr2e-5_repeat2.txt
 
 policy:
   lr: 1e-3
@@ -33,6 +33,7 @@ policy:
     embedding_dim: 512
     decoder_layers: 4
     default_conditioning_reward: 1.0
+    conditioning_reward_range: [0.5, 1.0]
     condition_on_audio: false
     use_signal_inputs: true
     mask_vae_state_dict_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/bvae/bvae_USINGTHISFORNOW_2048gpu.pt

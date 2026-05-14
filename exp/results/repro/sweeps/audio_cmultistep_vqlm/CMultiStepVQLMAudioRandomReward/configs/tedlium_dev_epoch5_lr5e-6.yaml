@@ -6,14 +6,14 @@ training:
   random_seed: 123456
   batch_size: 1
   epochs: 100
-  model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/CMultiStepMLM/no_audio_modelsignals.pt
-  tmp_model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/CMultiStepMLM/no_audio_modelsignals.pt
+  model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/CMultiStepMLM/curbest.pt
+  tmp_model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/CMultiStepMLM/curbest.pt
   max_steps: 10000
   prefetch_factor: null
   num_workers: 0
 
 evaluation:
-  id: 'ROB-80-tedlium-dev-CMultiStepVQLMRandomReward-epoch5-lr2e-5-repeat1'
+  id: 'ROB-80-tedlium-dev-CMultiStepVQLMAudioRandomReward-epoch5-lr5e-6-repeat1'
   dataset: 'tedlium'
   split: 'dev'
   use_cer: false
@@ -21,8 +21,8 @@ evaluation:
   augmentation_config:
     seed: 123456
   optim_args:
-    lr: 2e-5
-  save_path: /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-80/exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLMRandomReward/tedlium_dev_epoch5_lr2e-5.txt
+    lr: 5e-6
+  save_path: /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-80/exp/results/repro/sweeps/audio_cmultistep_vqlm/CMultiStepVQLMAudioRandomReward/tedlium_dev_epoch5_lr5e-6.txt
 
 policy:
   lr: 1e-3
@@ -30,12 +30,17 @@ policy:
   config:
     codebook_size: 2048
     hidden_dim: 512
-    embedding_dim: 512
+    embedding_dim: 256
     decoder_layers: 4
     default_conditioning_reward: 1.0
     conditioning_reward_range: [0.5, 1.0]
-    condition_on_audio: false
-    use_signal_inputs: true
+    condition_on_audio: true
+    use_signal_inputs: false
+    audio_vae_state_dict_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/autoenc_audio/model_gpu.pt
+    audio_vae_config:
+      latent_dim: 256
+      use_vq: false
+      norm_type: 'bn'
     mask_vae_state_dict_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/bvae/bvae_USINGTHISFORNOW_2048gpu.pt
     mask_vae_config:
       latent_dim: 128

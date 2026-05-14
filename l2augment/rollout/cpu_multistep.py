@@ -107,11 +107,16 @@ def cpu_rollout(
         shuffle=True,
         augmentation_config:Dict[str, Any] = {},
         epochs = 1,
-        **kwargs
-    ):
+    **kwargs
+):
 
     dtype = torch.float32 #temporary
-    
+    rollout_seed = augmentation_config.get('seed', 123456)
+    random.seed(rollout_seed)
+    np.random.seed(rollout_seed)
+    torch.manual_seed(rollout_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(rollout_seed)
 
     torch.use_deterministic_algorithms(True, warn_only=True)
 
@@ -280,7 +285,6 @@ def cpu_rollout(
  
         
        
-
 
 
 
