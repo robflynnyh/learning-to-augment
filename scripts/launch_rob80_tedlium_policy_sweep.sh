@@ -25,6 +25,7 @@ UFMR_VARIANT="${UFMR_VARIANT:-test_wer}"
 UFMR_CKPT="${UFMR_CKPT:-/store/store5/data/acp21rjf_checkpoints/l2augment/ufmr/${UFMR_VARIANT}/model.pt}"
 BASE_LRS="${ROB80_BASE_LRS:-5e-6 1e-5 2e-5}"
 UFMR_EXTRA_LRS="${ROB80_UFMR_EXTRA_LRS:-4e-5 8e-5 1.6e-4}"
+REPEATS="${ROB80_REPEATS:-1}"
 DATASET="${ROB80_DATASET:-tedlium}"
 SPLIT="${ROB80_SPLIT:-dev}"
 TAG_PREFIX="${ROB80_TAG_PREFIX:-tedlium_dev}"
@@ -37,6 +38,9 @@ INCLUDE_UFMR_EXTRA="${ROB80_INCLUDE_UFMR_EXTRA:-1}"
 on_exit() {
   status=$?
   set +e
+  if [ "${ROB80_DISABLE_CALLBACK:-0}" = "1" ]; then
+    exit "${status}"
+  fi
   if [ -z "${LINEAR_API_KEY:-}" ]; then
     echo "LINEAR_API_KEY is not set; cannot post Linear completion callback" >&2
     exit "${status}"
@@ -86,6 +90,7 @@ echo "[rob80] tag_prefix=${TAG_PREFIX}"
 echo "[rob80] base_lrs=${BASE_LRS}"
 echo "[rob80] ufmr_extra_lrs=${UFMR_EXTRA_LRS}"
 echo "[rob80] include_ufmr_extra=${INCLUDE_UFMR_EXTRA}"
+echo "[rob80] repeats=${REPEATS}"
 echo "[rob80] cuda_visible_devices=${CUDA_VISIBLE_DEVICES:-unset}"
 
 if [ "${ROB80_CALLBACK_ONLY:-0}" = "1" ]; then
@@ -114,7 +119,7 @@ export L2A_TEDLIUM3_LEGACY_DIR="${L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TE
 export L2A_REV16_DIR="${L2A_REV16_DIR:-/store/store4/data/rev_benchmark}"
 export L2A_CHIME6_DIR="${L2A_CHIME6_DIR:-/store/store4/data/chime6/}"
 
-python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${UFMR_CKPT}" "${BASE_LRS}" "${UFMR_EXTRA_LRS}" "${DATASET}" "${SPLIT}" "${TAG_PREFIX}" "${INCLUDE_UFMR_EXTRA}" <<'PY'
+python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${UFMR_CKPT}" "${BASE_LRS}" "${UFMR_EXTRA_LRS}" "${DATASET}" "${SPLIT}" "${TAG_PREFIX}" "${INCLUDE_UFMR_EXTRA}" "${REPEATS}" <<'PY'
 import sys
 from pathlib import Path
 
@@ -127,6 +132,7 @@ dataset = sys.argv[6]
 split = sys.argv[7]
 tag_prefix = sys.argv[8]
 include_ufmr_extra = sys.argv[9] == "1"
+repeats = tuple(int(item) for item in sys.argv[10].split())
 epochs = (1, 5)
 ufmr_lrs = base_lrs + (ufmr_extra_lrs if include_ufmr_extra else ())
 methods = {
@@ -140,38 +146,42 @@ methods = {
         ufmr_lrs,
     ),
 }
-for method, (policy_class, policy_ckpt, repeats, use_random, method_lrs) in methods.items():
+for method, (policy_class, policy_ckpt, search_repeats, use_random, method_lrs) in methods.items():
     (root / method / "configs").mkdir(parents=True, exist_ok=True)
-    for epoch_count in epochs:
-        for lr in method_lrs:
-            tag = f"{tag_prefix}_epoch{epoch_count}_lr{lr}"
-            save_path = root / method / f"{tag}.txt"
-            config_path = root / method / "configs" / f"{tag}.yaml"
-            training_extra = ""
-            if policy_ckpt is not None:
-                training_extra = (
-                    f"  model_save_path: {policy_ckpt}\n"
-                    f"  tmp_model_save_path: {policy_ckpt}\n"
-                )
-            config_path.write_text(
-                f"""checkpointing:
+    for repeat in repeats:
+        repeat_suffix = "" if repeat == 1 else f"_repeat{repeat}"
+        seed = 123456 + repeat - 1
+        for epoch_count in epochs:
+            for lr in method_lrs:
+                tag = f"{tag_prefix}_epoch{epoch_count}_lr{lr}{repeat_suffix}"
+                save_path = root / method / f"{tag}.txt"
+                config_path = root / method / "configs" / f"{tag}.yaml"
+                training_extra = ""
+                if policy_ckpt is not None:
+                    training_extra = (
+                        f"  model_save_path: {policy_ckpt}\n"
+                        f"  tmp_model_save_path: {policy_ckpt}\n"
+                    )
+                config_path.write_text(
+                    f"""checkpointing:
   asr_model: {asr_ckpt}
 
 training:
   device: 'cuda'
-  random_seed: 1234
+  random_seed: {seed}
   batch_size: 84
   epochs: 100
 {training_extra}
 evaluation:
-  id: 'ROB-80-{dataset}-{split}-{method}-epoch{epoch_count}-lr{lr}'
+  id: 'ROB-80-{dataset}-{split}-{method}-epoch{epoch_count}-lr{lr}-repeat{repeat}'
   dataset: '{dataset}'
   split: '{split}'
   rollout_setting: policy
   use_cer: false
   epochs: {epoch_count}
   augmentation_config:
-    repeats: {repeats}
+    repeats: {search_repeats}
+    seed: {seed}
     use_random: {str(use_random).lower()}
   optim_args:
     lr: {lr}
@@ -181,8 +191,8 @@ policy:
   lr: 1e-4
   class: {policy_class}
 """
-            )
-            print(f"[rob80] wrote config {config_path}")
+                )
+                print(f"[rob80] wrote config {config_path}")
 PY
 
 if [ "${ROB80_CONFIG_ONLY:-0}" = "1" ]; then
@@ -197,16 +207,18 @@ export PYTHONPATH="${REPO_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 
 METHODS="${ROB80_METHODS:-RFM RMM UFMR}"
 EPOCHS="${ROB80_EPOCHS:-1 5}"
+RUN_REPEATS="${ROB80_RUN_REPEATS:-${REPEATS}}"
 OVERRIDE_LRS="${ROB80_LRS:-}"
 EVAL_SCRIPT="${ROB80_EVAL_SCRIPT:-eval.py}"
 
 if [ "${ROB80_SMOKE:-0}" = "1" ]; then
   METHODS="${ROB80_SMOKE_METHODS:-RFM}"
   EPOCHS="${ROB80_SMOKE_EPOCHS:-1}"
+  RUN_REPEATS="${ROB80_SMOKE_REPEATS:-1}"
   OVERRIDE_LRS="${ROB80_SMOKE_LRS:-5e-6}"
   ROB80_INDEXES="${ROB80_INDEXES:-0}"
   ROB80_DONT_SAVE="${ROB80_DONT_SAVE:-1}"
-  echo "[rob80] smoke mode: methods=${METHODS}; epochs=${EPOCHS}; lrs=${OVERRIDE_LRS}; indexes=${ROB80_INDEXES}; dont_save=${ROB80_DONT_SAVE}"
+  echo "[rob80] smoke mode: methods=${METHODS}; repeats=${RUN_REPEATS}; epochs=${EPOCHS}; lrs=${OVERRIDE_LRS}; indexes=${ROB80_INDEXES}; dont_save=${ROB80_DONT_SAVE}"
 fi
 
 cd "${REPO_DIR}/exp"
@@ -218,31 +230,37 @@ for method in ${METHODS}; do
       method_lrs="${BASE_LRS} ${UFMR_EXTRA_LRS}"
     fi
   fi
-  for epoch_count in ${EPOCHS}; do
-    for lr in ${method_lrs}; do
-      tag="${TAG_PREFIX}_epoch${epoch_count}_lr${lr}"
-      config="${RESULT_ROOT}/${method}/configs/${tag}.yaml"
-      save_path="${RESULT_ROOT}/${method}/${tag}.txt"
-      if [ ! -f "${config}" ]; then
-        echo "Missing generated config: ${config}" >&2
-        exit 1
-      fi
-      if [ "${FORCE_RERUN:-0}" != "1" ] && [ -f "${save_path}" ] && grep -q "Updated_WER:" "${save_path}"; then
-        echo "[rob80] skipping completed ${method}/${tag}: ${save_path}"
-        continue
-      fi
-      if [ "${FORCE_RERUN:-0}" = "1" ]; then
-        rm -f "${save_path}"
-      fi
-      args=(python "${EVAL_SCRIPT}" --config "${config}")
-      if [ -n "${ROB80_INDEXES:-}" ]; then
-        args+=(--indexes ${ROB80_INDEXES})
-      fi
-      if [ "${ROB80_DONT_SAVE:-0}" = "1" ]; then
-        args+=(--dont_save)
-      fi
-      echo "[rob80] running ${method}/${tag}: ${args[*]}"
-      "${args[@]}"
+  for repeat in ${RUN_REPEATS}; do
+    repeat_suffix=""
+    if [ "${repeat}" != "1" ]; then
+      repeat_suffix="_repeat${repeat}"
+    fi
+    for epoch_count in ${EPOCHS}; do
+      for lr in ${method_lrs}; do
+        tag="${TAG_PREFIX}_epoch${epoch_count}_lr${lr}${repeat_suffix}"
+        config="${RESULT_ROOT}/${method}/configs/${tag}.yaml"
+        save_path="${RESULT_ROOT}/${method}/${tag}.txt"
+        if [ ! -f "${config}" ]; then
+          echo "Missing generated config: ${config}" >&2
+          exit 1
+        fi
+        if [ "${FORCE_RERUN:-0}" != "1" ] && [ -f "${save_path}" ] && grep -q "Updated_WER:" "${save_path}"; then
+          echo "[rob80] skipping completed ${method}/${tag}: ${save_path}"
+          continue
+        fi
+        if [ "${FORCE_RERUN:-0}" = "1" ]; then
+          rm -f "${save_path}"
+        fi
+        args=(python "${EVAL_SCRIPT}" --config "${config}")
+        if [ -n "${ROB80_INDEXES:-}" ]; then
+          args+=(--indexes ${ROB80_INDEXES})
+        fi
+        if [ "${ROB80_DONT_SAVE:-0}" = "1" ]; then
+          args+=(--dont_save)
+        fi
+        echo "[rob80] running ${method}/${tag}: ${args[*]}"
+        "${args[@]}"
+      done
     done
   done
 done
@@ -257,6 +275,7 @@ summary_args=(
   --outcome-name "${OUTCOME_NAME}"
   --title "${TITLE}"
   --note "${NOTE}"
+  --repeats "${REPEATS}"
 )
 if [ "${INCLUDE_UFMR_EXTRA}" = "1" ]; then
   summary_args+=(--include-ufmr-extra)

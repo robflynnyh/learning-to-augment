@@ -24,6 +24,9 @@ GIT_COMMIT="${GIT_COMMIT:-$(git rev-parse HEAD 2>/dev/null || printf 'unknown')}
 on_exit() {
   status=$?
   set +e
+  if [ "${ROB80_DISABLE_CALLBACK:-0}" = "1" ]; then
+    exit "${status}"
+  fi
   if [ -z "${LINEAR_API_KEY:-}" ]; then
     echo "LINEAR_API_KEY is not set; cannot post Linear completion callback" >&2
     exit "${status}"

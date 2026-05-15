@@ -127,3 +127,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/sweeps/audio_cmultistep_vqlm/ROB-80_AUDIO_REWARD_CONDITIONING_COMPARISON.md`;
   its best row was uniform `[0.5, 1.0]` random reward at `5e-6` / 5 epochs with
   updated WER `0.086880`.
+- Prepared the ROB-80 missing-repeat follow-up after the request that all sweep
+  results should have two repeats. The RFM/RMM/UFMR policy sweep launcher and
+  summarizer now support `_repeatN` result suffixes and aggregate repeat means;
+  `scripts/launch_rob80_tedlium_missing_repeat2_sweep.sh` runs only repeat 2
+  for the original TED-LIUM dev policy sweep, segmented-dev policy sweep, and
+  audio-conditioned CMultiStepVQLM fixed/random reward sweep. The no-audio
+  CMultiStepVQLM result family already has two repeats.
