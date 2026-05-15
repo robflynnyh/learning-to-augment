@@ -3,18 +3,20 @@ checkpointing:
 
 training:
   device: 'cuda'
-  random_seed: 1234
+  random_seed: 123456
   batch_size: 84
   epochs: 100
 
 evaluation:
-  id: 'ROB-80-tedlium-dev-RFM-epoch1-lr5e-6'
+  id: 'ROB-80-tedlium-dev-RFM-epoch1-lr5e-6-repeat1'
   dataset: 'tedlium'
   split: 'dev'
+  rollout_setting: policy
   use_cer: false
   epochs: 1
   augmentation_config:
     repeats: 1
+    seed: 123456
     use_random: true
   optim_args:
     lr: 5e-6

@@ -134,3 +134,14 @@ reproduce results, interpret metrics, or avoid known failure modes.
   for the original TED-LIUM dev policy sweep, segmented-dev policy sweep, and
   audio-conditioned CMultiStepVQLM fixed/random reward sweep. The no-audio
   CMultiStepVQLM result family already has two repeats.
+- Completed the ROB-80 missing-repeat follow-up. The original TED-LIUM dev
+  policy sweep now summarizes 48/48 cells across two repeats; best averaged
+  rows are RFM `5e-6` / 5 epochs at updated WER `0.087018`, RMM `5e-6` / 5
+  epochs at `0.086686`, and UFMR `4e-5` / 1 epoch at `0.088068` among the
+  stable higher-LR follow-up rows. The segmented-dev policy sweep now
+  summarizes 36/36 cells across two repeats; best averaged rows are RFM
+  `5e-6` / 5 epochs at `0.098790`, RMM `1e-5` / 5 epochs at `0.097021`, and
+  UFMR `5e-6` / 5 epochs at `0.096579`. The audio-conditioned CMultiStepVQLM
+  fixed/random comparison now summarizes 24/24 cells across two repeats, with
+  the best averaged row from uniform `[0.5, 1.0]` random reward at `5e-6` / 5
+  epochs and updated WER `0.087653`.

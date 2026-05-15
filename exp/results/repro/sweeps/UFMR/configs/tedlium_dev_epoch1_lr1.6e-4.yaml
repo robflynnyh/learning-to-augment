@@ -3,20 +3,22 @@ checkpointing:
 
 training:
   device: 'cuda'
-  random_seed: 1234
+  random_seed: 123456
   batch_size: 84
   epochs: 100
   model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/ufmr/test_wer/model.pt
   tmp_model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/ufmr/test_wer/model.pt
 
 evaluation:
-  id: 'ROB-80-tedlium-dev-UFMR-epoch1-lr1.6e-4'
+  id: 'ROB-80-tedlium-dev-UFMR-epoch1-lr1.6e-4-repeat1'
   dataset: 'tedlium'
   split: 'dev'
+  rollout_setting: policy
   use_cer: false
   epochs: 1
   augmentation_config:
     repeats: 15
+    seed: 123456
     use_random: false
   optim_args:
     lr: 1.6e-4
