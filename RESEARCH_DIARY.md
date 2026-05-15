@@ -113,3 +113,17 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `123457`; the audio-conditioned comparison uses the legacy score-conditioned
   `CMultiStepMLM/curbest.pt` checkpoint with `condition_on_audio: true` and
   `use_signal_inputs: false`.
+
+## 2026-05-15
+
+- Completed the ROB-80 repeat/audio CMultiStepVQLM reward-conditioning
+  follow-up. The no-audio repeat comparison now summarizes 24/24 cells across
+  two repeats in
+  `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/ROB-80_NOAUDIO_REWARD_CONDITIONING_REPEAT_COMPARISON.md`;
+  the best averaged no-audio rows are fixed reward `1.0` at `5e-6` / 5 epochs
+  with updated WER `0.087266`, and uniform `[0.5, 1.0]` random reward at
+  `5e-6` / 5 epochs with updated WER `0.087238`. The audio-conditioned
+  comparison completed 12/12 cells in
+  `exp/results/repro/sweeps/audio_cmultistep_vqlm/ROB-80_AUDIO_REWARD_CONDITIONING_COMPARISON.md`;
+  its best row was uniform `[0.5, 1.0]` random reward at `5e-6` / 5 epochs with
+  updated WER `0.086880`.
