@@ -100,27 +100,29 @@ def plot(
 
     fig, ax = plt.subplots(figsize=(6.8, 3.6))
     colors = [
-        "#0072B2",
-        "#D55E00",
+        "#005AB5",
+        "#DC3220",
         "#009E73",
+        "#7B3294",
+        "#E66101",
+        "#1F78B4",
         "#CC79A7",
-        "#F0E442",
-        "#56B4E9",
-        "#E69F00",
+        "#332288",
+        "#AA4499",
+        "#44AA99",
+        "#882255",
+        "#117733",
+        "#6699CC",
+        "#D55E00",
+        "#661100",
+        "#999933",
+        "#88CCEE",
+        "#CC6677",
+        "#DDCC77",
         "#000000",
-        "#7570B3",
-        "#A6761D",
-        "#E7298A",
-        "#66A61E",
-        "#1B9E77",
-        "#D95F02",
-        "#666666",
-        "#E6AB02",
-        "#A6CEE3",
-        "#B2DF8A",
-        "#FB9A99",
-        "#CAB2D6",
     ]
+    markers = ["o", "s", "^", "D", "v", "P", "X", "<", ">", "*"]
+    linestyles = ["-", "--", "-.", ":"]
     for idx, (label, rows) in enumerate(series):
         if not rows:
             continue
@@ -130,15 +132,16 @@ def plot(
             repeats,
             wers,
             label=label,
-            marker="o",
-            markersize=3.4,
+            marker=markers[idx % len(markers)],
+            markersize=3.6,
             linewidth=1.5,
+            linestyle=linestyles[(idx // len(markers)) % len(linestyles)],
             color=colors[idx % len(colors)],
         )
     ax.axhline(original_wer, color="#222222", linestyle="--", linewidth=1.0, label="No adaptation")
     if ufmr_rows:
         ufmr_wer = 100.0 * ufmr_rows[-1]["updated_wer"]
-        ax.axhline(ufmr_wer, color="#666666", linestyle=":", linewidth=1.2, label=ufmr_label)
+        ax.axhline(ufmr_wer, color="#E66101", linestyle=(0, (4, 2, 1, 2)), linewidth=1.4, label=ufmr_label)
     if log_x:
         ax.set_xscale("log")
         ax.set_xlim(min(all_repeats) * 0.9, max(all_repeats) * 1.1)

@@ -165,6 +165,11 @@ same no-adaptation and UFMR references:
 - `exp/results/repro/oracle/oracle_best_repeat50_lrs_vs_ufmr.pdf`
 - `exp/results/repro/oracle/oracle_best_repeat50_lrs_vs_ufmr.csv`
 
+After review feedback, the plotting script was refreshed to use a
+higher-contrast color cycle, varied markers and line styles, and a distinct
+UFMR reference line. Both `oracle_lr_sweep_vs_ufmr.pdf` and
+`oracle_best_repeat50_lrs_vs_ufmr.pdf` were regenerated with this styling.
+
 Artifacts:
 
 - `exp/results/repro/oracle/newer_default_oracle_vs_ufmr.pdf`

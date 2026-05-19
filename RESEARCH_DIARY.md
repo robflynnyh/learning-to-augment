@@ -171,3 +171,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/oracle/oracle_best_repeat50_lrs_vs_ufmr.{csv,pdf}` and
   updated `exp/results/repro/oracle/OUTCOME.md` with the selected repeat-50
   WERs and artifact paths.
+- Refreshed the ROB-60 oracle plotting style after review feedback. The plotter
+  now uses a higher-contrast color cycle, varied markers and line styles, and a
+  distinct UFMR reference line so nearby curves are easier to separate.
+  Regenerated both `oracle_lr_sweep_vs_ufmr.{csv,pdf}` and
+  `oracle_best_repeat50_lrs_vs_ufmr.{csv,pdf}` with the refreshed styling.
