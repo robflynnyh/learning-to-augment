@@ -1,7 +1,7 @@
 # Oracle Reproduction Outcome
 
 Issue: ROB-60
-Date: 2026-05-14
+Date: 2026-05-19
 
 ## Scope
 
@@ -147,6 +147,23 @@ same UFMR/no-adaptation references:
 
 - `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.pdf`
 - `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.csv`
+
+Robert later requested a less crowded version of this plot containing only the
+best LR setup per method, where "best" is selected by repeat-50 WER. The
+repeat-50 selection from `oracle_lr_sweep_vs_ufmr.csv` is:
+
+| Method | Selected setup | Repeat 50 WER | Best repeat in selected curve | Best WER |
+| --- | --- | ---: | ---: | ---: |
+| RMM | `lr=3e-5`, `search_lr=2e-1` | 8.428% | 50 | 8.428% |
+| UVQLM | `lr=3e-5`, `search_lr=2e-1` | 8.467% | 50 | 8.467% |
+| RFM | `lr=3e-5`, `search_lr=2e-1` | 8.817% | 50 | 8.817% |
+| RAN | `lr=3e-5`, `search_lr=2e-1` | 8.949% | 5 | 8.885% |
+
+The reduced log-scaled comparison includes those four selected curves plus the
+same no-adaptation and UFMR references:
+
+- `exp/results/repro/oracle/oracle_best_repeat50_lrs_vs_ufmr.pdf`
+- `exp/results/repro/oracle/oracle_best_repeat50_lrs_vs_ufmr.csv`
 
 Artifacts:
 

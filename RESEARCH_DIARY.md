@@ -161,3 +161,13 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/oracle/OUTCOME.md`, and regenerated
   `exp/results/repro/oracle/oracle_lr_sweep_vs_ufmr.{csv,pdf}` to include the
   RAN curve; large screen/GPU logs remain uncommitted.
+
+## 2026-05-19
+
+- Added Robert's requested reduced ROB-60 oracle comparison plot using only the
+  best repeat-50 LR setup per method. The selected curves are RMM, RFM, UVQLM,
+  and RAN at `lr=3e-5`, `search_lr=2e-1`; RAN is included as the only available
+  random additive-noise LR cell. Wrote
+  `exp/results/repro/oracle/oracle_best_repeat50_lrs_vs_ufmr.{csv,pdf}` and
+  updated `exp/results/repro/oracle/OUTCOME.md` with the selected repeat-50
+  WERs and artifact paths.
