@@ -110,3 +110,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Resolved ROB-80 PR merge conflicts against current `origin/main`, keeping the
   stricter `VectorQuantize` compatibility helper while preserving the latest
   ROB-60 oracle diary/result artifacts from the base branch.
+- Added the ROB-106 low-reward conditioning comparison scaffold for TED-LIUM dev
+  no-audio CMultiStepVQLM. It reuses the ROB-80 best comparable setting
+  (`epochs=5`, `lr=5e-6`, repeats 1 and 2) and compares fixed reward `1.0`,
+  fixed reward `0.0`, and uniform `[0.0, 1.0]` reward conditioning under
+  `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/rob106_low_reward_conditioning/`.

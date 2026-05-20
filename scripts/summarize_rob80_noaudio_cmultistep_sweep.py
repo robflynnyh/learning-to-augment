@@ -107,8 +107,14 @@ def collect_rows(
 def conditioning_label(method: str) -> str:
     if method == "CMultiStepVQLM":
         return "fixed_1.0"
+    if method == "CMultiStepVQLMReward1":
+        return "fixed_1.0"
+    if method == "CMultiStepVQLMReward0":
+        return "fixed_0.0"
     if method == "CMultiStepVQLMRandomReward":
         return "uniform_0.5_1.0"
+    if method == "CMultiStepVQLMRandomReward0to1":
+        return "uniform_0.0_1.0"
     if method == "CMultiStepVQLMAudio":
         return "audio_fixed_1.0"
     if method == "CMultiStepVQLMAudioRandomReward":
