@@ -24,3 +24,6 @@ Launch command:
 ```bash
 /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob106_tedlium_low_reward_conditioning.sh
 ```
+
+The follow-up UVQLM rollout folder size scan is recorded under
+`uvqlm_rollout_size/OUTCOME.md`.

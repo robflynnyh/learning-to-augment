@@ -124,3 +124,6 @@ reproduce results, interpret metrics, or avoid known failure modes.
   sample estimate. The scanner reports apparent bytes, allocated bytes, counts,
   and top-level breakdowns; the Slurm wrapper keeps the Linear callback `EXIT`
   trap.
+- Recorded the completed ROB-106 UVQLM rollout size scan in
+  `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/rob106_low_reward_conditioning/uvqlm_rollout_size/OUTCOME.md`:
+  266408 files, 146.22 GiB apparent, and 146.73 GiB allocated.
