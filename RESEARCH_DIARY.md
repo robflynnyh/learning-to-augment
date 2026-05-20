@@ -176,3 +176,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
   distinct UFMR reference line so nearby curves are easier to separate.
   Regenerated both `oracle_lr_sweep_vs_ufmr.{csv,pdf}` and
   `oracle_best_repeat50_lrs_vs_ufmr.{csv,pdf}` with the refreshed styling.
+
+## 2026-05-20
+
+- Simplified the reduced ROB-60 oracle plot legend after review feedback by
+  regenerating `oracle_best_repeat50_lrs_vs_ufmr.{csv,pdf}` with method-only
+  labels for RMM, UVQLM, RFM, RAN, and UFMR. The selected LR/search-LR details
+  remain documented in `exp/results/repro/oracle/OUTCOME.md`.

@@ -160,12 +160,14 @@ repeat-50 selection from `oracle_lr_sweep_vs_ufmr.csv` is:
 | RAN | `lr=3e-5`, `search_lr=2e-1` | 8.949% | 5 | 8.885% |
 
 The reduced log-scaled comparison includes those four selected curves plus the
-same no-adaptation and UFMR references:
+same no-adaptation and UFMR references. After review feedback, the legend uses
+method-only labels; the selected LR/search-LR details are recorded in the table
+above rather than repeated inside the plot legend.
 
 - `exp/results/repro/oracle/oracle_best_repeat50_lrs_vs_ufmr.pdf`
 - `exp/results/repro/oracle/oracle_best_repeat50_lrs_vs_ufmr.csv`
 
-After review feedback, the plotting script was refreshed to use a
+After earlier review feedback, the plotting script was refreshed to use a
 higher-contrast color cycle, varied markers and line styles, and a distinct
 UFMR reference line. Both `oracle_lr_sweep_vs_ufmr.pdf` and
 `oracle_best_repeat50_lrs_vs_ufmr.pdf` were regenerated with this styling.

@@ -1,34 +1,34 @@
 series,dataset,split,epochs,repeats,original_wer,updated_wer,rollout_type
-RMM 3e-5/2e-1,tedlium3_segmented_data,test,1,1,0.0958287557,0.0917531984,cpu_rollout_search
-RMM 3e-5/2e-1,tedlium3_segmented_data,test,1,2,0.0958287557,0.0907608888,cpu_rollout_search
-RMM 3e-5/2e-1,tedlium3_segmented_data,test,1,3,0.0958287557,0.0916468795,cpu_rollout_search
-RMM 3e-5/2e-1,tedlium3_segmented_data,test,1,4,0.0958287557,0.0886345111,cpu_rollout_search
-RMM 3e-5/2e-1,tedlium3_segmented_data,test,1,5,0.0958287557,0.0876422015,cpu_rollout_search
-RMM 3e-5/2e-1,tedlium3_segmented_data,test,1,10,0.0958641953,0.0855512634,cpu_rollout_search
-RMM 3e-5/2e-1,tedlium3_segmented_data,test,1,20,0.0958287557,0.0844880746,cpu_rollout_search
-RMM 3e-5/2e-1,tedlium3_segmented_data,test,1,50,0.0958287557,0.0842754368,cpu_rollout_search
-UVQLM 3e-5/2e-1,tedlium3_segmented_data,test,1,1,0.0958287557,0.0919658362,cpu_rollout_search
-UVQLM 3e-5/2e-1,tedlium3_segmented_data,test,1,2,0.0958641953,0.0895559415,cpu_rollout_search
-UVQLM 3e-5/2e-1,tedlium3_segmented_data,test,1,3,0.0958287557,0.0889180281,cpu_rollout_search
-UVQLM 3e-5/2e-1,tedlium3_segmented_data,test,1,4,0.0958287557,0.0894496226,cpu_rollout_search
-UVQLM 3e-5/2e-1,tedlium3_segmented_data,test,1,5,0.0958641953,0.0882801148,cpu_rollout_search
-UVQLM 3e-5/2e-1,tedlium3_segmented_data,test,1,10,0.0958641953,0.0874650034,cpu_rollout_search
-UVQLM 3e-5/2e-1,tedlium3_segmented_data,test,1,20,0.0958641953,0.0853740653,cpu_rollout_search
-UVQLM 3e-5/2e-1,tedlium3_segmented_data,test,1,50,0.0958287557,0.0846652727,cpu_rollout_search
-RFM 3e-5/2e-1,tedlium3_segmented_data,test,1,1,0.0958641953,0.0935606195,cpu_rollout_search
-RFM 3e-5/2e-1,tedlium3_segmented_data,test,1,2,0.0958287557,0.0929581458,cpu_rollout_search
-RFM 3e-5/2e-1,tedlium3_segmented_data,test,1,3,0.0958641953,0.0923911117,cpu_rollout_search
-RFM 3e-5/2e-1,tedlium3_segmented_data,test,1,4,0.0958287557,0.0904419322,cpu_rollout_search
-RFM 3e-5/2e-1,tedlium3_segmented_data,test,1,5,0.0958641953,0.0896268207,cpu_rollout_search
-RFM 3e-5/2e-1,tedlium3_segmented_data,test,1,10,0.0958287557,0.0899457774,cpu_rollout_search
-RFM 3e-5/2e-1,tedlium3_segmented_data,test,1,20,0.0958287557,0.0901584151,cpu_rollout_search
-RFM 3e-5/2e-1,tedlium3_segmented_data,test,1,50,0.0958641953,0.0881737959,cpu_rollout_search
-RAN 3e-5/2e-1,tedlium3_segmented_data,test,1,1,0.0958287557,0.0915405607,cpu_rollout_search
-RAN 3e-5/2e-1,tedlium3_segmented_data,test,1,2,0.0958287557,0.0901584151,cpu_rollout_search
-RAN 3e-5/2e-1,tedlium3_segmented_data,test,1,3,0.0958287557,0.0898040189,cpu_rollout_search
-RAN 3e-5/2e-1,tedlium3_segmented_data,test,1,4,0.0958287557,0.0913988021,cpu_rollout_search
-RAN 3e-5/2e-1,tedlium3_segmented_data,test,1,5,0.0958641953,0.0888471489,cpu_rollout_search
-RAN 3e-5/2e-1,tedlium3_segmented_data,test,1,10,0.0958287557,0.0893078641,cpu_rollout_search
-RAN 3e-5/2e-1,tedlium3_segmented_data,test,1,20,0.0958641953,0.0899103377,cpu_rollout_search
-RAN 3e-5/2e-1,tedlium3_segmented_data,test,1,50,0.0958641953,0.0894850622,cpu_rollout_search
-UFMR 8e-6 repeat 15,tedlium3_segmented_data,test,1,15,0.0958641953,0.0904064925,cpu_rollout_policy
+RMM,tedlium3_segmented_data,test,1,1,0.0958287557,0.0917531984,cpu_rollout_search
+RMM,tedlium3_segmented_data,test,1,2,0.0958287557,0.0907608888,cpu_rollout_search
+RMM,tedlium3_segmented_data,test,1,3,0.0958287557,0.0916468795,cpu_rollout_search
+RMM,tedlium3_segmented_data,test,1,4,0.0958287557,0.0886345111,cpu_rollout_search
+RMM,tedlium3_segmented_data,test,1,5,0.0958287557,0.0876422015,cpu_rollout_search
+RMM,tedlium3_segmented_data,test,1,10,0.0958641953,0.0855512634,cpu_rollout_search
+RMM,tedlium3_segmented_data,test,1,20,0.0958287557,0.0844880746,cpu_rollout_search
+RMM,tedlium3_segmented_data,test,1,50,0.0958287557,0.0842754368,cpu_rollout_search
+UVQLM,tedlium3_segmented_data,test,1,1,0.0958287557,0.0919658362,cpu_rollout_search
+UVQLM,tedlium3_segmented_data,test,1,2,0.0958641953,0.0895559415,cpu_rollout_search
+UVQLM,tedlium3_segmented_data,test,1,3,0.0958287557,0.0889180281,cpu_rollout_search
+UVQLM,tedlium3_segmented_data,test,1,4,0.0958287557,0.0894496226,cpu_rollout_search
+UVQLM,tedlium3_segmented_data,test,1,5,0.0958641953,0.0882801148,cpu_rollout_search
+UVQLM,tedlium3_segmented_data,test,1,10,0.0958641953,0.0874650034,cpu_rollout_search
+UVQLM,tedlium3_segmented_data,test,1,20,0.0958641953,0.0853740653,cpu_rollout_search
+UVQLM,tedlium3_segmented_data,test,1,50,0.0958287557,0.0846652727,cpu_rollout_search
+RFM,tedlium3_segmented_data,test,1,1,0.0958641953,0.0935606195,cpu_rollout_search
+RFM,tedlium3_segmented_data,test,1,2,0.0958287557,0.0929581458,cpu_rollout_search
+RFM,tedlium3_segmented_data,test,1,3,0.0958641953,0.0923911117,cpu_rollout_search
+RFM,tedlium3_segmented_data,test,1,4,0.0958287557,0.0904419322,cpu_rollout_search
+RFM,tedlium3_segmented_data,test,1,5,0.0958641953,0.0896268207,cpu_rollout_search
+RFM,tedlium3_segmented_data,test,1,10,0.0958287557,0.0899457774,cpu_rollout_search
+RFM,tedlium3_segmented_data,test,1,20,0.0958287557,0.0901584151,cpu_rollout_search
+RFM,tedlium3_segmented_data,test,1,50,0.0958641953,0.0881737959,cpu_rollout_search
+RAN,tedlium3_segmented_data,test,1,1,0.0958287557,0.0915405607,cpu_rollout_search
+RAN,tedlium3_segmented_data,test,1,2,0.0958287557,0.0901584151,cpu_rollout_search
+RAN,tedlium3_segmented_data,test,1,3,0.0958287557,0.0898040189,cpu_rollout_search
+RAN,tedlium3_segmented_data,test,1,4,0.0958287557,0.0913988021,cpu_rollout_search
+RAN,tedlium3_segmented_data,test,1,5,0.0958641953,0.0888471489,cpu_rollout_search
+RAN,tedlium3_segmented_data,test,1,10,0.0958287557,0.0893078641,cpu_rollout_search
+RAN,tedlium3_segmented_data,test,1,20,0.0958641953,0.0899103377,cpu_rollout_search
+RAN,tedlium3_segmented_data,test,1,50,0.0958641953,0.0894850622,cpu_rollout_search
+UFMR,tedlium3_segmented_data,test,1,15,0.0958641953,0.0904064925,cpu_rollout_policy
