@@ -119,3 +119,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   two repeats, fixed reward `1.0` did not beat fixed reward `0.0`
   (`0.087764` vs. `0.087625` updated WER), while uniform `[0.0, 1.0]`
   conditioning was best (`0.086244` updated WER).
+- Added a ROB-106 CPU-node size-scan path for the Stanage UVQLM rollout folder
+  after a follow-up Linear comment requested an exact folder size rather than a
+  sample estimate. The scanner reports apparent bytes, allocated bytes, counts,
+  and top-level breakdowns; the Slurm wrapper keeps the Linear callback `EXIT`
+  trap.
