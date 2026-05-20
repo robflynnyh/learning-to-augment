@@ -18,11 +18,27 @@ Current repo-specific cache:
 /store/store5/data/acp21rjf_checkpoints/l2augment/
 ```
 
+This American Life dev/test mirror:
+
+```text
+/store/store5/data/this_american_life/
+```
+
 Currently transferred there:
 
 - `asr/step_105360.pt` — canonical ASR backbone from `spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt`
 - `ufmr/` — UFMR variants from `l2augment_model/ufm/`
 - `MANIFEST.md` — manifest for transferred files
+
+Currently transferred for This American Life:
+
+- `valid-transcripts-aligned.json`
+- `test-transcripts-aligned.json`
+- `full-speaker-map.json`
+- `audio/*.mp3` for only the episodes referenced by the valid and test transcript JSON files
+
+The train transcript and train-only audio are intentionally not mirrored on
+Mimas for ROB-104.
 
 ## Previously missed non-UFMR checkpoint families
 

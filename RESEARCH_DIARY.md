@@ -79,6 +79,14 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/oracle/OUTCOME.md` plus `oracle_lr_sweep_vs_ufmr.{csv,pdf}`
   for the full table and plot.
 
+## 2026-05-20
+
+- ROB-104 mirrored only This American Life dev/test data from Stanage to
+  `/store/store5/data/this_american_life/` on Mimas: 34 valid episodes, 36 test
+  episodes, 70 referenced MP3 files, valid/test transcript JSONs, and the
+  speaker map. The train transcript and train-only audio are intentionally not
+  present. Mimas eval launchers now export `L2A_TAL_DIR` to this path.
+
 ## 2026-05-15
 
 - Finalized ROB-80's two-repeat reporting contract. Read the result files, not
