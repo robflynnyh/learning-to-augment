@@ -1,0 +1,1 @@
+ID: ROB-80-tedlium-dev-RMM-epoch5-lr2e-5 - Dataset: tedlium - Split: dev - Epochs: 5 - Original_WER: 0.10008842710290704 - Updated_WER: 0.0875428318779706

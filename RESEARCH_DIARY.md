@@ -43,8 +43,19 @@ reproduce results, interpret metrics, or avoid known failure modes.
   remain under `exp/results/repro/`. Treat the historical numbers as reference
   material until they are reverified.
 
+## 2026-05-12
+
+- Added the ROB-80 TED-LIUM dev policy LR sweep wrapper/summarizer for RFM,
+  RMM, and UFMR. Durable tables live in `exp/results/repro/sweeps/`; UFMR
+  `1.6e-4` diverged at 5 epochs, so later policy sweeps should stay on the
+  lower LR range unless explicitly revisiting instability.
+
 ## 2026-05-13
 
+- Added and fixed the ROB-80 segmented-dev policy sweep. Use
+  `scripts/launch_rob80_tedlium_segmented_policy_sweep.sh`; it runs
+  `oracle_eval.py` with `rollout_setting: policy` because `exp/eval.py` cannot
+  consume `tedlium3_segmented_data` utterance-list outputs.
 - Updated Symphony rules for ROB-83 to forbid `/tmp` on Mimas for working files,
   logs, downloads, result staging, callbacks, and experiment scratch space. Use
   durable repo-local paths, `exp/results/`, or suitable `/store/...` locations
@@ -52,12 +63,31 @@ reproduce results, interpret metrics, or avoid known failure modes.
 
 ## 2026-05-14
 
+- Added ROB-80 no-audio and audio-conditioned CMultiStepVQLM sweep support.
+  The compatible no-audio checkpoint is `CMultiStepMLM/no_audio_modelsignals.pt`
+  with `condition_on_audio: false` / `use_signal_inputs: true`; the
+  audio-conditioned checkpoint is `CMultiStepMLM/curbest.pt` with
+  `condition_on_audio: true` / `use_signal_inputs: false`.
+- Added fixed-vs-random reward conditioning for CMultiStepVQLM using
+  `conditioning_reward_range`; durable comparison tables are under
+  `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/` and
+  `exp/results/repro/sweeps/audio_cmultistep_vqlm/`.
 - Finalized ROB-60 oracle follow-ups across RMM, RFM, UVQLM, and RAN. Best
   completed segmented-test oracle result is RMM `lr=3e-5`, `search_lr=2e-1`,
   repeat 50 at `8.428%` WER; RAN peaks at repeat 5 with `8.885%` WER and
   remains weaker than the matching learned/random mask-search cells. Use
   `exp/results/repro/oracle/OUTCOME.md` plus `oracle_lr_sweep_vs_ufmr.{csv,pdf}`
   for the full table and plot.
+
+## 2026-05-15
+
+- Finalized ROB-80's two-repeat reporting contract. Read the result files, not
+  this diary, for metrics: `ROB-80_OUTCOME.md`,
+  `segmented_dev/ROB-80_SEGMENTED_OUTCOME.md`,
+  `no_audio_cmultistep_vqlm/ROB-80_NOAUDIO_REWARD_CONDITIONING_REPEAT_COMPARISON.md`,
+  and `audio_cmultistep_vqlm/ROB-80_AUDIO_REWARD_CONDITIONING_COMPARISON.md`.
+  `scripts/launch_rob80_tedlium_missing_repeat2_sweep.sh` only exists to fill
+  missing repeat-2 cells and should not be used for a fresh full sweep.
 
 ## 2026-05-19
 
@@ -66,3 +96,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   the best repeat-50 LR setup per method, then refreshed both oracle plots with
   clearer styling. The reduced plot legend intentionally uses method-only
   labels; selected LR/search-LR details remain in `OUTCOME.md`.
+
+## 2026-05-20
+
+- Resolved ROB-80 PR merge conflicts against current `origin/main`, keeping the
+  stricter `VectorQuantize` compatibility helper while preserving the latest
+  ROB-60 oracle diary/result artifacts from the base branch.

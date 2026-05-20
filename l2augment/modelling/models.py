@@ -627,14 +627,33 @@ def calc_length(lengths, all_paddings, kernel_size, stride, ceil_mode, repeat_nu
     return lengths.to(dtype=torch.int)
 
 
+import inspect
 from vector_quantize_pytorch import VectorQuantize
 
 
-def vector_quantize_kwargs(**kwargs):
-    signature = inspect.signature(VectorQuantize.__init__)
-    if "rotation_trick" not in signature.parameters:
-        kwargs.pop("rotation_trick", None)
-    return kwargs
+_VECTOR_QUANTIZE_INIT_PARAMS = inspect.signature(VectorQuantize.__init__).parameters
+_VECTOR_QUANTIZE_OPTIONAL_INIT_PARAMS = {"rotation_trick"}
+
+
+def vector_quantize_compat(**kwargs):
+    """Construct VectorQuantize across the older package used on Mimas.
+
+    The local vector-quantize-pytorch build predates the training-only
+    ``rotation_trick`` option. Treat that option as optional, but fail fast for
+    any other constructor mismatch so pretrained checkpoint wiring cannot drift
+    silently.
+    """
+    unsupported_kwargs = set(kwargs) - set(_VECTOR_QUANTIZE_INIT_PARAMS)
+    unexpected_kwargs = unsupported_kwargs - _VECTOR_QUANTIZE_OPTIONAL_INIT_PARAMS
+    if unexpected_kwargs:
+        raise TypeError(
+            "Unsupported VectorQuantize kwargs: "
+            f"{', '.join(sorted(unexpected_kwargs))}"
+        )
+    supported_kwargs = {
+        key: value for key, value in kwargs.items() if key in _VECTOR_QUANTIZE_INIT_PARAMS
+    }
+    return VectorQuantize(**supported_kwargs)
 
 
 class VQVariationalAutoEncoder(VAEBase):
@@ -659,7 +678,7 @@ class VQVariationalAutoEncoder(VAEBase):
 
         assert norm_type in ['gn', 'bn'], 'norm_type must be either "gn" or "bn"'
         
-        self.VQ = VectorQuantize(**vector_quantize_kwargs(
+        self.VQ = vector_quantize_compat(
             dim=latent_dim,
             codebook_size=codebook_size,
             decay=0.99,
@@ -669,7 +688,7 @@ class VQVariationalAutoEncoder(VAEBase):
             threshold_ema_dead_code=1.0,
             use_cosine_sim=True,
             rotation_trick=True,
-        )) if use_vq else PlaceholderVQ()
+        ) if use_vq else PlaceholderVQ()
         
         self.encoder = nn.Sequential(
             nn.Conv1d(input_dim, hidden_dim, kernel_size=1, stride=1),
@@ -1551,6 +1570,11 @@ class ConditionalMultiStepMaskGenerator(Policy):
             mask_vae_config:Dict={},
             mask_vae_state_dict_path:str=None,  
             default_conditioning_reward=1.0,
+            conditioning_reward_range=None,
+            # True matches the newer no-audio signal-conditioned checkpoint.
+            # False matches the older audio-conditioned checkpoint, whose BOS
+            # input was only the reward embedding.
+            use_signal_inputs=True,
             min_audio_size=160,
             condition_on_audio=True,
             decoder_layers=4,
@@ -1560,6 +1584,12 @@ class ConditionalMultiStepMaskGenerator(Policy):
 
         self.min_audio_size = min_audio_size
         self.default_conditioning_reward = default_conditioning_reward
+        self.conditioning_reward_range = conditioning_reward_range
+        if self.conditioning_reward_range is not None:
+            if len(self.conditioning_reward_range) != 2:
+                raise ValueError("conditioning_reward_range must contain exactly two values")
+            low, high = sorted(float(item) for item in self.conditioning_reward_range)
+            self.conditioning_reward_range = (low, high)
         self.audio_enc = VQVariationalAutoEncoder(**audio_vae_config) if condition_on_audio else None
         if audio_vae_state_dict_path is not None and condition_on_audio:
             audio_vae_state_dict = torch.load(audio_vae_state_dict_path, map_location='cpu')['model_state_dict']
@@ -1581,13 +1611,15 @@ class ConditionalMultiStepMaskGenerator(Policy):
 
         self.condition_on_audio = condition_on_audio
         self.decoder_layers = decoder_layers
+        self.use_signal_inputs = use_signal_inputs
 
-    
-        self.score_enc = timestep_encoder(hidden_dim=hidden_dim//3)
-        self.entropy_embed = timestep_encoder(hidden_dim=hidden_dim//3)
-        self.n_losses_embed = timestep_encoder(hidden_dim=hidden_dim//3)
-   
-        self.signal_fusion = SwiGlu(self.n_losses_embed.network.weight.shape[0] * 2 * 3, hidden_dim)
+        if self.use_signal_inputs:
+            self.score_enc = timestep_encoder(hidden_dim=hidden_dim//3)
+            self.entropy_embed = timestep_encoder(hidden_dim=hidden_dim//3)
+            self.n_losses_embed = timestep_encoder(hidden_dim=hidden_dim//3)
+            self.signal_fusion = SwiGlu(self.n_losses_embed.network.weight.shape[0] * 2 * 3, hidden_dim)
+        else:
+            self.score_enc = timestep_encoder(hidden_dim=hidden_dim)
 
         self.decoder = nn.GRU(
             input_size=hidden_dim,
@@ -1649,11 +1681,18 @@ class ConditionalMultiStepMaskGenerator(Policy):
         device='cpu'
     ):
         
-        score_enc = self.score_enc(torch.tensor([self.default_conditioning_reward], device=device).unsqueeze(-1)).unsqueeze(1)
-        entropy_emb = self.entropy_embed(entropy.unsqueeze(-1))[None, None, :]
-        n_losses_emb = self.n_losses_embed(n_losses.unsqueeze(-1))[None, None, :]
-
-        bos_emb = self.signal_fusion(torch.cat((score_enc, entropy_emb, n_losses_emb), dim=-1))
+        if self.conditioning_reward_range is None:
+            conditioning_reward = torch.tensor([self.default_conditioning_reward], device=device)
+        else:
+            low, high = self.conditioning_reward_range
+            conditioning_reward = torch.empty(1, device=device).uniform_(low, high)
+        score_enc = self.score_enc(conditioning_reward.unsqueeze(-1)).unsqueeze(1)
+        if self.use_signal_inputs:
+            entropy_emb = self.entropy_embed(entropy.unsqueeze(-1))[None, None, :]
+            n_losses_emb = self.n_losses_embed(n_losses.unsqueeze(-1))[None, None, :]
+            bos_emb = self.signal_fusion(torch.cat((score_enc, entropy_emb, n_losses_emb), dim=-1))
+        else:
+            bos_emb = score_enc
       
         #score_emb = self.score_enc(torch.tensor([self.default_conditioning_reward], device=device).unsqueeze(-1)).unsqueeze(1)
         outputs = []
@@ -1780,10 +1819,12 @@ class ConditionalMultiStepMaskGenerator(Policy):
             h_n=None
         ):
         score_enc = self.score_enc(rewards.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
-        entropy_emb = self.entropy_embed(entropy.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
-        n_losses_emb = self.n_losses_embed(n_losses.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
-   
-        bos_emb = self.signal_fusion(torch.cat((score_enc, entropy_emb, n_losses_emb), dim=-1))
+        if self.use_signal_inputs:
+            entropy_emb = self.entropy_embed(entropy.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
+            n_losses_emb = self.n_losses_embed(n_losses.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
+            bos_emb = self.signal_fusion(torch.cat((score_enc, entropy_emb, n_losses_emb), dim=-1))
+        else:
+            bos_emb = score_enc
         #bos_emb = self.score_enc(rewards.to(dtype=latent_seq.dtype).unsqueeze(-1)).unsqueeze(1)
       
         latent_seq = torch.cat((bos_emb, latent_seq), dim=1)

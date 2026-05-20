@@ -1,0 +1,43 @@
+checkpointing:
+  asr_model: /store/store5/data/acp21rjf_checkpoints/l2augment/asr/step_105360.pt
+
+training:
+  device: 'cuda'
+  random_seed: 123457
+  batch_size: 1
+  epochs: 100
+  model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/CMultiStepMLM/no_audio_modelsignals.pt
+  tmp_model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/CMultiStepMLM/no_audio_modelsignals.pt
+  max_steps: 10000
+  prefetch_factor: null
+  num_workers: 0
+
+evaluation:
+  id: 'ROB-80-tedlium-dev-CMultiStepVQLMRandomReward-epoch5-lr2e-5-repeat2'
+  dataset: 'tedlium'
+  split: 'dev'
+  use_cer: false
+  epochs: 5
+  augmentation_config:
+    seed: 123457
+  optim_args:
+    lr: 2e-5
+  save_path: /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-80/exp/results/repro/sweeps/no_audio_cmultistep_vqlm/CMultiStepVQLMRandomReward/tedlium_dev_epoch5_lr2e-5_repeat2.txt
+
+policy:
+  lr: 1e-3
+  class: ConditionalMultiStepMaskGenerator
+  config:
+    codebook_size: 2048
+    hidden_dim: 512
+    embedding_dim: 512
+    decoder_layers: 4
+    default_conditioning_reward: 1.0
+    conditioning_reward_range: [0.5, 1.0]
+    condition_on_audio: false
+    use_signal_inputs: true
+    mask_vae_state_dict_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/bvae/bvae_USINGTHISFORNOW_2048gpu.pt
+    mask_vae_config:
+      latent_dim: 128
+      codebook_size: 2048
+      use_vq: true
