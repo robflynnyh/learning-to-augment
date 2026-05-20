@@ -9,6 +9,7 @@ from typing import Tuple, Callable, Dict
 from einops.layers.torch import Rearrange
 from lcasr.utils.augmentation import SpecAugment 
 from contextlib import nullcontext
+import inspect
 import matplotlib.pyplot as plt
 import wandb
 
@@ -678,15 +679,15 @@ class VQVariationalAutoEncoder(VAEBase):
         assert norm_type in ['gn', 'bn'], 'norm_type must be either "gn" or "bn"'
         
         self.VQ = vector_quantize_compat(
-            dim = latent_dim, 
-            codebook_size=codebook_size, 
-            decay=0.99, 
+            dim=latent_dim,
+            codebook_size=codebook_size,
+            decay=0.99,
             commitment_weight=commitment_weight,
-            kmeans_init = True,   # set to True
-            kmeans_iters = 10,
-            threshold_ema_dead_code = 1.0,
-            use_cosine_sim = True,
-            rotation_trick = True,
+            kmeans_init=True,
+            kmeans_iters=10,
+            threshold_ema_dead_code=1.0,
+            use_cosine_sim=True,
+            rotation_trick=True,
         ) if use_vq else PlaceholderVQ()
         
         self.encoder = nn.Sequential(
@@ -2180,7 +2181,7 @@ class AdditivePolicy(Policy):
         x = self.encode(x)
         return x    
     
-    def augment(self, audio, sample=True, return_probs=False, use_random=False, lengths=None):
+    def augment(self, audio, sample=True, return_probs=False, use_random=False, lengths=None, *args, **kwargs):
 
         if not use_random:
             pred = self(audio) # b, c, t
