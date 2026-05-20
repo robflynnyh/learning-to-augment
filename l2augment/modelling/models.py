@@ -631,10 +631,24 @@ from vector_quantize_pytorch import VectorQuantize
 
 
 _VECTOR_QUANTIZE_INIT_PARAMS = inspect.signature(VectorQuantize.__init__).parameters
+_VECTOR_QUANTIZE_OPTIONAL_INIT_PARAMS = {"rotation_trick"}
 
 
 def vector_quantize_compat(**kwargs):
-    """Construct VectorQuantize while tolerating older installed signatures."""
+    """Construct VectorQuantize across the older package used on Mimas.
+
+    The local vector-quantize-pytorch build predates the training-only
+    ``rotation_trick`` option. Treat that option as optional, but fail fast for
+    any other constructor mismatch so pretrained checkpoint wiring cannot drift
+    silently.
+    """
+    unsupported_kwargs = set(kwargs) - set(_VECTOR_QUANTIZE_INIT_PARAMS)
+    unexpected_kwargs = unsupported_kwargs - _VECTOR_QUANTIZE_OPTIONAL_INIT_PARAMS
+    if unexpected_kwargs:
+        raise TypeError(
+            "Unsupported VectorQuantize kwargs: "
+            f"{', '.join(sorted(unexpected_kwargs))}"
+        )
     supported_kwargs = {
         key: value for key, value in kwargs.items() if key in _VECTOR_QUANTIZE_INIT_PARAMS
     }
@@ -1556,6 +1570,9 @@ class ConditionalMultiStepMaskGenerator(Policy):
             mask_vae_state_dict_path:str=None,  
             default_conditioning_reward=1.0,
             conditioning_reward_range=None,
+            # True matches the newer no-audio signal-conditioned checkpoint.
+            # False matches the older audio-conditioned checkpoint, whose BOS
+            # input was only the reward embedding.
             use_signal_inputs=True,
             min_audio_size=160,
             condition_on_audio=True,
