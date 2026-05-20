@@ -127,3 +127,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Recorded the completed ROB-106 UVQLM rollout size scan in
   `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/rob106_low_reward_conditioning/uvqlm_rollout_size/OUTCOME.md`:
   266408 files, 146.22 GiB apparent, and 146.73 GiB allocated.
+- Added `scripts/launch_rob106_uvqlm_store4_sync.sh` for the follow-up
+  callback-backed Mimas copy from the Stanage UVQLM rollout folder to
+  `/store/store4/data/l2augment_rollout_uvqmlm/`. The wrapper uses a real
+  `EXIT` trap, logs store4 space before copying, and can be resumed with the
+  same command if interrupted.
