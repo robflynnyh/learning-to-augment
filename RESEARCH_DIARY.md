@@ -8,6 +8,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Added Symphony project wiring for the Learn-to-Augment Linear project,
   including split instruction files, detached-job callbacks, wrapper templates,
   and a blocked follow-up issue helper.
+- ROB-60 oracle result details live in `exp/results/repro/oracle/OUTCOME.md`;
+  keep that file as the durable result summary rather than expanding diary
+  notes. Generated plots/CSVs are beside it, and large screen/GPU logs remain
+  uncommitted.
 - Replaced the superseded ROB-62 `16384` / `9e-5` scaffold with the corrected
   result-repo setup under
   `exp/results/repro/policy/ROB-62_result_repo_2048_1epoch/`. This uses the
@@ -45,3 +49,20 @@ reproduce results, interpret metrics, or avoid known failure modes.
   logs, downloads, result staging, callbacks, and experiment scratch space. Use
   durable repo-local paths, `exp/results/`, or suitable `/store/...` locations
   for artifacts that later Symphony turns may need to inspect.
+
+## 2026-05-14
+
+- Finalized ROB-60 oracle follow-ups across RMM, RFM, UVQLM, and RAN. Best
+  completed segmented-test oracle result is RMM `lr=3e-5`, `search_lr=2e-1`,
+  repeat 50 at `8.428%` WER; RAN peaks at repeat 5 with `8.885%` WER and
+  remains weaker than the matching learned/random mask-search cells. Use
+  `exp/results/repro/oracle/OUTCOME.md` plus `oracle_lr_sweep_vs_ufmr.{csv,pdf}`
+  for the full table and plot.
+
+## 2026-05-19
+
+- Added the ROB-60 reduced plot
+  `exp/results/repro/oracle/oracle_best_repeat50_lrs_vs_ufmr.{csv,pdf}` for
+  the best repeat-50 LR setup per method, then refreshed both oracle plots with
+  clearer styling. The reduced plot legend intentionally uses method-only
+  labels; selected LR/search-LR details remain in `OUTCOME.md`.

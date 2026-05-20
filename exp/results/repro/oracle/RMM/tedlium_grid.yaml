@@ -19,7 +19,7 @@ evaluation:
   optim_args:
     lr: 1e-6
     single_step_lr: 4e-2
-  save_path: /exp/exp4/acp21rjf/learning-to-augment/exp/results/repro/oracle/RMM/tedlium_lr{grid_label:evaluation.optim_args.lr}_searchlr{grid_label:evaluation.optim_args.single_step_lr}.txt
+  save_path: exp/results/repro/oracle/RMM/tedlium_lr{grid_label:evaluation.optim_args.lr}_searchlr{grid_label:evaluation.optim_args.single_step_lr}.txt
 
 policy:
   lr: 1e-4
@@ -55,3 +55,51 @@ grid:
         evaluation.optim_args.single_step_lr:
           value: 9e-2
           label: "9e-2"
+    - id: lr1e-5_searchlr2e-1
+      values:
+        evaluation.optim_args.lr:
+          value: 1e-5
+          label: "1e-5"
+        evaluation.optim_args.single_step_lr:
+          value: 2e-1
+          label: "2e-1"
+    - id: lr8e-6_searchlr2e-1
+      values:
+        evaluation.optim_args.lr:
+          value: 8e-6
+          label: "8e-6"
+        evaluation.optim_args.single_step_lr:
+          value: 2e-1
+          label: "2e-1"
+    - id: lr1e-5_searchlr9e-2
+      values:
+        evaluation.optim_args.lr:
+          value: 1e-5
+          label: "1e-5"
+        evaluation.optim_args.single_step_lr:
+          value: 9e-2
+          label: "9e-2"
+    - id: lr3e-5_searchlr2e-1
+      values:
+        evaluation.optim_args.lr:
+          value: 3e-5
+          label: "3e-5"
+        evaluation.optim_args.single_step_lr:
+          value: 2e-1
+          label: "2e-1"
+    - id: lr1e-4_searchlr2e-1
+      values:
+        evaluation.optim_args.lr:
+          value: 1e-4
+          label: "1e-4"
+        evaluation.optim_args.single_step_lr:
+          value: 2e-1
+          label: "2e-1"
+    - id: lr6e-5_searchlr2e-1
+      values:
+        evaluation.optim_args.lr:
+          value: 6e-5
+          label: "6e-5"
+        evaluation.optim_args.single_step_lr:
+          value: 2e-1
+          label: "2e-1"
