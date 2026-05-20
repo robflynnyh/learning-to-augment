@@ -106,3 +106,6 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/sweeps/uvqlm/tedlium_dev/`. A later Linear comment on
   2026-05-20 dropped the originally requested segmented-dev half before
   completion, so the launcher and committed artifact set are TED-LIUM dev only.
+  The completed 12-cell dev sweep is summarized in
+  `ROB-82_TEDLIUM_DEV_UVQLM_OUTCOME.md`; the best averaged row is 5 epochs at
+  `5e-6` with updated WER `0.086824` across two repeats.
