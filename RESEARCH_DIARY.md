@@ -45,41 +45,17 @@ reproduce results, interpret metrics, or avoid known failure modes.
 
 ## 2026-05-12
 
-- Added the ROB-80 TED-LIUM dev policy LR sweep wrapper for RFM, RMM, and UFMR under
-  `scripts/launch_rob80_tedlium_policy_sweep.sh`. It writes generated configs
-  and results under `exp/results/repro/sweeps/`, covers adaptation LRs `5e-6`,
-  `1e-5`, and `2e-5` for `1` and `5` epochs, and summarizes completed cells via
-  `scripts/summarize_rob80_tedlium_sweep.py`.
-- Completed the ROB-80 TED-LIUM dev sweep: all 18 cells finished. The best
-  updated WERs were RFM `0.087653` at `1e-5` / 5 epochs, RMM `0.086051` at
-  `5e-6` / 5 epochs, and UFMR `0.087985` at `2e-5` / 5 epochs. The summary
-  table and CSV are in `exp/results/repro/sweeps/`.
-- Prepared a ROB-80 UFMR-only higher-LR follow-up after the initial best UFMR
-  point landed at the highest tested LR. The wrapper and summarizer now include
-  UFMR `4e-5`, `8e-5`, and `1.6e-4` for both 1 and 5 epochs while leaving the
-  RFM/RMM grids unchanged.
-- Completed the ROB-80 UFMR higher-LR follow-up: all 24 TED-LIUM dev cells are
-  now summarized in `exp/results/repro/sweeps/ROB-80_OUTCOME.md`. The highest
-  UFMR LR (`1.6e-4`) diverged badly at 5 epochs, so subsequent segmented-dev
-  sweeps should stay centered on the original `5e-6`, `1e-5`, `2e-5` range.
-- Added a ROB-80 TED-LIUM segmented dev wrapper,
-  `scripts/launch_rob80_tedlium_segmented_policy_sweep.sh`, which reuses the
-  policy sweep runner with `dataset: tedlium3_segmented_data`, `split: dev`,
-  and a separate result root under `exp/results/repro/sweeps/segmented_dev/`.
+- Added the ROB-80 TED-LIUM dev policy LR sweep wrapper/summarizer for RFM,
+  RMM, and UFMR. Durable tables live in `exp/results/repro/sweeps/`; UFMR
+  `1.6e-4` diverged at 5 epochs, so later policy sweeps should stay on the
+  lower LR range unless explicitly revisiting instability.
 
 ## 2026-05-13
 
-- Investigated the failed ROB-80 segmented dev queue. The wrapper did start on
-  Mimas and acquired GPU 2, but `exp/eval.py` could not consume
-  `tedlium3_segmented_data` utterance-list outputs, and the failure callback
-  resolved `scripts/callbacks/...` relative to `exp/`. The segmented wrapper now
-  runs `oracle_eval.py` with `rollout_setting: policy`, and the callback path is
-  rooted at the repository directory.
-- Completed the ROB-80 TED-LIUM segmented dev follow-up: all 18 RFM/RMM/UFMR
-  cells finished for `5e-6`, `1e-5`, and `2e-5` at 1 and 5 epochs. The best
-  segmented updated WERs were RFM `0.097601` at `5e-6` / 5 epochs, RMM
-  `0.097325` at `1e-5` / 5 epochs, and UFMR `0.096717` at `1e-5` / 5 epochs;
-  the table and CSV are under `exp/results/repro/sweeps/segmented_dev/`.
+- Added and fixed the ROB-80 segmented-dev policy sweep. Use
+  `scripts/launch_rob80_tedlium_segmented_policy_sweep.sh`; it runs
+  `oracle_eval.py` with `rollout_setting: policy` because `exp/eval.py` cannot
+  consume `tedlium3_segmented_data` utterance-list outputs.
 - Updated Symphony rules for ROB-83 to forbid `/tmp` on Mimas for working files,
   logs, downloads, result staging, callbacks, and experiment scratch space. Use
   durable repo-local paths, `exp/results/`, or suitable `/store/...` locations
@@ -87,36 +63,15 @@ reproduce results, interpret metrics, or avoid known failure modes.
 
 ## 2026-05-14
 
-- Prepared the ROB-80 no-audio CMultiStepVQLM follow-up after the user selected
-  that policy family. The Mimas launcher writes generated configs and results
-  under `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/`, uses
-  `ConditionalMultiStepMaskGenerator` with `condition_on_audio: false`, and
-  sweeps TED-LIUM dev learning rates `5e-6`, `1e-5`, and `2e-5` for 1 and 5
-  adaptation epochs. The initial `no_audio_modelgpu_big.pt` smoke failed
-  because that checkpoint predates the current signal-conditioned model
-  modules; the queued follow-up uses the compatible
-  `CMultiStepMLM/no_audio_modelsignals.pt` checkpoint.
-- Completed the ROB-80 no-audio CMultiStepVQLM TED-LIUM dev follow-up: all 6
-  cells finished for `5e-6`, `1e-5`, and `2e-5` at 1 and 5 epochs. The best
-  updated WER was `0.087322` at `1e-5` / 5 epochs; the table, CSV, generated
-  configs, and per-cell result files are under
-  `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/`.
-- Prepared a ROB-80 reward-conditioning follow-up for no-audio CMultiStepVQLM.
-  The model now supports an optional `conditioning_reward_range` for inference;
-  when set to `[0.5, 1.0]`, each generated mask samples its conditioning reward
-  uniformly from that interval. The no-audio launcher and summarizer can compare
-  this randomized variant against the existing fixed `1.0` baseline under
-  `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/`.
-- Completed the ROB-80 no-audio CMultiStepVQLM random reward-conditioning
-  comparison: all 12 fixed-vs-random cells are summarized in
-  `ROB-80_NOAUDIO_REWARD_CONDITIONING_COMPARISON.md`. The best randomized row
-  reached updated WER `0.085774` at `5e-6` / 5 epochs, improving on the best
-  fixed-`1.0` row (`0.087322` at `1e-5` / 5 epochs).
-- Prepared the ROB-80 repeat/audio CMultiStepVQLM follow-up. Repeat 2 writes
-  no-audio fixed/random reward results with `_repeat2` suffixes and rollout seed
-  `123457`; the audio-conditioned comparison uses the legacy score-conditioned
-  `CMultiStepMLM/curbest.pt` checkpoint with `condition_on_audio: true` and
-  `use_signal_inputs: false`.
+- Added ROB-80 no-audio and audio-conditioned CMultiStepVQLM sweep support.
+  The compatible no-audio checkpoint is `CMultiStepMLM/no_audio_modelsignals.pt`
+  with `condition_on_audio: false` / `use_signal_inputs: true`; the
+  audio-conditioned checkpoint is `CMultiStepMLM/curbest.pt` with
+  `condition_on_audio: true` / `use_signal_inputs: false`.
+- Added fixed-vs-random reward conditioning for CMultiStepVQLM using
+  `conditioning_reward_range`; durable comparison tables are under
+  `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/` and
+  `exp/results/repro/sweeps/audio_cmultistep_vqlm/`.
 - Finalized ROB-60 oracle follow-ups across RMM, RFM, UVQLM, and RAN. Best
   completed segmented-test oracle result is RMM `lr=3e-5`, `search_lr=2e-1`,
   repeat 50 at `8.428%` WER; RAN peaks at repeat 5 with `8.885%` WER and
@@ -126,35 +81,13 @@ reproduce results, interpret metrics, or avoid known failure modes.
 
 ## 2026-05-15
 
-- Completed the ROB-80 repeat/audio CMultiStepVQLM reward-conditioning
-  follow-up. The no-audio repeat comparison now summarizes 24/24 cells across
-  two repeats in
-  `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/ROB-80_NOAUDIO_REWARD_CONDITIONING_REPEAT_COMPARISON.md`;
-  the best averaged no-audio rows are fixed reward `1.0` at `5e-6` / 5 epochs
-  with updated WER `0.087266`, and uniform `[0.5, 1.0]` random reward at
-  `5e-6` / 5 epochs with updated WER `0.087238`. The audio-conditioned
-  comparison completed 12/12 cells in
-  `exp/results/repro/sweeps/audio_cmultistep_vqlm/ROB-80_AUDIO_REWARD_CONDITIONING_COMPARISON.md`;
-  its best row was uniform `[0.5, 1.0]` random reward at `5e-6` / 5 epochs with
-  updated WER `0.086880`.
-- Prepared the ROB-80 missing-repeat follow-up after the request that all sweep
-  results should have two repeats. The RFM/RMM/UFMR policy sweep launcher and
-  summarizer now support `_repeatN` result suffixes and aggregate repeat means;
-  `scripts/launch_rob80_tedlium_missing_repeat2_sweep.sh` runs only repeat 2
-  for the original TED-LIUM dev policy sweep, segmented-dev policy sweep, and
-  audio-conditioned CMultiStepVQLM fixed/random reward sweep. The no-audio
-  CMultiStepVQLM result family already has two repeats.
-- Completed the ROB-80 missing-repeat follow-up. The original TED-LIUM dev
-  policy sweep now summarizes 48/48 cells across two repeats; best averaged
-  rows are RFM `5e-6` / 5 epochs at updated WER `0.087018`, RMM `5e-6` / 5
-  epochs at `0.086686`, and UFMR `4e-5` / 1 epoch at `0.088068` among the
-  stable higher-LR follow-up rows. The segmented-dev policy sweep now
-  summarizes 36/36 cells across two repeats; best averaged rows are RFM
-  `5e-6` / 5 epochs at `0.098790`, RMM `1e-5` / 5 epochs at `0.097021`, and
-  UFMR `5e-6` / 5 epochs at `0.096579`. The audio-conditioned CMultiStepVQLM
-  fixed/random comparison now summarizes 24/24 cells across two repeats, with
-  the best averaged row from uniform `[0.5, 1.0]` random reward at `5e-6` / 5
-  epochs and updated WER `0.087653`.
+- Finalized ROB-80's two-repeat reporting contract. Read the result files, not
+  this diary, for metrics: `ROB-80_OUTCOME.md`,
+  `segmented_dev/ROB-80_SEGMENTED_OUTCOME.md`,
+  `no_audio_cmultistep_vqlm/ROB-80_NOAUDIO_REWARD_CONDITIONING_REPEAT_COMPARISON.md`,
+  and `audio_cmultistep_vqlm/ROB-80_AUDIO_REWARD_CONDITIONING_COMPARISON.md`.
+  `scripts/launch_rob80_tedlium_missing_repeat2_sweep.sh` only exists to fill
+  missing repeat-2 cells and should not be used for a fresh full sweep.
 
 ## 2026-05-19
 
