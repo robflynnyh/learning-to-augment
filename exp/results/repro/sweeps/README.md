@@ -43,3 +43,20 @@ The older `no_audio_modelgpu_big.pt` checkpoint exists in the cache for
 provenance but does not load into the current signal-conditioned model class.
 The summary is written to
 `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/ROB-80_NOAUDIO_CMULTISTEP_OUTCOME.md`.
+
+## ROB-82 TED-LIUM UVQLM LR Sweep
+
+`scripts/launch_rob82_tedlium_uvqlm_sweep.sh` runs UVQLM as a separate policy
+family from UFMR. It uses the same centered LR grid (`5e-6`, `1e-5`, `2e-5`),
+epochs (`1`, `5`), and two-repeat reporting contract used for the finalized
+ROB-80 sweep tables.
+
+Outputs are kept under `exp/results/repro/sweeps/uvqlm/`:
+
+- `tedlium_dev/UVQLM/` for TED-LIUM dev via `exp/eval.py`
+- `segmented_dev/UVQLM/` for TED-LIUM segmented dev via `exp/oracle_eval.py`
+
+The segmented-dev path intentionally uses `oracle_eval.py` with
+`rollout_setting: policy`, because that entrypoint consumes
+`tedlium3_segmented_data` utterance lists. `exp/eval.py` expects each
+`process_fn` to return a two-value `(audio, text)` pair.
