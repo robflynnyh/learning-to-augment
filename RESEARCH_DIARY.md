@@ -115,3 +115,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   (`epochs=5`, `lr=5e-6`, repeats 1 and 2) and compares fixed reward `1.0`,
   fixed reward `0.0`, and uniform `[0.0, 1.0]` reward conditioning under
   `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/rob106_low_reward_conditioning/`.
+- Completed the ROB-106 TED-LIUM dev low-reward conditioning comparison. Across
+  two repeats, fixed reward `1.0` did not beat fixed reward `0.0`
+  (`0.087764` vs. `0.087625` updated WER), while uniform `[0.0, 1.0]`
+  conditioning was best (`0.086244` updated WER).

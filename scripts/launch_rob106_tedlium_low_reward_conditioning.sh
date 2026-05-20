@@ -76,7 +76,15 @@ export ROB80_SUMMARY_METHODS="${ROB80_SUMMARY_METHODS:-CMultiStepVQLMReward1 CMu
 export ROB80_CSV_NAME="${ROB80_CSV_NAME:-rob106_tedlium_noaudio_low_reward_conditioning.csv}"
 export ROB80_OUTCOME_NAME="${ROB80_OUTCOME_NAME:-OUTCOME.md}"
 export ROB80_TITLE="${ROB80_TITLE:-ROB-106 TED-LIUM Dev No-Audio CMultiStepVQLM Low-Reward Conditioning}"
-export ROB80_NOTE="${ROB80_NOTE:-Compares the ROB-80 best comparable no-audio CMultiStepVQLM setting, TED-LIUM dev with 5 adaptation epochs and lr=5e-6, under fixed reward 1.0, fixed reward 0.0, and random reward sampled uniformly from [0.0, 1.0]. Rewards are in the trained MultiStepDataset min-max normalized range.}"
+export ROB80_NOTE="${ROB80_NOTE:-Compares the ROB-80 best comparable no-audio CMultiStepVQLM setting, TED-LIUM dev with 5 adaptation epochs and lr=5e-6, under fixed reward 1.0, fixed reward 0.0, and random reward sampled uniformly from [0.0, 1.0]. Rewards are in the trained MultiStepDataset min-max normalized range.
+
+Policy checkpoint: \`/store/store5/data/acp21rjf_checkpoints/l2augment/models/CMultiStepMLM/no_audio_modelsignals.pt\`
+
+ASR checkpoint: \`/store/store5/data/acp21rjf_checkpoints/l2augment/asr/step_105360.pt\`
+
+Launch command: \`/store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob106_tedlium_low_reward_conditioning.sh\`
+
+Interpretation: fixed reward \`1.0\` did not outperform fixed reward \`0.0\` on the two-repeat mean; uniform random conditioning over \`[0.0, 1.0]\` was best in this small comparison.}"
 
 echo "[rob106] branch=${GIT_BRANCH}"
 echo "[rob106] commit=${GIT_COMMIT}"
