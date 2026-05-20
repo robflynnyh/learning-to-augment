@@ -51,12 +51,7 @@ family from UFMR. It uses the same centered LR grid (`5e-6`, `1e-5`, `2e-5`),
 epochs (`1`, `5`), and two-repeat reporting contract used for the finalized
 ROB-80 sweep tables.
 
-Outputs are kept under `exp/results/repro/sweeps/uvqlm/`:
-
-- `tedlium_dev/UVQLM/` for TED-LIUM dev via `exp/eval.py`
-- `segmented_dev/UVQLM/` for TED-LIUM segmented dev via `exp/oracle_eval.py`
-
-The segmented-dev path intentionally uses `oracle_eval.py` with
-`rollout_setting: policy`, because that entrypoint consumes
-`tedlium3_segmented_data` utterance lists. `exp/eval.py` expects each
-`process_fn` to return a two-value `(audio, text)` pair.
+Outputs are kept under `exp/results/repro/sweeps/uvqlm/tedlium_dev/UVQLM/`
+and are evaluated via `exp/eval.py`. The originally requested segmented-dev
+half of ROB-82 was dropped by a later Linear comment on 2026-05-20 before
+completion, so this issue's UVQLM artifact set is TED-LIUM dev only.

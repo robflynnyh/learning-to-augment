@@ -102,7 +102,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Resolved ROB-80 PR merge conflicts against current `origin/main`, keeping the
   stricter `VectorQuantize` compatibility helper while preserving the latest
   ROB-60 oracle diary/result artifacts from the base branch.
-- Added ROB-82 UVQLM TED-LIUM dev and segmented-dev sweep support under
-  `exp/results/repro/sweeps/uvqlm/`. The launcher uses `eval.py` for normal
-  TED-LIUM dev and `oracle_eval.py` for segmented dev because segmented records
-  produce utterance lists rather than `(audio, text)` pairs.
+- Added ROB-82 UVQLM TED-LIUM dev sweep support under
+  `exp/results/repro/sweeps/uvqlm/tedlium_dev/`. A later Linear comment on
+  2026-05-20 dropped the originally requested segmented-dev half before
+  completion, so the launcher and committed artifact set are TED-LIUM dev only.

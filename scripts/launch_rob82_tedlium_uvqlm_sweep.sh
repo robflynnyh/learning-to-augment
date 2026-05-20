@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Queue-safe ROB-82 TED-LIUM dev and segmented-dev LR sweep for UVQLM.
+# Queue-safe ROB-82 TED-LIUM dev LR sweep for UVQLM.
 
 set -uo pipefail
 
@@ -49,7 +49,7 @@ on_exit() {
     --branch "${GIT_BRANCH}"
     --commit "${GIT_COMMIT}"
     --target-state "${CALLBACK_TARGET_STATE:-Todo}"
-    --note "${CALLBACK_NOTE:-ROB-82 TED-LIUM dev and segmented-dev UVQLM LR sweep wrapper exited. Inspect exp/results/repro/sweeps/uvqlm/ for the result tables when complete.}"
+    --note "${CALLBACK_NOTE:-ROB-82 TED-LIUM dev UVQLM LR sweep wrapper exited. Inspect exp/results/repro/sweeps/uvqlm/tedlium_dev/ for the result table when complete.}"
     --tail-lines "${CALLBACK_TAIL_LINES:-80}"
     --max-log-chars "${CALLBACK_MAX_LOG_CHARS:-6000}"
     --max-comment-chars "${CALLBACK_MAX_COMMENT_CHARS:-10000}"
@@ -116,10 +116,7 @@ lrs = tuple(sys.argv[6].split())
 epochs = tuple(int(item) for item in sys.argv[7].split())
 repeats = tuple(int(item) for item in sys.argv[8].split())
 
-specs = (
-    ("tedlium_dev", "tedlium", "dev", "eval.py"),
-    ("segmented_dev", "tedlium3_segmented_data", "dev", "oracle_eval.py"),
-)
+specs = (("tedlium_dev", "tedlium", "dev", "eval.py"),)
 for split_dir, dataset, split, _eval_script in specs:
     result_root = root / split_dir
     (result_root / method / "configs").mkdir(parents=True, exist_ok=True)
@@ -264,15 +261,5 @@ run_split \
   "UVQLM is evaluated as a separate method family from UFMR, using the ROB-80 centered LR grid and two repeats for consistency with the final ROB-80 sweep contract." \
   "rob82_tedlium_dev_uvqlm_sweep.csv" \
   "ROB-82_TEDLIUM_DEV_UVQLM_OUTCOME.md"
-
-run_split \
-  "segmented_dev" \
-  "tedlium3_segmented_data" \
-  "dev" \
-  "oracle_eval.py" \
-  "ROB-82 TED-LIUM Segmented Dev UVQLM LR Sweep" \
-  "Segmented dev uses oracle_eval.py because it passes TED-LIUM segmented utterance lists into the rollout path; exp/eval.py expects a two-value audio/text processor return." \
-  "rob82_tedlium_segmented_dev_uvqlm_sweep.csv" \
-  "ROB-82_SEGMENTED_DEV_UVQLM_OUTCOME.md"
 
 echo "[rob82-uvqlm] finished"
