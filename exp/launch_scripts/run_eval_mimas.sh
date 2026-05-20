@@ -40,13 +40,12 @@ if [[ ! -f "$UFMR_CKPT" ]]; then
     fi
 fi
 
-# Dataset roots on mimas (datasets live in /store/store4/data).
-# TAL is intentionally unset — it isn't mirrored on this box; leaving it
-# unset means the parscratch default kicks in and a TAL run will fail loudly.
+# Dataset roots on mimas.
 export L2A_EARNINGS22_DIR=/store/store4/data/earnings-22
 export L2A_TEDLIUM3_LEGACY_DIR=/store/store4/data/TEDLIUM_release-3/legacy/
 export L2A_REV16_DIR=/store/store4/data/rev_benchmark
 export L2A_CHIME6_DIR=/store/store4/data/chime6/
+export L2A_TAL_DIR=/store/store5/data/this_american_life
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
