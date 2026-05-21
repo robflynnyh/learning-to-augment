@@ -5,7 +5,7 @@
 #
 # Defaults to all checkpoint variants under /store/store5/.../ufmr.
 # Singlestep configs are intentionally excluded.
-# Set INCLUDE_TAL=1 if you also want the TAL configs (requires L2A_TAL_DIR).
+# Set INCLUDE_TAL=1 if you also want the TAL configs.
 
 set -euo pipefail
 

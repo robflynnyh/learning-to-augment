@@ -11,6 +11,7 @@ exp/wandb/
 exp/results/repro/sweeps/logs/
 exp/results/repro/sweeps/segmented_dev/logs/
 exp/results/repro/sweeps/no_audio_cmultistep_vqlm/logs/
+exp/results/repro/sweeps/no_audio_cmultistep_vqlm/rob106_low_reward_conditioning/logs/
 exp/results/repro/sweeps/audio_cmultistep_vqlm/logs/
 exp/results/repro/sweeps/uvqlm/logs/
 symphony/.env

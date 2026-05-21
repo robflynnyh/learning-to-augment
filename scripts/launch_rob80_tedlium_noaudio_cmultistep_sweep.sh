@@ -128,7 +128,7 @@ export L2A_TEDLIUM3_LEGACY_DIR="${L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TE
 export L2A_REV16_DIR="${L2A_REV16_DIR:-/store/store4/data/rev_benchmark}"
 export L2A_CHIME6_DIR="${L2A_CHIME6_DIR:-/store/store4/data/chime6/}"
 
-python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${POLICY_CKPT}" "${MASK_VAE_CKPT}" "${AUDIO_VAE_CKPT}" "${DECODER_LAYERS}" "${CONDITION_ON_AUDIO}" "${USE_SIGNAL_INPUTS}" "${EMBEDDING_DIM}" "${DATASET}" "${SPLIT}" "${TAG_PREFIX}" "${METHOD}" "${LRS}" "${EPOCHS}" "${REPEATS}" "${CONDITIONING_REWARD_RANGE}" "${ROB80_DEFAULT_CONDITIONING_REWARD:-1.0}" <<'PY'
+python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${POLICY_CKPT}" "${MASK_VAE_CKPT}" "${AUDIO_VAE_CKPT}" "${DECODER_LAYERS}" "${CONDITION_ON_AUDIO}" "${USE_SIGNAL_INPUTS}" "${EMBEDDING_DIM}" "${DATASET}" "${SPLIT}" "${TAG_PREFIX}" "${METHOD}" "${LRS}" "${EPOCHS}" "${REPEATS}" "${CONDITIONING_REWARD_RANGE}" "${ROB80_DEFAULT_CONDITIONING_REWARD:-1.0}" "${LINEAR_ISSUE}" <<'PY'
 import sys
 from pathlib import Path
 
@@ -150,6 +150,7 @@ epochs = tuple(int(item) for item in sys.argv[15].split())
 repeats = tuple(int(item) for item in sys.argv[16].split())
 conditioning_reward_range = tuple(sys.argv[17].split())
 default_conditioning_reward = float(sys.argv[18])
+linear_issue = sys.argv[19]
 conditioning_reward_range_yaml = ""
 if conditioning_reward_range:
     if len(conditioning_reward_range) != 2:
@@ -190,7 +191,7 @@ training:
   num_workers: 0
 
 evaluation:
-  id: 'ROB-80-{dataset}-{split}-{method}-epoch{epoch_count}-lr{lr}-repeat{repeat}'
+  id: '{linear_issue}-{dataset}-{split}-{method}-epoch{epoch_count}-lr{lr}-repeat{repeat}'
   dataset: '{dataset}'
   split: '{split}'
   use_cer: false
