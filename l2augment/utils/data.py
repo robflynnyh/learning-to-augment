@@ -2,11 +2,27 @@ import re
 import os
 from os.path import join
 import json
-from lcasr.utils.audio_tools import processing_chain, total_seconds, to_spectogram, total_frames
-from lcasr.eval.utils import zero_out_spectogram
+try:
+    from lcasr.utils.audio_tools import processing_chain, total_seconds, to_spectogram, total_frames
+    from lcasr.eval.utils import zero_out_spectogram
+except ImportError:
+    def _missing_lcasr(*args, **kwargs):
+        raise ImportError("lcasr is required for audio dataset utilities")
+
+    processing_chain = _missing_lcasr
+    total_seconds = _missing_lcasr
+    to_spectogram = _missing_lcasr
+    zero_out_spectogram = _missing_lcasr
+
+    def total_frames(seconds):
+        return int(round(seconds * 100))
 import pickle
 from typing import List
-import torch, torchaudio
+import torch
+try:
+    import torchaudio
+except (ImportError, OSError):
+    torchaudio = None
 from typing import Tuple
 from torch.utils.data import Dataset
 from l2augment.utils.helpers import lmap

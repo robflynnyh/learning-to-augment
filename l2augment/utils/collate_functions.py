@@ -210,6 +210,59 @@ def DTLM_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
     }
 
 
+def RewardConditionedMaskLM_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+    generations = []
+    rewards = []
+    raw_rewards = []
+    generation_lengths = []
+    source_paths = []
+    item_idxs = []
+    counts = []
+    degenerate_reward_groups = []
+
+    for i, item in enumerate(batch):
+        if item is None:
+            continue
+
+        cur_generations = item['generation'].to(torch.long)
+        cur_count = cur_generations.shape[0]
+        cur_length = int(item['generation_length'])
+
+        generations.append(cur_generations)
+        rewards.append(item['reward'].to(dtype=torch.float32))
+        raw_rewards.append(item['raw_reward'].to(dtype=torch.float32))
+        generation_lengths.extend([cur_length] * cur_count)
+        source_paths.extend([item['source_path']] * cur_count)
+        item_idxs.extend([i] * cur_count)
+        counts.append(cur_count)
+        degenerate_reward_groups.append(item['degenerate_reward_group'])
+
+    if len(generations) == 0:
+        return None
+
+    max_length = max(generation.shape[-1] for generation in generations)
+    padded_generations = []
+    for generation in generations:
+        if generation.shape[-1] < max_length:
+            diff = max_length - generation.shape[-1]
+            generation = torch.cat([
+                generation,
+                torch.zeros(generation.shape[0], diff, dtype=generation.dtype),
+            ], dim=-1)
+        padded_generations.append(generation)
+
+    return {
+        'generations': torch.cat(padded_generations, dim=0),
+        'generation_lengths': torch.tensor(generation_lengths, dtype=torch.long),
+        'rewards': torch.cat(rewards, dim=0),
+        'raw_rewards': torch.cat(raw_rewards, dim=0),
+        'source_paths': source_paths,
+        'item_idxs': torch.tensor(item_idxs, dtype=torch.long),
+        'counts': torch.tensor(counts, dtype=torch.long),
+        'degenerate_reward_groups': torch.stack(degenerate_reward_groups),
+    }
+
+
 def MultiStep_DTLM_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:    
 
     audio = {}
@@ -405,6 +458,7 @@ collate_functions_dict = {
     "MultiStep_FM_ranker": MultiStep_FM_ranker_fn,
     "MultiStep_DTLM": MultiStep_DTLM_fn,
     "DTLM": DTLM_fn,
+    "RewardConditionedMaskLM": RewardConditionedMaskLM_fn,
     "default": mask_collate_fn,
     "1dmask": mask_collate_fn,
     "mask_and_audio": mask_and_audio_collate_fn,

@@ -160,3 +160,15 @@ reproduce results, interpret metrics, or avoid known failure modes.
   trains from saved ROB-109 VQ `generation` sequences, keeps the large rollout
   dataset in place, uses per-utterance WER-delta normalization, and uses
   fixed-length audio-derived generation without EOS supervision.
+- Implemented the ROB-114 no-audio reward-conditioned mask LM path:
+  `RewardConditionedMaskLMDataset`, `RewardConditionedMaskLM` collate,
+  `RewardConditionedMaskLM`, active full/smoke configs, and smoke validation
+  script under
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/`. The model
+  conditions the first decoder input on normalized reward and trains only on
+  fixed-length saved VQ generations, without EOS targets.
+- Validated ROB-114 with the Torch 2.8 `speech-diff` environment needed to
+  deserialize the trusted float8 ROB-109 rollout files: 2-file train/dev stats,
+  finite CPU CE/backward, fixed 7-token generation at two reward values,
+  real-rollout augment length check, and a one-file `exp/train_freq_mask.py`
+  smoke with W&B disabled.

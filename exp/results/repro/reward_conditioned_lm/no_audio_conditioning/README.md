@@ -282,6 +282,51 @@ requested later, follow the project instruction to use a detached Mimas screen
 session through `/store/store5/software/simple-gpu-schedule/with-gpu` with an
 actual tested Linear callback wrapper.
 
+## ROB-114 Implementation
+
+Implemented repo artifacts:
+
+- Dataset adapter:
+  `l2augment.utils.datasets.RewardConditionedMaskLMDataset`
+- Collate path:
+  `l2augment.utils.collate_functions.RewardConditionedMaskLM_fn`
+- Policy class:
+  `l2augment.modelling.models.RewardConditionedMaskLM`
+- Active full-run config:
+  `exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance.yaml`
+- One-file harness-smoke config:
+  `exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_smoke.yaml`
+- Smoke script:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/smoke_reward_conditioned_mask_lm.py`
+
+The dataset reads the in-place ROB-109 rollout root and returns saved
+`generation` tensors, normalized per-utterance WER-delta rewards, raw WER-delta
+rewards, source paths, and VQ sequence lengths. It does not return audio or raw
+masks for training.
+
+The model keeps the UVQLM BVAE codebook, token embeddings, GRU decoder, and
+prediction head. It replaces the fixed BOS token with a reward encoder output.
+Teacher-forced training predicts only the saved VQ sequence positions and does
+not append or supervise EOS. Fixed-length generation receives
+`target_prediction_steps`, suppresses EOS while that explicit length is active,
+and returns generation metadata from `augment()`.
+
+Smoke commands:
+
+```bash
+/store/store4/software/bin/anaconda3/envs/speech-diff/bin/python \
+  exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/smoke_reward_conditioned_mask_lm.py
+
+PYTHONPATH="$PWD" WANDB_MODE=disabled \
+  /store/store4/software/bin/anaconda3/envs/speech-diff/bin/python \
+  exp/train_freq_mask.py \
+  --config exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_smoke.yaml
+```
+
+The smoke commands use the Torch 2.8 `speech-diff` environment because the
+trusted ROB-109 rollout files include float8 tensors. The training path itself
+still reads only saved VQ `generation` and reward fields.
+
 ## First Real Experiment Proposal
 
 Recommended first full experiment:
