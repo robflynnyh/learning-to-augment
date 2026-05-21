@@ -139,3 +139,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `/store/store4/data/l2augment_rollout_uvqmlm/`. The wrapper uses a real
   `EXIT` trap, logs store4 space before copying, and can be resumed with the
   same command if interrupted.
+2026-05-21 - ROB-108 setup: added a dedicated Mimas wrapper and summarizer for
+test-split RFM/RMM/UFMR/UVQLM evals across TED-LIUM, Earnings22, CHiME-6,
+Rev16, and TAL. Result root is
+`exp/results/repro/sweeps/rob108_test_policy_evals/`; repeat-aware rows are
+kept in `rob108_test_policy_evals.csv` and `OUTCOME.md`.
