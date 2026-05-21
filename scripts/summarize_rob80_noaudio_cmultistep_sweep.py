@@ -67,6 +67,7 @@ def collect_rows(
             for epoch_count in epochs:
                 for lr in lrs:
                     result_path = result_root / method / f"{tag_prefix}_epoch{epoch_count}_lr{lr}{repeat_suffix}.txt"
+                    config_path = result_root / method / "configs" / f"{tag_prefix}_epoch{epoch_count}_lr{lr}{repeat_suffix}.yaml"
                     parsed = parse_result(result_path, dataset, split, epoch_count)
                     row = {
                         "method": method,
@@ -75,6 +76,7 @@ def collect_rows(
                         "seed": str(seed),
                         "epochs": str(epoch_count),
                         "lr": lr,
+                        "config_path": display_path(config_path),
                         "result_path": display_path(result_path),
                     }
                     if parsed is None:
@@ -107,8 +109,14 @@ def collect_rows(
 def conditioning_label(method: str) -> str:
     if method == "CMultiStepVQLM":
         return "fixed_1.0"
+    if method == "CMultiStepVQLMReward1":
+        return "fixed_1.0"
+    if method == "CMultiStepVQLMReward0":
+        return "fixed_0.0"
     if method == "CMultiStepVQLMRandomReward":
         return "uniform_0.5_1.0"
+    if method == "CMultiStepVQLMRandomReward0to1":
+        return "uniform_0.0_1.0"
     if method == "CMultiStepVQLMAudio":
         return "audio_fixed_1.0"
     if method == "CMultiStepVQLMAudioRandomReward":
@@ -183,13 +191,13 @@ def write_markdown(rows: list[dict[str, str]], path: Path, title: str, note: str
             "",
             "## Per Repeat",
             "",
-            "| Method | Conditioning | Repeat | Seed | Epochs | LR | Original WER | Updated WER | Abs Delta | Rel Delta % | Status |",
-            "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+            "| Method | Conditioning | Repeat | Seed | Epochs | LR | Config | Original WER | Updated WER | Abs Delta | Rel Delta % | Status |",
+            "| --- | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- |",
         ]
     )
     for row in rows:
         lines.append(
-            "| {method} | {conditioning} | {repeat} | {seed} | {epochs} | `{lr}` | "
+            "| {method} | {conditioning} | {repeat} | {seed} | {epochs} | `{lr}` | `{config_path}` | "
             "{original_wer} | {updated_wer} | {absolute_delta} | {relative_delta_pct} | "
             "{status} |".format(**row)
         )

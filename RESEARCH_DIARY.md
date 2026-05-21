@@ -110,3 +110,25 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Resolved ROB-80 PR merge conflicts against current `origin/main`, keeping the
   stricter `VectorQuantize` compatibility helper while preserving the latest
   ROB-60 oracle diary/result artifacts from the base branch.
+- Added the ROB-106 low-reward conditioning comparison scaffold for TED-LIUM dev
+  no-audio CMultiStepVQLM. It reuses the ROB-80 best comparable setting
+  (`epochs=5`, `lr=5e-6`, repeats 1 and 2) and compares fixed reward `1.0`,
+  fixed reward `0.0`, and uniform `[0.0, 1.0]` reward conditioning under
+  `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/rob106_low_reward_conditioning/`.
+- Completed the ROB-106 TED-LIUM dev low-reward conditioning comparison. Across
+  two repeats, fixed reward `1.0` did not beat fixed reward `0.0`
+  (`0.087764` vs. `0.087625` updated WER), while uniform `[0.0, 1.0]`
+  conditioning was best (`0.086244` updated WER).
+- Added a ROB-106 CPU-node size-scan path for the Stanage UVQLM rollout folder
+  after a follow-up Linear comment requested an exact folder size rather than a
+  sample estimate. The scanner reports apparent bytes, allocated bytes, counts,
+  and top-level breakdowns; the Slurm wrapper keeps the Linear callback `EXIT`
+  trap.
+- Recorded the completed ROB-106 UVQLM rollout size scan in
+  `exp/results/repro/sweeps/no_audio_cmultistep_vqlm/rob106_low_reward_conditioning/uvqlm_rollout_size/OUTCOME.md`:
+  266408 files, 146.22 GiB apparent, and 146.73 GiB allocated.
+- Added `scripts/launch_rob106_uvqlm_store4_sync.sh` for the follow-up
+  callback-backed Mimas copy from the Stanage UVQLM rollout folder to
+  `/store/store4/data/l2augment_rollout_uvqmlm/`. The wrapper uses a real
+  `EXIT` trap, logs store4 space before copying, and can be resumed with the
+  same command if interrupted.
