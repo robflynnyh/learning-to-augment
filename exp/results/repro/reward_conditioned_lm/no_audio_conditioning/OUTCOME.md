@@ -49,10 +49,23 @@ Completed on 2026-05-21.
   length 29, 29 generated VQ tokens, mask shape `[1, 80, 1042]`, and augmented
   audio shape `[1, 80, 1042]`.
 - One-file training harness smoke: W&B disabled, CPU device, 1 train file,
-  1 dev file, one training batch. Initial dev loss `7.8133697509765625`, train
-  batch loss `7.5905327796936035`, final averaged dev loss
-  `7.81338095664978`, and both tmp
+  1 dev file, one training batch. Initial dev loss `7.758825302124023`, train
+  batch loss `7.676178932189941`, final averaged dev loss
+  `7.759217977523804`, and both tmp
   and final smoke checkpoints saved.
+
+PR-review follow-up validation after removing import/load guards:
+
+- `/store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2/bin/python -m py_compile l2augment/utils/data.py l2augment/utils/datasets.py l2augment/utils/collate_functions.py l2augment/modelling/models.py exp/train_freq_mask.py exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/smoke_reward_conditioned_mask_lm.py`
+- The hard-coded `flash_attn_pytorch2` interpreter in this Symphony shell reports
+  Torch `2.0.1`; direct `torch.load('/store/store4/data/l2augment_rollout_uvqmlm/dev/BarrySchwartz_2005G_8.pt')`
+  fails there with missing `torch._utils._rebuild_tensor_v3`.
+- The no-guard direct-load smokes were rerun successfully with Torch
+  `2.6.0+cu124` using `/store/store4/software/bin/anaconda3/envs/speechbrain/bin/python`
+  plus the local `lcasr`, `language_modelling`, repo, and existing
+  `vector_quantize_pytorch` dependency paths. The stats/model/augment smoke
+  reproduced the committed JSON values, and the one-file training harness smoke
+  completed with the losses above.
 
 Durable smoke artifacts:
 

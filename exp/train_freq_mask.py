@@ -20,10 +20,7 @@ import pickle
 from typing import List, Dict, Any
 from madgrad import MADGRAD
 import wandb
-try:
-    from eval import main as run_eval
-except ImportError:
-    run_eval = None
+from eval import main as run_eval
 
 logger = logging.getLogger('train')
 logger.setLevel(logging.INFO)
@@ -214,4 +211,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = OmegaConf.load(args.config)
     main(config)
-

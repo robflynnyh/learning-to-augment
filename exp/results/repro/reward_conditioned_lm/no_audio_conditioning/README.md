@@ -323,9 +323,16 @@ PYTHONPATH="$PWD" WANDB_MODE=disabled \
 ```
 
 The smoke commands use the normal `flash_attn_pytorch2` project environment.
-The dataset has a narrow trusted-rollout deserialization shim for ROB-109 files
-whose saved dicts include Torch 2.8 float8 mask/audio tensors; the training path
-itself reads only saved VQ `generation` and reward fields.
+Rollout files are read with the project-standard `torch.load`; the training path
+consumes only saved VQ `generation` and reward fields.
+
+PR-review follow-up removed all local import/load compatibility guards. In this
+Symphony shell, `/store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2/bin/python`
+currently reports Torch `2.0.1` and cannot direct-load the ROB-109 files because
+`torch._utils._rebuild_tensor_v3` is missing. The no-guard direct-load path was
+rerun successfully with a Torch `2.6.0+cu124` environment and the local project
+dependency paths; the reviewer notes that their default `flash_attn_pytorch2`
+also reports Torch `2.6.0+cu124`.
 
 ## First Real Experiment Proposal
 

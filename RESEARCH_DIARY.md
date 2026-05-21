@@ -168,7 +168,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   conditions the first decoder input on normalized reward and trains only on
   fixed-length saved VQ generations, without EOS targets.
 - Validated the initial ROB-114 implementation with the Torch 2.8 `speech-diff`
-  environment to deserialize the trusted float8 ROB-109 rollout files: 2-file
+  environment: 2-file
   train/dev stats, finite CPU CE/backward, fixed 7-token generation at two
   reward values, real-rollout augment length check, and a one-file
   `exp/train_freq_mask.py` smoke with W&B disabled.
@@ -176,3 +176,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   min-max normalization with degenerate groups mapped to `0.5`, using multistep
   evaluation in the active config, increasing full-run early-stop tolerance to
   5, and validating the path in the normal `flash_attn_pytorch2` project env.
+- Removed the remaining ROB-114 import/load guards after PR review: `lcasr`,
+  `torchaudio`, and `eval` now fail at import time as in the project env, and
+  ROB-109 rollout files are loaded with the normal `torch.load` path.
+  The hard-coded local `flash_attn_pytorch2` executable reports Torch `2.0.1`
+  in this shell, so the no-guard direct-load validation was rerun under a Torch
+  `2.6.0+cu124` env with explicit local dependency paths.

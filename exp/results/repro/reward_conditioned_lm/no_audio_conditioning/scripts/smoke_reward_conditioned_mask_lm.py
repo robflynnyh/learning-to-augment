@@ -12,7 +12,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from l2augment.modelling.models import RewardConditionedMaskLM
 from l2augment.utils.collate_functions import RewardConditionedMaskLM_fn
-from l2augment.utils.datasets import RewardConditionedMaskLMDataset, load_reward_conditioned_rollout
+from l2augment.utils.datasets import RewardConditionedMaskLMDataset
 
 
 def rollout_files(root, split, limit):
@@ -118,7 +118,7 @@ def run_model_smoke(model, item, target_steps):
 
 
 def run_augment_smoke(model, rollout_path):
-    rollout = load_reward_conditioned_rollout(rollout_path)
+    rollout = torch.load(rollout_path)
     audio = rollout["audio"].to(dtype=torch.float32)
     if audio.ndim == 2:
         audio = audio.unsqueeze(0)

@@ -13,51 +13,6 @@ from l2augment.utils.data import CustomDataset
 dataset_classes_dict = {}
 
 
-def enable_rob109_rollout_load_compat():
-    """Allow trusted Torch 2.8 rollout files to load in the Torch 2.0 env.
-
-    ROB-109 rollout files only need `generation` and `reward` for this dataset,
-    but the serialized dict also contains float8 mask/audio tensors. Older
-    Mimas training envs do not know those float8 dtype names or the v3 tensor
-    rebuild helper, so map float8 storage to uint8 when necessary.
-    """
-    if not hasattr(torch._utils, "_rebuild_tensor_v3"):
-        def _rebuild_tensor_v3(
-                storage,
-                storage_offset,
-                size,
-                stride,
-                requires_grad,
-                backward_hooks,
-                dtype,
-                metadata=None,
-            ):
-            tensor = torch.empty(
-                (0,),
-                dtype=dtype,
-                device=storage._untyped_storage.device,
-                requires_grad=requires_grad,
-            )
-            tensor.set_(storage._untyped_storage, storage_offset, size, stride)
-            tensor._backward_hooks = backward_hooks
-            return tensor
-
-        torch._utils._rebuild_tensor_v3 = _rebuild_tensor_v3
-
-    if not hasattr(torch, "float8_e5m2"):
-        torch.float8_e5m2 = torch.uint8
-    if not hasattr(torch, "float8_e4m3fn"):
-        torch.float8_e4m3fn = torch.uint8
-
-
-def load_reward_conditioned_rollout(file):
-    enable_rob109_rollout_load_compat()
-    try:
-        return torch.load(file, weights_only=True)
-    except Exception:
-        return torch.load(file, weights_only=False)
-
-
 class MultiStepDataset(Dataset):
     def __init__(
             self, 
@@ -229,7 +184,7 @@ class RewardConditionedMaskLMDataset(Dataset):
     def __getitem__(self, idx):
         try:
             file = self.data[idx]
-            rollout = load_reward_conditioned_rollout(file)
+            rollout = torch.load(file)
             generation = rollout['generation'].to(torch.long)
             if generation.ndim == 1:
                 generation = generation.unsqueeze(0)
