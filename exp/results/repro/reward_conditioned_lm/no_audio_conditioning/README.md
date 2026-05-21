@@ -313,26 +313,48 @@ and returns generation metadata from `augment()`.
 Smoke commands:
 
 ```bash
-/store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2/bin/python \
-  exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/smoke_reward_conditioned_mask_lm.py
+bash -ic 'export PYTHONPATH="$PWD:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python - <<'"'"'PY'"'"'
+import runpy
+import sys
+import torch
+print("python", sys.executable, sys.version.split()[0])
+print("torch", torch.__version__, torch.__file__)
+sys.path.append("/store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2/lib/python3.9/site-packages")
+sys.argv = ["exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/smoke_reward_conditioned_mask_lm.py"]
+runpy.run_path(sys.argv[0], run_name="__main__")
+PY'
 
-PYTHONPATH="$PWD" WANDB_MODE=disabled \
-  /store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2/bin/python \
-  exp/train_freq_mask.py \
-  --config exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_smoke.yaml
+bash -ic 'export PYTHONPATH="$PWD:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; export WANDB_MODE=disabled; python - <<'"'"'PY'"'"'
+import runpy
+import sys
+import torch
+print("python", sys.executable, sys.version.split()[0])
+print("torch", torch.__version__, torch.__file__)
+sys.path.insert(0, "exp")
+sys.path.append("/store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2/lib/python3.9/site-packages")
+sys.argv = [
+    "exp/train_freq_mask.py",
+    "--config",
+    "exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_smoke.yaml",
+]
+runpy.run_path(sys.argv[0], run_name="__main__")
+PY'
 ```
 
-The smoke commands use the normal `flash_attn_pytorch2` project environment.
 Rollout files are read with the project-standard `torch.load`; the training path
 consumes only saved VQ `generation` and reward fields.
 
 PR-review follow-up removed all local import/load compatibility guards. In this
-Symphony shell, `/store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2/bin/python`
-currently reports Torch `2.0.1` and cannot direct-load the ROB-109 files because
-`torch._utils._rebuild_tensor_v3` is missing. The no-guard direct-load path was
-rerun successfully with a Torch `2.6.0+cu124` environment and the local project
-dependency paths; the reviewer notes that their default `flash_attn_pytorch2`
-also reports Torch `2.6.0+cu124`.
+Symphony shell, the literal
+`/store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2/bin/python`
+interpreter is stale: it reports Python `3.9.17` and Torch `2.0.1`. The human
+interactive `flash_attn_pytorch2` transcript is reproduced by an interactive
+bash shell where `python` is aliased to `/usr/bin/python3.10`, which imports
+Torch `2.6.0+cu124` from `~/.local`. The smoke commands above use that
+interactive Python path and append local dependency paths after Torch is loaded,
+so the stale env-path Torch cannot shadow the correct runtime. Torch 2.6 also
+requires trusted local training checkpoints to be loaded with
+`weights_only=False`; ROB-109 rollout files still use normal `torch.load`.
 
 ## First Real Experiment Proposal
 
