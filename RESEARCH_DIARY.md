@@ -148,3 +148,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
   paths used by the original UMLM generation config, and the synced dev rollout
   files use reward shape `(10, 2, 2)` as 10 masks by `[CER, WER]` by
   `[before, after]`.
+- Extended ROB-109 after review with behavior-level VQ-sequence verification:
+  `exp/results/scripts/verify_rob109_uvqlm_rollout_sequences.py` re-decodes all
+  5,070 saved dev `generation` sequences through the current Mimas BVAE
+  checkpoint and scores them with the current Mimas UMLM checkpoint. The summary
+  JSON in the ROB-109 result directory records 12 mismatched mask pixels out of
+  460,274,400 and saved-sequence mean NLL `2.8811` versus random-code mean NLL
+  `10.7293`.

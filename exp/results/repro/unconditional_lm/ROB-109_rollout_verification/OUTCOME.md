@@ -38,10 +38,18 @@ Evidence:
   `c233d24923a24cf1be77711add20d03e54e3f1eab24729c5201b96602f5964eb`.
 - The files include the `generation` tensor returned by
   `UnconditionalMaskGenerator.augment`, matching the UVQLM sampled-code path.
+- Re-decoding every saved dev `generation` sequence through the current Mimas
+  BVAE checkpoint reproduces the saved masks to within 12 differing binary
+  pixels out of 460,274,400 checked pixels across all 5,070 dev rollout
+  sequences.
+- The saved dev `generation` sequences have much lower negative log-likelihood
+  under the current Mimas UMLM checkpoint than random same-length VQ sequences:
+  mean NLL `2.8811` vs. random-code mean NLL `10.7293`.
 
 Important limitation: the rollout `.pt` files do not embed checkpoint filenames
 or checkpoint hashes. The verification is therefore provenance plus bytewise
-checkpoint/source matching, not embedded metadata read from each rollout file.
+checkpoint/source matching plus behavior-level consistency with the current
+Mimas checkpoints, not embedded metadata read from each rollout file.
 
 The local UMLM checkpoint's embedded `config.generation.save_dir` still records
 `/mnt/parscratch/users/acp21rjf/l2augment_rollout_mmr9e2/`, which appears to be
@@ -150,6 +158,59 @@ zero delta counts     [CER, WER]: [1662, 1931] out of 5070
 
 These aggregate values are descriptive only; the verification task did not run a
 new generation job.
+
+## VQ Sequence And Mask Verification
+
+After the follow-up request, I added a behavior-level verification that does not
+depend only on source/destination hashes:
+
+1. Load each saved `/store/store4/data/l2augment_rollout_uvqmlm/dev/*.pt` file.
+2. Take each saved `generation` VQ-code sequence.
+3. Decode that fixed code sequence through the current Mimas BVAE checkpoint
+   using the same decoder path used by `UnconditionalMaskGenerator.generate`.
+4. Compare the decoded binary mask against the saved `mask` tensor.
+5. Score the saved code sequence under the current Mimas UMLM checkpoint and
+   compare it with a random same-length VQ-code baseline.
+
+Command:
+
+```bash
+/store/store4/software/bin/anaconda3/envs/speech-diff/bin/python \
+  exp/results/scripts/verify_rob109_uvqlm_rollout_sequences.py \
+  --max-files 0 \
+  --output-json \
+  exp/results/repro/unconditional_lm/ROB-109_rollout_verification/uvqlm_sequence_verification.json
+```
+
+Results:
+
+```text
+verified files: 507 / 507
+verified sequences: 5070
+mask mismatch pixels: 12 / 460274400
+mask mismatch mean rate: 2.858976174958292e-08
+mask mismatch max rate for any sequence: 2.6881720430107527e-05
+
+saved sequence NLL mean/min/max/std:
+  2.8810917640931506 / 0.25088369846343994 / 7.844291687011719 / 1.319888008691828
+
+random same-length code NLL mean/min/max/std:
+  10.729314022609703 / 4.61667013168335 / 12.436729431152344 / 0.854364330410143
+```
+
+The 12 mismatched pixels are isolated single-pixel differences after recomputing
+the BVAE decoder on CPU and rounding the sigmoid output back to a binary mask.
+This is behaviorally consistent with the saved masks having been decoded from
+those exact VQ sequences using the Mimas/Stanage-equivalent BVAE checkpoint. The
+NLL comparison is also consistent with the saved VQ sequences coming from the
+Mimas/Stanage-equivalent UMLM checkpoint: they are far more likely under the
+trained UMLM than random VQ-code sequences of the same lengths.
+
+The full machine-readable summary is committed at:
+
+```text
+exp/results/repro/unconditional_lm/ROB-109_rollout_verification/uvqlm_sequence_verification.json
+```
 
 ## Verification Commands
 
