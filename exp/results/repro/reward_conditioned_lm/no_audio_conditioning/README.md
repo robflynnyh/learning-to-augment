@@ -43,8 +43,8 @@ Review comments that changed or constrained the plan:
   model uses saved VQ `generation` sequences. If masks are ever needed, cast
   them with `.float()`.
 - Build in W&B logging and early stopping on dev loss.
-- Test both global reward normalization and within-utterance reward
-  normalization.
+- Use per-utterance reward normalization only. A later PR review comment changed
+  this from the earlier two-mode global-vs-within-utterance comparison.
 
 ## Current Repository Evidence
 
@@ -101,12 +101,10 @@ ROB-109 verified the rollout source for this issue:
 3. The conditioning scalar should default to WER delta because ROB-109 rewards
    include CER and WER and the repo's evaluation summaries use WER as the main
    criterion.
-4. The first implementation should compare two reward-normalization modes:
-   global train-split normalization and within-utterance normalization across
-   the sampled masks for each rollout file. Global normalization preserves an
-   absolute reward scale; within-utterance normalization may make learning
-   easier if the model mostly needs to rank the 10 candidates for a given
-   utterance.
+4. The first implementation should use per-utterance reward normalization across
+   the sampled masks for each rollout file. This intentionally discards absolute
+   reward scale and frames the model around per-utterance candidate preference,
+   which matches the latest review direction.
 5. The model should condition by replacing UVQLM's fixed BOS embedding with an
    MLP/timestep-encoder output from the normalized reward. This keeps the
    architecture close to UVQLM while making reward control the only new signal.
@@ -142,8 +140,7 @@ normalized_reward -> Linear/SiLU/Linear or timestep_encoder -> hidden_dim BOS
   - Loss: masked cross entropy over valid VQ-code positions only; do not append
     or supervise EOS in the fixed-length training path.
 - During generation:
-  - Input: a requested normalized reward, or a raw reward plus stats for
-    normalization, plus the required output audio length.
+  - Input: a requested normalized reward plus the required output audio length.
   - Compute `target_prediction_steps` from the input audio length using the
     frozen BVAE downsampling contract, matching `UnconditionalMaskGenerator`.
   - BOS: encoded reward.
@@ -160,9 +157,7 @@ Recommended config knobs:
   for random reward sampling at eval time, matching the existing CMultistep
   sweep pattern.
 - `reward_encoder`: `timestep` or `mlp`.
-- `reward_normalization`: `global` or `within_utterance`.
-- `reward_stats_path`: JSON file recording raw reward normalization stats for
-  the global mode.
+- `reward_normalization`: `per_utterance`.
 - `reward_metric`: `wer`, `cer`, or weighted combination.
 - `generation_sample`: boolean for sample versus greedy diagnostics.
 - `suppress_eos_for_fixed_length`: default `true`; keep an explicit knob only
@@ -189,17 +184,7 @@ The raw `mask` tensor can stay untouched because the model trains on
 `generation`. If a diagnostic later needs to inspect masks from these rollout
 files, cast them to float with `.float()` before use.
 
-Global normalization mode:
-
-- Run a stats pass over the train split that reads only `reward` and
-  `generation` metadata.
-- Compute train-split mean, std, min, max, selected quantiles, and
-  positive/zero/negative counts for raw WER delta.
-- Save a small `reward_stats.json` under this result directory or an
-  implementation subdirectory.
-- Normalize both train and dev with the train stats.
-
-Within-utterance normalization mode:
+Per-utterance normalization:
 
 - For each rollout file, normalize the 10 sampled rewards within that file.
 - Record how all-equal or near-zero-variance reward groups are handled. The
@@ -244,8 +229,7 @@ Add the smallest set of reusable pieces:
 4. A training config under active configs, for example:
 
 ```text
-exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_global.yaml
-exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_within_utterance.yaml
+exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance.yaml
 ```
 
 5. A result directory for subsequent implementation:
@@ -267,8 +251,8 @@ Initial validation before any long run:
    - Read 2 train files and 2 dev files from the real rollout root.
    - Confirm `generation` and raw WER reward can be loaded without touching or
      duplicating masks.
-   - Confirm both global and within-utterance normalization produce finite
-     rewards and record degenerate reward-group counts.
+   - Confirm per-utterance normalization produces finite rewards and records
+     degenerate reward-group counts.
 
 2. Model unit smoke:
    - Instantiate the model on CPU with the BVAE config and a tiny synthetic
@@ -283,7 +267,7 @@ Initial validation before any long run:
      disabled/offline mode if needed, and the real rollout root limited to a
      tiny file list.
    - Confirm checkpoint save path works in a durable non-committed location.
-   - Confirm W&B keys include train loss, dev loss, reward-normalization mode,
+   - Confirm W&B keys include train loss, dev loss, reward-normalization setting,
      and generated sequence diagnostics.
 
 4. One-recording eval smoke:
@@ -304,15 +288,15 @@ Recommended first full experiment:
 
 - Dataset: in-place ROB-109 UVQLM train/dev rollouts.
 - Reward metric: WER delta.
-- Reward normalization: run both global train mean/std and within-utterance
-  normalization.
+- Reward normalization: per-utterance normalization across each rollout file's
+  sampled masks.
 - Model: no-audio reward-conditioned mask LM.
 - Architecture: UVQLM GRU decoder, hidden dim 256, four layers, BVAE codebook
   2048, reward BOS from `timestep_encoder`.
 - Training: start from scratch for the baseline because the BOS mechanism
   changes. Optional follow-up: initialize shared embeddings/decoder/prediction
   from UMLM and randomly initialize reward encoder.
-- W&B: log config, train/dev CE loss, normalization mode, reward distribution
+- W&B: log config, train/dev CE loss, normalization setting, reward distribution
   summaries, sequence NLL by reward bins, generated sequence length checks, and
   generated mask samples at representative rewards.
 - Early stopping: use dev CE loss with `training.tolerance`; restore the best
@@ -320,25 +304,22 @@ Recommended first full experiment:
 - Diagnostics:
   - Train/dev CE loss.
   - Sequence NLL by raw-reward and normalized-reward bins.
-  - Generated mask samples at normalized reward values such as p10, p50, p90
-    for global mode and `-1`, `0`, `1` for within-utterance mode.
+  - Generated mask samples at normalized reward values such as `-1`, `0`, and
+    `1`.
   - Fixed-length generation checks against audio-derived target length.
   - Oracle/eval WER for fixed reward values and sampled reward ranges.
 
 Suggested reward probes:
 
 ```text
-global normalized: -1.0, 0.0, 1.0, 2.0
-within-utterance normalized: -1.0, 0.0, 1.0
-raw WER delta: use reward_stats.json to map interpretable deltas into global normalized units
+per-utterance normalized: -1.0, 0.0, 1.0
 ```
 
 ## Risks And Checks
 
-- The two reward-normalization modes answer different questions. Global mode
-  supports absolute reward targeting; within-utterance mode supports rank-like
-  candidate preference for each utterance. Report them separately rather than
-  merging their results.
+- Per-utterance normalization removes absolute WER-delta scale. Report generated
+  behavior as rank-like candidate preference within an utterance, not as
+  targeting a globally interpretable raw reward value.
 - If the model is trained only on UVQLM samples, high reward samples may be
   rare. Consider balanced sampling by reward bin after the baseline run if
   conditioning is ignored.
@@ -357,7 +338,7 @@ raw WER delta: use reward_stats.json to map interpretable deltas into global nor
 
 1. Is `RewardConditionedMaskLM` the preferred class/config name, or should the
    implementation use a shorter existing-family name?
-2. For within-utterance normalization, should degenerate 10-sample groups map to
+2. For per-utterance normalization, should degenerate 10-sample groups map to
    all zeros, all ones, or be skipped?
 3. Should the first training run start from scratch or initialize shared UVQLM
    layers from the existing UMLM checkpoint?
