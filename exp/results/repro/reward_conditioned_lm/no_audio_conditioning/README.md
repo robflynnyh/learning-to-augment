@@ -388,3 +388,54 @@ per-utterance min-max normalized: 0.0, 0.5, 1.0
    layers from the existing UMLM checkpoint?
 4. Should the conditioning reward at eval time be fixed to high target values,
    swept over several fixed values, or sampled from a range?
+
+## ROB-117 Training Launch
+
+ROB-117 queues the active full config introduced in ROB-114:
+
+```bash
+exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance.yaml
+```
+
+The full config trains on
+`/store/store4/data/l2augment_rollout_uvqmlm/{train,dev}`, keeps W&B logging
+enabled through `training.wandb_project: l2augment`, and uses dev-loss early
+stopping with `training.tolerance: 5`.
+
+Preflight on 2026-05-21:
+
+```bash
+bash -ic 'export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; export WANDB_MODE=disabled; python exp/train_freq_mask.py --config exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_smoke.yaml'
+```
+
+This passed under the bashrc Python 3.10 / Torch 2.6 runtime and logged to:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_smoke_20260521.log
+```
+
+The long Mimas launch wrapper is:
+
+```bash
+scripts/launch_rob117_reward_conditioned_mask_lm_training.sh
+```
+
+It keeps logs, W&B files, caches, and scratch under this result directory and
+uses the Linear completion callback trap. The actual trap path was smoke-tested
+with:
+
+```bash
+ROB117_CALLBACK_ONLY=1 ROB117_CALLBACK_CHECK_ONLY=1 CALLBACK_TARGET_STATE=Todo scripts/launch_rob117_reward_conditioned_mask_lm_training.sh
+```
+
+The detached queue command is:
+
+```bash
+screen -L -Logfile exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training.screen.log -dmS rob117-reward-conditioned-mask-lm bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob117_reward_conditioned_mask_lm_training.sh'
+```
+
+Expected checkpoint:
+
+```text
+/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt
+```

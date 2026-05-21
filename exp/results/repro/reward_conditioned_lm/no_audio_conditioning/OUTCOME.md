@@ -68,3 +68,53 @@ Durable smoke artifacts:
 - `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/smoke/no_audio_reward_conditioned_mask_lm_smoke_tmp.pt`
 
 The `.pt` checkpoint artifacts are intentionally ignored by Git.
+
+## ROB-117 Training Queue
+
+Started on 2026-05-21 from branch
+`symphony/ROB-117-train-no-audio-reward-conditioned-mask-lm` at commit
+`b755600ab27e90fdf411bde9d201d35f208cb494`.
+
+Preflight:
+
+- Local checkout is based on merged ROB-114 / PR #17 code at
+  `b755600ab27e90fdf411bde9d201d35f208cb494`.
+- Active config:
+  `exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance.yaml`.
+- Smoke config:
+  `exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_smoke.yaml`.
+- Dataset root exists at `/store/store4/data/l2augment_rollout_uvqmlm/`, with
+  `/train` using 147G and `/dev` using 531M at launch time.
+- Full config has W&B logging enabled by `training.wandb_project: l2augment`
+  and no disabled `training.wandb_mode`; dev-loss early stopping is enabled by
+  `training.tolerance: 5`.
+- Bashrc runtime check resolved `python` to `/usr/bin/python3.10`, Python
+  `3.10.12`, Torch `2.6.0+cu124`, CUDA available.
+- One-file training smoke passed with W&B disabled. Log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_smoke_20260521.log`.
+- Actual wrapper EXIT-trap callback path passed in check-only mode:
+  `ROB117_CALLBACK_ONLY=1 ROB117_CALLBACK_CHECK_ONLY=1 CALLBACK_TARGET_STATE=Todo scripts/launch_rob117_reward_conditioned_mask_lm_training.sh`.
+
+Queued command:
+
+```bash
+screen -L -Logfile exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training.screen.log -dmS rob117-reward-conditioned-mask-lm bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob117_reward_conditioned_mask_lm_training.sh'
+```
+
+Expected outputs:
+
+- Main log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training.log`
+- Screen log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training.screen.log`
+- Result root:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/`
+- Checkpoint:
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt`
+- Temporary checkpoint:
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_tmp.pt`
+
+Training outcome is pending the detached run and callback. On completion,
+inspect the log and checkpoint, then run the requested checkpoint-load and
+fixed-length generation sanity check at two reward controls before PR/Linear
+handoff.

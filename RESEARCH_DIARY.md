@@ -184,3 +184,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Resolved the ROB-114 environment command docs to use `bash -ic python`, where
   `python` is aliased to `/usr/bin/python3.10`, and set trusted local policy
   checkpoint loads to `weights_only=False` for Torch 2.6.
+- Started ROB-117 no-audio reward-conditioned mask LM training from the merged
+  ROB-114 commit. The bashrc Python 3.10 / Torch 2.6 smoke passed, the full
+  config still has W&B logging and dev-loss early stopping enabled, and
+  `scripts/launch_rob117_reward_conditioned_mask_lm_training.sh` records the
+  detached Mimas `with-gpu 1,2` launch plus the callback trap contract.
