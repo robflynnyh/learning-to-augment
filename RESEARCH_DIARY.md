@@ -110,6 +110,13 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Resolved ROB-80 PR merge conflicts against current `origin/main`, keeping the
   stricter `VectorQuantize` compatibility helper while preserving the latest
   ROB-60 oracle diary/result artifacts from the base branch.
+- Added ROB-82 UVQLM TED-LIUM dev sweep support under
+  `exp/results/repro/sweeps/uvqlm/tedlium_dev/`. A later Linear comment on
+  2026-05-20 dropped the originally requested segmented-dev half before
+  completion, so the launcher and committed artifact set are TED-LIUM dev only.
+  The completed 12-cell dev sweep is summarized in
+  `ROB-82_TEDLIUM_DEV_UVQLM_OUTCOME.md`; the best averaged row is 5 epochs at
+  `5e-6` with updated WER `0.086824` across two repeats.
 - Added the ROB-106 low-reward conditioning comparison scaffold for TED-LIUM dev
   no-audio CMultiStepVQLM. It reuses the ROB-80 best comparable setting
   (`epochs=5`, `lr=5e-6`, repeats 1 and 2) and compares fixed reward `1.0`,

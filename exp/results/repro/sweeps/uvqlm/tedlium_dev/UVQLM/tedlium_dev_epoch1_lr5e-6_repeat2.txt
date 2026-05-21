@@ -1,0 +1,1 @@
+ID: ROB-82-tedlium-dev-UVQLM-epoch1-lr5e-6-repeat2 - Dataset: tedlium - Split: dev - Epochs: 1 - Original_WER: 0.10008842710290704 - Updated_WER: 0.08936664087542832

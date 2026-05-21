@@ -1,0 +1,13 @@
+method,repeat,seed,epochs,lr,result_path,status,original_wer,updated_wer,absolute_delta,relative_delta_pct
+UVQLM,1,123456,1,5e-6,exp/results/repro/sweeps/uvqlm/tedlium_dev/UVQLM/tedlium_dev_epoch1_lr5e-6.txt,complete,0.100088,0.090693,-0.009395,-9.39
+UVQLM,1,123456,1,1e-5,exp/results/repro/sweeps/uvqlm/tedlium_dev/UVQLM/tedlium_dev_epoch1_lr1e-5.txt,complete,0.100088,0.089919,-0.010169,-10.16
+UVQLM,1,123456,1,2e-5,exp/results/repro/sweeps/uvqlm/tedlium_dev/UVQLM/tedlium_dev_epoch1_lr2e-5.txt,complete,0.100088,0.090472,-0.009616,-9.61
+UVQLM,1,123456,5,5e-6,exp/results/repro/sweeps/uvqlm/tedlium_dev/UVQLM/tedlium_dev_epoch5_lr5e-6.txt,complete,0.100088,0.086603,-0.013485,-13.47
+UVQLM,1,123456,5,1e-5,exp/results/repro/sweeps/uvqlm/tedlium_dev/UVQLM/tedlium_dev_epoch5_lr1e-5.txt,complete,0.100088,0.086382,-0.013706,-13.69
+UVQLM,1,123456,5,2e-5,exp/results/repro/sweeps/uvqlm/tedlium_dev/UVQLM/tedlium_dev_epoch5_lr2e-5.txt,complete,0.100088,0.086548,-0.013540,-13.53
+UVQLM,2,123457,1,5e-6,exp/results/repro/sweeps/uvqlm/tedlium_dev/UVQLM/tedlium_dev_epoch1_lr5e-6_repeat2.txt,complete,0.100088,0.089367,-0.010722,-10.71
+UVQLM,2,123457,1,1e-5,exp/results/repro/sweeps/uvqlm/tedlium_dev/UVQLM/tedlium_dev_epoch1_lr1e-5_repeat2.txt,complete,0.100088,0.088261,-0.011827,-11.82
+UVQLM,2,123457,1,2e-5,exp/results/repro/sweeps/uvqlm/tedlium_dev/UVQLM/tedlium_dev_epoch1_lr2e-5_repeat2.txt,complete,0.100088,0.089477,-0.010611,-10.60
+UVQLM,2,123457,5,5e-6,exp/results/repro/sweeps/uvqlm/tedlium_dev/UVQLM/tedlium_dev_epoch5_lr5e-6_repeat2.txt,complete,0.100088,0.087045,-0.013043,-13.03
+UVQLM,2,123457,5,1e-5,exp/results/repro/sweeps/uvqlm/tedlium_dev/UVQLM/tedlium_dev_epoch5_lr1e-5_repeat2.txt,complete,0.100088,0.088040,-0.012048,-12.04
+UVQLM,2,123457,5,2e-5,exp/results/repro/sweeps/uvqlm/tedlium_dev/UVQLM/tedlium_dev_epoch5_lr2e-5_repeat2.txt,complete,0.100088,0.089588,-0.010501,-10.49
