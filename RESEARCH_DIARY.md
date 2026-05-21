@@ -155,9 +155,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   JSON in the ROB-109 result directory records 12 mismatched mask pixels out of
   460,274,400 and saved-sequence mean NLL `2.8811` versus random-code mean NLL
   `10.7293`.
-- Added the ROB-111 review plan for a no-audio reward-conditioned UVQLM under
-  `exp/results/repro/unconditional_lm/ROB-111_reward_conditioned_vq_lm_plan/`.
-  The plan recommends training from saved ROB-109 VQ `generation` sequences,
-  using global train-split WER-delta normalization, and building a slim
-  generation/reward dataset to avoid raw float8 rollout deserialization during
-  training.
+- Added the ROB-111 review plan for a no-audio reward-conditioned mask LM under
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/`. The plan
+  trains from saved ROB-109 VQ `generation` sequences, keeps the large rollout
+  dataset in place, compares global and within-utterance WER-delta
+  normalization, and uses fixed-length audio-derived generation without EOS
+  supervision.
