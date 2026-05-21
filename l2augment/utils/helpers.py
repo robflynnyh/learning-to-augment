@@ -19,7 +19,7 @@ def load_model(model, config, path=None, log_command=print):
         return 
     try:
         # Load the checkpoint
-        checkpoint = torch.load(save_path, map_location='cpu')
+        checkpoint = torch.load(save_path, map_location='cpu', weights_only=False)
         # Load the model state dictionary
         model.load_state_dict(checkpoint['model_state_dict'])    
         log_command(f"Model successfully loaded from {save_path}")

@@ -128,16 +128,25 @@ def prepare_data(config, split='train'):
     for rollout_dir in rollout_dirs:
         rollout_directory = os.path.join(rollout_dir, split)
 
-        all_rollouts_cur = os.listdir(rollout_directory)
+        all_rollouts_cur = sorted(os.listdir(rollout_directory))
         all_rollouts_cur = [el for el in all_rollouts_cur if el.endswith('.pt')]
         all_rollouts_cur = [os.path.join(rollout_directory, el) for el in all_rollouts_cur]
 
         all_rollouts.extend(all_rollouts_cur)
 
+    max_files = config.get('generation', {}).get(f'{split}_max_files', None)
+    if max_files is None:
+        max_files = config.get('generation', {}).get('max_files_per_split', None)
+    if max_files is not None:
+        all_rollouts = all_rollouts[:int(max_files)]
+
     return all_rollouts
 
 def main(config):
-    wandb.init(project="l2augment")
+    wandb_kwargs = {'project': config.get('training', {}).get('wandb_project', 'l2augment')}
+    if config.get('training', {}).get('wandb_mode', None) is not None:
+        wandb_kwargs['mode'] = config['training']['wandb_mode']
+    wandb.init(**wandb_kwargs)
 
     policy = load_rl_models(config=config) 
     policy_path = config['training']['model_save_path']
@@ -202,6 +211,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = OmegaConf.load(args.config)
     main(config)
-
-
-

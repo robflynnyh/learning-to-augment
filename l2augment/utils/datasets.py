@@ -138,6 +138,74 @@ class MultiStepFMDataset(Dataset):
             return None
 
 
+class RewardConditionedMaskLMDataset(Dataset):
+    def __init__(
+            self,
+            files,
+            reward_metric='wer',
+            normalization='per_utterance_minmax',
+            degenerate_range_eps=1e-6,
+            degenerate_value=0.5,
+            logger=print,
+        ):
+        self.data = sorted(files)
+        self.reward_metric = reward_metric
+        self.normalization = normalization
+        self.degenerate_range_eps = degenerate_range_eps
+        self.degenerate_value = degenerate_value
+        self.logger = logger
+
+    def __len__(self):
+        return len(self.data)
+
+    def _raw_reward(self, reward):
+        if reward.ndim == 3:
+            metric_to_index = {'cer': 0, 'wer': 1}
+            metric_idx = metric_to_index.get(self.reward_metric, self.reward_metric)
+            return reward[:, int(metric_idx), 0] - reward[:, int(metric_idx), 1]
+        before, after = reward.chunk(2, dim=-1)
+        return (before - after).squeeze(-1)
+
+    def _normalize_reward(self, reward):
+        reward = reward.to(dtype=torch.float32)
+        reward[torch.isnan(reward)] = 0.0
+        reward[torch.isinf(reward)] = 0.0
+
+        if self.normalization not in ('per_utterance', 'per_utterance_minmax'):
+            raise ValueError(f"Unsupported reward normalization: {self.normalization}")
+
+        reward_min = reward.min()
+        reward_range = reward.max() - reward_min
+        degenerate = reward.numel() <= 1 or reward_range <= self.degenerate_range_eps
+        if degenerate:
+            return torch.full_like(reward, float(self.degenerate_value)), True
+        return (reward - reward_min) / reward_range, False
+
+    def __getitem__(self, idx):
+        try:
+            file = self.data[idx]
+            rollout = torch.load(file)
+            generation = rollout['generation'].to(torch.long)
+            if generation.ndim == 1:
+                generation = generation.unsqueeze(0)
+
+            raw_reward = self._raw_reward(rollout['reward'])
+            reward, degenerate = self._normalize_reward(raw_reward)
+
+            return {
+                'generation': generation,
+                'reward': reward,
+                'raw_reward': raw_reward.to(dtype=torch.float32),
+                'source_path': file,
+                'generation_length': torch.tensor(generation.shape[-1], dtype=torch.long),
+                'degenerate_reward_group': torch.tensor(degenerate, dtype=torch.bool),
+            }
+        except Exception as e:
+            self.logger(f"Error loading reward-conditioned mask LM data: {e}")
+            return None
+
+
 dataset_classes_dict['default'] = CustomDataset
 dataset_classes_dict['MultiStepDataset'] = MultiStepDataset
 dataset_classes_dict['MultiStepFMDataset'] = MultiStepFMDataset
+dataset_classes_dict['RewardConditionedMaskLMDataset'] = RewardConditionedMaskLMDataset

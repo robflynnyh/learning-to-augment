@@ -7,7 +7,7 @@ from torch.distributions import Normal
 import random
 from typing import Tuple, Callable, Dict
 from einops.layers.torch import Rearrange
-from lcasr.utils.augmentation import SpecAugment 
+from lcasr.utils.augmentation import SpecAugment
 from contextlib import nullcontext
 import inspect
 import matplotlib.pyplot as plt
@@ -627,7 +627,6 @@ def calc_length(lengths, all_paddings, kernel_size, stride, ceil_mode, repeat_nu
     return lengths.to(dtype=torch.int)
 
 
-import inspect
 from vector_quantize_pytorch import VectorQuantize
 
 
@@ -2133,6 +2132,201 @@ class UnconditionalMaskGenerator(Policy):
         return ce_loss, {'loss':ce_loss, 'total_loss':ce_loss}
 
 
+class RewardConditionedMaskLM(Policy):
+    def __init__(
+            self,
+            hidden_dim=256,
+            mask_vae_config:Dict={},
+            mask_vae_state_dict_path:str=None,
+            default_conditioning_reward=0.0,
+            reward_encoder='timestep',
+            sample_generation=True,
+            **kwargs
+        ) -> None:
+        super().__init__()
+
+        self.default_conditioning_reward = default_conditioning_reward
+        self.sample_generation = sample_generation
+
+        self.mask_enc = BinaryVariationalAutoEncoder(**mask_vae_config)
+        if mask_vae_state_dict_path is not None:
+            mask_vae_state_dict = torch.load(mask_vae_state_dict_path, map_location='cpu', weights_only=False)['model_state_dict']
+            self.mask_enc.load_state_dict(mask_vae_state_dict)
+            print(f'Loaded VAE state dict from {mask_vae_state_dict_path}')
+        self.mask_enc.eval()
+        for param in self.mask_enc.parameters():
+            param.requires_grad = False
+
+        self.codebook_size = self.mask_enc.VQ.codebook_size
+        self.embeddings = nn.Embedding(self.codebook_size + 1, hidden_dim, padding_idx=self.codebook_size)
+
+        if reward_encoder == 'timestep':
+            self.reward_encoder = timestep_encoder(hidden_dim=hidden_dim)
+        elif reward_encoder == 'mlp':
+            self.reward_encoder = nn.Sequential(
+                nn.Linear(1, hidden_dim),
+                nn.SiLU(),
+                nn.Linear(hidden_dim, hidden_dim),
+            )
+        else:
+            raise ValueError(f"Unsupported reward encoder: {reward_encoder}")
+
+        self.decoder = nn.GRU(
+            input_size=hidden_dim,
+            hidden_size=hidden_dim,
+            num_layers=4,
+            batch_first=True,
+        )
+        self.prediction = nn.Sequential(
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, self.codebook_size + 1)
+        )
+
+    def total_parameters(self):
+        params_decoder = sum(p.numel() for p in self.decoder.parameters())
+        params_prediction = sum(p.numel() for p in self.prediction.parameters())
+        params_embeddings = sum(p.numel() for p in self.embeddings.parameters())
+        params_reward_encoder = sum(p.numel() for p in self.reward_encoder.parameters())
+        return params_decoder + params_prediction + params_embeddings + params_reward_encoder
+
+    def decode(self, mask_emb, lengths, h_n=None):
+        packed_emb = torch.nn.utils.rnn.pack_padded_sequence(
+            input=mask_emb,
+            lengths=lengths.cpu(),
+            batch_first=True,
+            enforce_sorted=False
+        )
+        x, h_n = self.decoder(packed_emb, h_n)
+        x, _ = torch.nn.utils.rnn.pad_packed_sequence(x, batch_first=True)
+        x = self.prediction(x)
+        return x, h_n
+
+    def forward(self, generations, generation_lengths, rewards):
+        rewards = rewards.to(dtype=self.embeddings.weight.dtype)
+        reward_emb = self.reward_encoder(rewards.unsqueeze(-1)).unsqueeze(1)
+        if generations.size(1) > 1:
+            previous_emb = self.embeddings(generations[:, :-1])
+            mask_emb = torch.cat((reward_emb, previous_emb), dim=1)
+        else:
+            mask_emb = reward_emb
+
+        predictions, _ = self.decode(mask_emb, generation_lengths)
+        return predictions, generation_lengths, {'mask_emb': mask_emb}
+
+    @torch.no_grad()
+    def generate(
+            self,
+            conditioning_reward=None,
+            sample=None,
+            target_output_length=None,
+            target_prediction_steps=None,
+            device='cpu'
+        ):
+        if conditioning_reward is None:
+            conditioning_reward = self.default_conditioning_reward
+        if sample is None:
+            sample = self.sample_generation
+
+        reward = torch.as_tensor([conditioning_reward], dtype=torch.float32, device=device)
+        seq = self.reward_encoder(reward.unsqueeze(-1)).unsqueeze(1)
+        outputs = []
+        h_n = None
+        total_steps = 80 if target_prediction_steps is None else int(target_prediction_steps)
+
+        mode = self.training
+        self.eval()
+
+        for _ in range(total_steps):
+            z, h_n = self.decoder(seq, h_n)
+            pred = self.prediction(z)
+
+            if target_prediction_steps is not None:
+                pred[..., self.codebook_size] = -torch.finfo(pred.dtype).max
+
+            probs = pred.softmax(-1)
+            if sample:
+                idx = torch.multinomial(probs.squeeze(1), 1)
+            else:
+                idx = probs.argmax(-1)
+            outputs.append(idx.squeeze().item())
+            if idx.item() == self.codebook_size:
+                break
+            seq = self.embeddings(idx)
+
+        outputs = [el for el in outputs if el != self.codebook_size]
+        if len(outputs) == 0:
+            return False
+        outputs = torch.tensor(outputs, device=device)
+
+        mask_latent = self.mask_enc.VQ.codebook[outputs][None].transpose(-1, -2)
+        mask_h = self.mask_enc.latent_to_hidden(mask_latent)
+        mask_h = self.mask_enc.rnn_out(mask_h) + mask_h
+        mask_h = self.mask_enc.decoder(mask_h)
+
+        if target_output_length is not None:
+            mask_h = torch.nn.functional.interpolate(mask_h, size=target_output_length, mode='linear', align_corners=False)
+
+        mask_pred = self.mask_enc.output(mask_h).sigmoid()
+        mask_pred = torch.round(mask_pred, decimals=0).to(dtype=torch.long)
+
+        if mode:
+            self.train()
+            self.mask_enc.eval()
+
+        return mask_pred, outputs
+
+    @torch.no_grad()
+    def augment(self, audio, conditioning_reward=None, sample=None, *args, **kwargs):
+        assert audio.size(0) == 1, 'only batch size 1 is supported atm'
+        mode = self.training
+        self.eval()
+
+        lengths = torch.tensor([audio.size(-1)], device=audio.device)
+        downsampled_lengths = self.mask_enc.calc_downsampled_length(lengths)
+        target_prediction_steps = int(downsampled_lengths[0].item())
+        if conditioning_reward is None:
+            conditioning_reward = self.default_conditioning_reward
+
+        mask_pred, generation = self.generate(
+            conditioning_reward=conditioning_reward,
+            sample=sample,
+            target_prediction_steps=target_prediction_steps,
+            target_output_length=int(lengths[0].item()),
+            device=audio.device,
+        )
+
+        audio = audio * mask_pred
+
+        if mode:
+            self.train()
+
+        return audio, mask_pred, {
+            'generation': generation,
+            'conditioning_reward': conditioning_reward,
+            'generation_length': target_prediction_steps,
+            'target_output_length': int(lengths[0].item()),
+        }
+
+    def forward_pass(self, batch, device, **kwargs):
+        generations = batch['generations'].to(device)
+        generation_lengths = batch['generation_lengths'].to(device)
+        rewards = batch['rewards'].to(device)
+
+        predictions, generation_lengths, _ = self(generations, generation_lengths, rewards)
+
+        lengths_mask = torch.arange(generations.size(-1), device=device) >= generation_lengths[:, None]
+        ce_loss = nn.functional.cross_entropy(
+            input=predictions.transpose(-1, -2),
+            target=generations,
+            ignore_index=-100,
+            reduction='none',
+        )
+        ce_loss = ce_loss.masked_fill(lengths_mask, 0)
+        ce_loss = ce_loss.sum() / ((~lengths_mask).sum())
+
+        return ce_loss, {'loss': ce_loss, 'total_loss': ce_loss}
+
+
 
 class AdditivePolicy(Policy):
     def __init__(
@@ -2226,6 +2420,7 @@ policy_dict['ConditionalFrequencyMaskingRanker'] = ConditionalFrequencyMaskingRa
 policy_dict['MultiStepMaskRanker'] = MultiStepMaskRanker
 
 policy_dict['UnconditionalMaskGenerator'] = UnconditionalMaskGenerator
+policy_dict['RewardConditionedMaskLM'] = RewardConditionedMaskLM
 policy_dict['ConditionalMaskGenerator'] = ConditionalMaskGenerator
 policy_dict['ConditionalMultiStepMaskGenerator'] = ConditionalMultiStepMaskGenerator
 
