@@ -2,27 +2,14 @@ from torch.nn import Module
 from torch import nn, Tensor
 import torch
 from einops import rearrange, repeat
-try:
-    from lcasr.components.batchrenorm import BatchRenorm1d
-except ImportError:
-    BatchRenorm1d = nn.BatchNorm1d
+from lcasr.components.batchrenorm import BatchRenorm1d
 from torch.distributions import Normal
 import random
 from typing import Tuple, Callable, Dict
 from einops.layers.torch import Rearrange
-try:
-    from lcasr.utils.augmentation import SpecAugment
-except ImportError:
-    class SpecAugment(nn.Module):
-        def __init__(self, *args, **kwargs) -> None:
-            super().__init__()
-
-        def forward(self, audio):
-            return audio
+from lcasr.utils.augmentation import SpecAugment
 from contextlib import nullcontext
 import inspect
-import sys
-from pathlib import Path
 import matplotlib.pyplot as plt
 import wandb
 
@@ -640,13 +627,7 @@ def calc_length(lengths, all_paddings, kernel_size, stride, ceil_mode, repeat_nu
     return lengths.to(dtype=torch.int)
 
 
-try:
-    from vector_quantize_pytorch import VectorQuantize
-except ImportError:
-    _VECTOR_QUANTIZE_SITE = Path("/store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2/lib/python3.9/site-packages")
-    if _VECTOR_QUANTIZE_SITE.exists() and str(_VECTOR_QUANTIZE_SITE) not in sys.path:
-        sys.path.append(str(_VECTOR_QUANTIZE_SITE))
-    from vector_quantize_pytorch import VectorQuantize
+from vector_quantize_pytorch import VectorQuantize
 
 
 _VECTOR_QUANTIZE_INIT_PARAMS = inspect.signature(VectorQuantize.__init__).parameters

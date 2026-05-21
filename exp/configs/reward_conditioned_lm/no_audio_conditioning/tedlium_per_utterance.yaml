@@ -6,7 +6,7 @@ training:
   random_seed: 123456
   batch_size: 48
   epochs: 100
-  tolerance: 2
+  tolerance: 5
   num_workers: 8
   prefetch_factor: 4
   wandb_project: l2augment
@@ -17,7 +17,7 @@ evaluation:
   id: ROB-114-reward-conditioned-mask-lm-tedlium-dev
   dataset: tedlium
   split: dev
-  rollout_fn: singlestep
+  rollout_fn: multistep
   use_cer: false
   epochs: 1
   augmentation_config:
@@ -32,8 +32,9 @@ dataset_class: RewardConditionedMaskLMDataset
 
 dataset:
   reward_metric: wer
-  normalization: per_utterance
-  degenerate_std_eps: 1e-6
+  normalization: per_utterance_minmax
+  degenerate_range_eps: 1e-6
+  degenerate_value: 0.5
 
 policy:
   lr: 6e-4

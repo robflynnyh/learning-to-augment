@@ -4,17 +4,58 @@ from os.path import join
 import json
 import pickle
 from typing import List
-import torch
-try:
-    import torchaudio
-except (ImportError, OSError):
-    torchaudio = None
+import torch, torchaudio
 from typing import Tuple
 from torch.utils.data import Dataset
 from l2augment.utils.helpers import lmap
 from l2augment.utils.data import CustomDataset
 
 dataset_classes_dict = {}
+
+
+def enable_rob109_rollout_load_compat():
+    """Allow trusted Torch 2.8 rollout files to load in the Torch 2.0 env.
+
+    ROB-109 rollout files only need `generation` and `reward` for this dataset,
+    but the serialized dict also contains float8 mask/audio tensors. Older
+    Mimas training envs do not know those float8 dtype names or the v3 tensor
+    rebuild helper, so map float8 storage to uint8 when necessary.
+    """
+    if not hasattr(torch._utils, "_rebuild_tensor_v3"):
+        def _rebuild_tensor_v3(
+                storage,
+                storage_offset,
+                size,
+                stride,
+                requires_grad,
+                backward_hooks,
+                dtype,
+                metadata=None,
+            ):
+            tensor = torch.empty(
+                (0,),
+                dtype=dtype,
+                device=storage._untyped_storage.device,
+                requires_grad=requires_grad,
+            )
+            tensor.set_(storage._untyped_storage, storage_offset, size, stride)
+            tensor._backward_hooks = backward_hooks
+            return tensor
+
+        torch._utils._rebuild_tensor_v3 = _rebuild_tensor_v3
+
+    if not hasattr(torch, "float8_e5m2"):
+        torch.float8_e5m2 = torch.uint8
+    if not hasattr(torch, "float8_e4m3fn"):
+        torch.float8_e4m3fn = torch.uint8
+
+
+def load_reward_conditioned_rollout(file):
+    enable_rob109_rollout_load_compat()
+    try:
+        return torch.load(file, weights_only=True)
+    except Exception:
+        return torch.load(file, weights_only=False)
 
 
 class MultiStepDataset(Dataset):
@@ -147,14 +188,16 @@ class RewardConditionedMaskLMDataset(Dataset):
             self,
             files,
             reward_metric='wer',
-            normalization='per_utterance',
-            degenerate_std_eps=1e-6,
+            normalization='per_utterance_minmax',
+            degenerate_range_eps=1e-6,
+            degenerate_value=0.5,
             logger=print,
         ):
         self.data = sorted(files)
         self.reward_metric = reward_metric
         self.normalization = normalization
-        self.degenerate_std_eps = degenerate_std_eps
+        self.degenerate_range_eps = degenerate_range_eps
+        self.degenerate_value = degenerate_value
         self.logger = logger
 
     def __len__(self):
@@ -173,23 +216,20 @@ class RewardConditionedMaskLMDataset(Dataset):
         reward[torch.isnan(reward)] = 0.0
         reward[torch.isinf(reward)] = 0.0
 
-        if self.normalization != 'per_utterance':
+        if self.normalization not in ('per_utterance', 'per_utterance_minmax'):
             raise ValueError(f"Unsupported reward normalization: {self.normalization}")
 
-        reward_mean = reward.mean()
-        reward_std = reward.std(unbiased=False)
-        degenerate = reward.numel() <= 1 or reward_std <= self.degenerate_std_eps
+        reward_min = reward.min()
+        reward_range = reward.max() - reward_min
+        degenerate = reward.numel() <= 1 or reward_range <= self.degenerate_range_eps
         if degenerate:
-            return torch.zeros_like(reward), True
-        return (reward - reward_mean) / (reward_std + self.degenerate_std_eps), False
+            return torch.full_like(reward, float(self.degenerate_value)), True
+        return (reward - reward_min) / reward_range, False
 
     def __getitem__(self, idx):
         try:
             file = self.data[idx]
-            try:
-                rollout = torch.load(file, weights_only=True)
-            except Exception:
-                rollout = torch.load(file, weights_only=False)
+            rollout = load_reward_conditioned_rollout(file)
             generation = rollout['generation'].to(torch.long)
             if generation.ndim == 1:
                 generation = generation.unsqueeze(0)

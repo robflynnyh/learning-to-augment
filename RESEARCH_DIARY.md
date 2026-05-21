@@ -158,7 +158,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Added the ROB-111 review plan for a no-audio reward-conditioned mask LM under
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/`. The plan
   trains from saved ROB-109 VQ `generation` sequences, keeps the large rollout
-  dataset in place, uses per-utterance WER-delta normalization, and uses
+  dataset in place, uses per-utterance WER-delta controls, and uses
   fixed-length audio-derived generation without EOS supervision.
 - Implemented the ROB-114 no-audio reward-conditioned mask LM path:
   `RewardConditionedMaskLMDataset`, `RewardConditionedMaskLM` collate,
@@ -167,8 +167,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/`. The model
   conditions the first decoder input on normalized reward and trains only on
   fixed-length saved VQ generations, without EOS targets.
-- Validated ROB-114 with the Torch 2.8 `speech-diff` environment needed to
-  deserialize the trusted float8 ROB-109 rollout files: 2-file train/dev stats,
-  finite CPU CE/backward, fixed 7-token generation at two reward values,
-  real-rollout augment length check, and a one-file `exp/train_freq_mask.py`
-  smoke with W&B disabled.
+- Validated the initial ROB-114 implementation with the Torch 2.8 `speech-diff`
+  environment to deserialize the trusted float8 ROB-109 rollout files: 2-file
+  train/dev stats, finite CPU CE/backward, fixed 7-token generation at two
+  reward values, real-rollout augment length check, and a one-file
+  `exp/train_freq_mask.py` smoke with W&B disabled.
+- Addressed ROB-114 PR review by switching reward controls to bounded per-file
+  min-max normalization with degenerate groups mapped to `0.5`, using multistep
+  evaluation in the active config, increasing full-run early-stop tolerance to
+  5, and validating the path in the normal `flash_attn_pytorch2` project env.

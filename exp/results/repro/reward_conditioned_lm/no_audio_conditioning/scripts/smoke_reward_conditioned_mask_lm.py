@@ -9,13 +9,10 @@ import torch
 SCRIPT_PATH = Path(__file__).resolve()
 REPO_ROOT = next(parent for parent in SCRIPT_PATH.parents if (parent / "l2augment" / "modelling" / "models.py").exists())
 sys.path.insert(0, str(REPO_ROOT))
-VECTOR_QUANTIZE_SITE = Path("/store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2/lib/python3.9/site-packages")
-if VECTOR_QUANTIZE_SITE.exists():
-    sys.path.append(str(VECTOR_QUANTIZE_SITE))
 
 from l2augment.modelling.models import RewardConditionedMaskLM
 from l2augment.utils.collate_functions import RewardConditionedMaskLM_fn
-from l2augment.utils.datasets import RewardConditionedMaskLMDataset
+from l2augment.utils.datasets import RewardConditionedMaskLMDataset, load_reward_conditioned_rollout
 
 
 def rollout_files(root, split, limit):
@@ -35,6 +32,9 @@ def dataset_stats(files):
         "degenerate_reward_groups": 0,
         "finite_normalized_rewards": True,
         "finite_raw_rewards": True,
+        "normalized_rewards_in_unit_interval": True,
+        "normalized_reward_min": None,
+        "normalized_reward_max": None,
         "generation_lengths": [],
     }
     items = []
@@ -47,6 +47,19 @@ def dataset_stats(files):
         stats["degenerate_reward_groups"] += int(item["degenerate_reward_group"])
         stats["finite_normalized_rewards"] &= bool(torch.isfinite(item["reward"]).all())
         stats["finite_raw_rewards"] &= bool(torch.isfinite(item["raw_reward"]).all())
+        stats["normalized_rewards_in_unit_interval"] &= bool(
+            ((item["reward"] >= 0.0) & (item["reward"] <= 1.0)).all()
+        )
+        reward_min = float(item["reward"].min().item())
+        reward_max = float(item["reward"].max().item())
+        stats["normalized_reward_min"] = (
+            reward_min if stats["normalized_reward_min"] is None
+            else min(stats["normalized_reward_min"], reward_min)
+        )
+        stats["normalized_reward_max"] = (
+            reward_max if stats["normalized_reward_max"] is None
+            else max(stats["normalized_reward_max"], reward_max)
+        )
         stats["generation_lengths"].append(int(item["generation_length"]))
     return dataset, items, stats
 
@@ -81,7 +94,7 @@ def run_model_smoke(model, item, target_steps):
         raise RuntimeError("Non-finite gradient produced")
 
     generations = {}
-    for reward in (-1.0, 1.0):
+    for reward in (0.0, 1.0):
         generated = model.generate(
             conditioning_reward=reward,
             sample=False,
@@ -105,10 +118,7 @@ def run_model_smoke(model, item, target_steps):
 
 
 def run_augment_smoke(model, rollout_path):
-    try:
-        rollout = torch.load(rollout_path, weights_only=True)
-    except Exception:
-        rollout = torch.load(rollout_path, weights_only=False)
+    rollout = load_reward_conditioned_rollout(rollout_path)
     audio = rollout["audio"].to(dtype=torch.float32)
     if audio.ndim == 2:
         audio = audio.unsqueeze(0)

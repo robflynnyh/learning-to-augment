@@ -14,7 +14,7 @@ Instructions that directly affect this issue:
 
 - Recent Linear comments must be checked before planning. The latest human
   Linear comment said PR review comments were added, so this revision treats
-  PR #16 review comments as binding task context.
+  PR #17 review comments as binding task context.
 - If comments request rework on an existing PR or branch, inspect that PR or
   branch before editing.
 - The work should stay narrowly scoped and should not launch long GPU jobs
@@ -44,7 +44,7 @@ Review comments that changed or constrained the plan:
   them with `.float()`.
 - Build in W&B logging and early stopping on dev loss.
 - Use per-utterance reward normalization only. A later PR review comment changed
-  this from the earlier two-mode global-vs-within-utterance comparison.
+  the normalization to bounded per-file min-max controls.
 
 ## Current Repository Evidence
 
@@ -101,10 +101,11 @@ ROB-109 verified the rollout source for this issue:
 3. The conditioning scalar should default to WER delta because ROB-109 rewards
    include CER and WER and the repo's evaluation summaries use WER as the main
    criterion.
-4. The first implementation should use per-utterance reward normalization across
-   the sampled masks for each rollout file. This intentionally discards absolute
-   reward scale and frames the model around per-utterance candidate preference,
-   which matches the latest review direction.
+4. The first implementation should use bounded per-utterance min-max reward
+   normalization across the sampled masks for each rollout file. This
+   intentionally discards absolute reward scale and frames the model around
+   per-utterance candidate preference, which matches the latest review
+   direction.
 5. The model should condition by replacing UVQLM's fixed BOS embedding with an
    MLP/timestep-encoder output from the normalized reward. This keeps the
    architecture close to UVQLM while making reward control the only new signal.
@@ -157,7 +158,7 @@ Recommended config knobs:
   for random reward sampling at eval time, matching the existing CMultistep
   sweep pattern.
 - `reward_encoder`: `timestep` or `mlp`.
-- `reward_normalization`: `per_utterance`.
+- `reward_normalization`: `per_utterance_minmax`.
 - `reward_metric`: `wer`, `cer`, or weighted combination.
 - `generation_sample`: boolean for sample versus greedy diagnostics.
 - `suppress_eos_for_fixed_length`: default `true`; keep an explicit knob only
@@ -184,15 +185,13 @@ The raw `mask` tensor can stay untouched because the model trains on
 `generation`. If a diagnostic later needs to inspect masks from these rollout
 files, cast them to float with `.float()` before use.
 
-Per-utterance normalization:
+Per-utterance min-max normalization:
 
-- For each rollout file, normalize the 10 sampled rewards within that file.
-- Record how all-equal or near-zero-variance reward groups are handled. The
-  existing dataset code usually falls back to zeros or fixed values when
-  variance is degenerate; the ROB-111 path should choose one behavior and log
-  its count.
+- For each rollout file, map the 10 sampled rewards within that file to `[0, 1]`.
+- Record how all-equal or near-zero-range reward groups are handled. ROB-114
+  maps these degenerate groups to the neutral value `0.5` and logs their count.
 - At generation time, choose conditioning values in normalized rank-like units
-  such as `-1`, `0`, and `1`, because the absolute WER-delta interpretation is
+  such as `0`, `0.5`, and `1`, because the absolute WER-delta interpretation is
   intentionally discarded in this mode.
 
 Implementation should avoid a bulky derived dataset. If caching is needed for
@@ -251,8 +250,8 @@ Initial validation before any long run:
    - Read 2 train files and 2 dev files from the real rollout root.
    - Confirm `generation` and raw WER reward can be loaded without touching or
      duplicating masks.
-   - Confirm per-utterance normalization produces finite rewards and records
-     degenerate reward-group counts.
+   - Confirm bounded per-utterance min-max normalization produces finite rewards
+     and records degenerate reward-group counts.
 
 2. Model unit smoke:
    - Instantiate the model on CPU with the BVAE config and a tiny synthetic
@@ -300,9 +299,9 @@ Implemented repo artifacts:
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/smoke_reward_conditioned_mask_lm.py`
 
 The dataset reads the in-place ROB-109 rollout root and returns saved
-`generation` tensors, normalized per-utterance WER-delta rewards, raw WER-delta
-rewards, source paths, and VQ sequence lengths. It does not return audio or raw
-masks for training.
+`generation` tensors, bounded per-utterance min-max WER-delta rewards, raw
+WER-delta rewards, source paths, and VQ sequence lengths. It does not return
+audio or raw masks for training.
 
 The model keeps the UVQLM BVAE codebook, token embeddings, GRU decoder, and
 prediction head. It replaces the fixed BOS token with a reward encoder output.
@@ -314,18 +313,19 @@ and returns generation metadata from `augment()`.
 Smoke commands:
 
 ```bash
-/store/store4/software/bin/anaconda3/envs/speech-diff/bin/python \
+/store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2/bin/python \
   exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/smoke_reward_conditioned_mask_lm.py
 
 PYTHONPATH="$PWD" WANDB_MODE=disabled \
-  /store/store4/software/bin/anaconda3/envs/speech-diff/bin/python \
+  /store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2/bin/python \
   exp/train_freq_mask.py \
   --config exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_smoke.yaml
 ```
 
-The smoke commands use the Torch 2.8 `speech-diff` environment because the
-trusted ROB-109 rollout files include float8 tensors. The training path itself
-still reads only saved VQ `generation` and reward fields.
+The smoke commands use the normal `flash_attn_pytorch2` project environment.
+The dataset has a narrow trusted-rollout deserialization shim for ROB-109 files
+whose saved dicts include Torch 2.8 float8 mask/audio tensors; the training path
+itself reads only saved VQ `generation` and reward fields.
 
 ## First Real Experiment Proposal
 
@@ -333,8 +333,8 @@ Recommended first full experiment:
 
 - Dataset: in-place ROB-109 UVQLM train/dev rollouts.
 - Reward metric: WER delta.
-- Reward normalization: per-utterance normalization across each rollout file's
-  sampled masks.
+- Reward normalization: bounded per-utterance min-max normalization across each
+  rollout file's sampled masks.
 - Model: no-audio reward-conditioned mask LM.
 - Architecture: UVQLM GRU decoder, hidden dim 256, four layers, BVAE codebook
   2048, reward BOS from `timestep_encoder`.
@@ -349,7 +349,7 @@ Recommended first full experiment:
 - Diagnostics:
   - Train/dev CE loss.
   - Sequence NLL by raw-reward and normalized-reward bins.
-  - Generated mask samples at normalized reward values such as `-1`, `0`, and
+  - Generated mask samples at normalized reward values such as `0`, `0.5`, and
     `1`.
   - Fixed-length generation checks against audio-derived target length.
   - Oracle/eval WER for fixed reward values and sampled reward ranges.
@@ -357,14 +357,14 @@ Recommended first full experiment:
 Suggested reward probes:
 
 ```text
-per-utterance normalized: -1.0, 0.0, 1.0
+per-utterance min-max normalized: 0.0, 0.5, 1.0
 ```
 
 ## Risks And Checks
 
-- Per-utterance normalization removes absolute WER-delta scale. Report generated
-  behavior as rank-like candidate preference within an utterance, not as
-  targeting a globally interpretable raw reward value.
+- Per-utterance min-max normalization removes absolute WER-delta scale. Report
+  generated behavior as rank-like candidate preference within an utterance, not
+  as targeting a globally interpretable raw reward value.
 - If the model is trained only on UVQLM samples, high reward samples may be
   rare. Consider balanced sampling by reward bin after the baseline run if
   conditioning is ignored.
@@ -383,8 +383,8 @@ per-utterance normalized: -1.0, 0.0, 1.0
 
 1. Is `RewardConditionedMaskLM` the preferred class/config name, or should the
    implementation use a shorter existing-family name?
-2. For per-utterance normalization, should degenerate 10-sample groups map to
-   all zeros, all ones, or be skipped?
+2. For per-utterance min-max normalization, should degenerate 10-sample groups
+   keep the current neutral `0.5` value or be skipped?
 3. Should the first training run start from scratch or initialize shared UVQLM
    layers from the existing UMLM checkpoint?
 4. Should the conditioning reward at eval time be fixed to high target values,

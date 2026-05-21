@@ -5,6 +5,9 @@
     "degenerate_reward_groups": 0,
     "finite_normalized_rewards": true,
     "finite_raw_rewards": true,
+    "normalized_rewards_in_unit_interval": true,
+    "normalized_reward_min": 0.0,
+    "normalized_reward_max": 1.0,
     "generation_lengths": [
       2,
       24
@@ -16,25 +19,28 @@
     "degenerate_reward_groups": 0,
     "finite_normalized_rewards": true,
     "finite_raw_rewards": true,
+    "normalized_rewards_in_unit_interval": true,
+    "normalized_reward_min": 0.0,
+    "normalized_reward_max": 1.0,
     "generation_lengths": [
       29,
       48
     ]
   },
   "model_smoke": {
-    "loss": 7.718461036682129,
+    "loss": 7.714467525482178,
     "logged_losses": {
-      "loss": 7.718461036682129,
-      "total_loss": 7.718461036682129
+      "loss": 7.714467525482178,
+      "total_loss": 7.714467525482178
     },
     "fixed_length_generation_steps": 7,
     "fixed_length_generations": {
-      "-1.0": [
-        1362,
+      "0.0": [
         1362,
         1362,
         1180,
         1180,
+        246,
         246,
         246
       ],

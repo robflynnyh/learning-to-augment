@@ -19,7 +19,7 @@ evaluation:
   id: ROB-114-reward-conditioned-mask-lm-smoke
   dataset: tedlium
   split: dev
-  rollout_fn: singlestep
+  rollout_fn: multistep
   use_cer: false
   epochs: 1
   augmentation_config:
@@ -34,8 +34,9 @@ dataset_class: RewardConditionedMaskLMDataset
 
 dataset:
   reward_metric: wer
-  normalization: per_utterance
-  degenerate_std_eps: 1e-6
+  normalization: per_utterance_minmax
+  degenerate_range_eps: 1e-6
+  degenerate_value: 0.5
 
 policy:
   lr: 6e-4
