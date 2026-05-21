@@ -178,13 +178,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   5, and validating the path in the normal `flash_attn_pytorch2` project env.
 - Removed the remaining ROB-114 import/load guards after PR review: `lcasr`,
   `torchaudio`, and `eval` now fail at import time as in the project env, and
-  ROB-109 rollout files are loaded with the normal `torch.load` path.
-  The hard-coded local `flash_attn_pytorch2` executable reports Torch `2.0.1`
-  in this shell, so the no-guard direct-load validation was rerun under a Torch
-  `2.6.0+cu124` env with explicit local dependency paths.
-- Resolved the ROB-114 environment mismatch: the human interactive transcript is
-  `bash -ic python`, where `python` is aliased to `/usr/bin/python3.10` and
-  imports Torch `2.6.0+cu124` from `~/.local`, not the stale absolute
-  `flash_attn_pytorch2/bin/python` interpreter. Reran stats/model/augment and
-  one-file training smokes through that Python path, and set trusted local
-  policy checkpoint loads to `weights_only=False` for Torch 2.6.
+  ROB-109 rollout files are loaded with the normal `torch.load` path. The
+  no-guard direct-load validation was rerun under the bashrc Python 3.10 /
+  Torch `2.6.0+cu124` runtime.
+- Resolved the ROB-114 environment command docs to use `bash -ic python`, where
+  `python` is aliased to `/usr/bin/python3.10`, and set trusted local policy
+  checkpoint loads to `weights_only=False` for Torch 2.6.

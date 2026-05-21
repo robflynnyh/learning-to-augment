@@ -16,36 +16,13 @@
 Stats/model/augment smoke:
 
 ```bash
-bash -ic 'export PYTHONPATH="$PWD:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python - <<'"'"'PY'"'"'
-import runpy
-import sys
-import torch
-print("python", sys.executable, sys.version.split()[0])
-print("torch", torch.__version__, torch.__file__)
-sys.path.append("/store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2/lib/python3.9/site-packages")
-sys.argv = ["exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/smoke_reward_conditioned_mask_lm.py"]
-runpy.run_path(sys.argv[0], run_name="__main__")
-PY'
+bash -ic 'export PYTHONPATH="$PWD:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/smoke_reward_conditioned_mask_lm.py'
 ```
 
 One-file training harness smoke:
 
 ```bash
-bash -ic 'export PYTHONPATH="$PWD:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; export WANDB_MODE=disabled; python - <<'"'"'PY'"'"'
-import runpy
-import sys
-import torch
-print("python", sys.executable, sys.version.split()[0])
-print("torch", torch.__version__, torch.__file__)
-sys.path.insert(0, "exp")
-sys.path.append("/store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2/lib/python3.9/site-packages")
-sys.argv = [
-    "exp/train_freq_mask.py",
-    "--config",
-    "exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_smoke.yaml",
-]
-runpy.run_path(sys.argv[0], run_name="__main__")
-PY'
+bash -ic 'export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; export WANDB_MODE=disabled; python exp/train_freq_mask.py --config exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_smoke.yaml'
 ```
 
 Full training was not queued because ROB-114 explicitly requires no long GPU
@@ -75,14 +52,9 @@ Completed on 2026-05-21.
 
 PR-review follow-up validation after removing import/load guards:
 
-- The literal `/store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2/bin/python`
-  interpreter in this Symphony shell reports Python `3.9.17` and Torch `2.0.1`.
-- The human interactive transcript is reproduced by `bash -ic python`, where
-  `python` is aliased to `/usr/bin/python3.10` and imports Torch
-  `2.6.0+cu124` from `~/.local`.
-- The no-guard direct-load stats/model/augment smoke passed under that Python
-  `3.10.12` / Torch `2.6.0+cu124` runtime and reproduced the committed JSON
-  values.
+- The no-guard direct-load stats/model/augment smoke passed under the bashrc
+  Python `3.10.12` / Torch `2.6.0+cu124` runtime and reproduced the committed
+  JSON values.
 - The one-file training harness smoke passed under the same runtime after
   `load_model()` was updated to load trusted local policy checkpoints with
   `weights_only=False`, which Torch 2.6 requires for existing checkpoints that
