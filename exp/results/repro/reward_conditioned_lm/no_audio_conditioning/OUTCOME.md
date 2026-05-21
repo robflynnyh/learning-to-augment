@@ -118,3 +118,34 @@ Training outcome is pending the detached run and callback. On completion,
 inspect the log and checkpoint, then run the requested checkpoint-load and
 fixed-length generation sanity check at two reward controls before PR/Linear
 handoff.
+
+## ROB-117 First Attempt Restart
+
+The first detached full-training attempt acquired Mimas GPU 2 and started W&B
+run `ejufy294` (`comic-field-2165`) on 2026-05-21, but it did not reach a first
+dev batch. The process stayed alive with no loss charts because DataLoader
+workers repeatedly failed before the initial `wandb.log(...)` calls:
+
+```text
+OSError: AF_UNIX path too long
+```
+
+Root cause: the wrapper set `TMPDIR` under the full result-root scratch path,
+which made Python multiprocessing's Unix socket path too long. The run was
+interrupted with `screen -S rob117-reward-conditioned-mask-lm -X stuff ^C`; the
+wrapper `EXIT` trap posted a Linear failure callback and the screen exited.
+
+Fix and validation before requeue:
+
+- Updated `scripts/launch_rob117_reward_conditioned_mask_lm_training.sh` so the
+  default scratch root is the short durable local path
+  `/exp/exp4/acp21rjf/rob117-scratch`.
+- Revalidated the actual wrapper callback path with:
+  `SCRATCH_ROOT=/exp/exp4/acp21rjf/rob117-scratch ROB117_CALLBACK_ONLY=1 ROB117_CALLBACK_CHECK_ONLY=1 bash scripts/launch_rob117_reward_conditioned_mask_lm_training.sh`.
+- Revalidated a DataLoader worker smoke against the active full config with
+  `TMPDIR=/exp/exp4/acp21rjf/rob117-scratch/tmp`, 4 dev rollout files,
+  `num_workers=2`, and `prefetch_factor=2`; the first batch loaded with
+  generation shape `(20, 48)` and reward range `[0.0, 1.0]`.
+- Reran the documented one-file training smoke through the actual wrapper using
+  the smoke config and the short scratch path. Log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_smoke_retry_20260521.log`.

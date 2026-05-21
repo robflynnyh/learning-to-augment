@@ -189,3 +189,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
   config still has W&B logging and dev-loss early stopping enabled, and
   `scripts/launch_rob117_reward_conditioned_mask_lm_training.sh` records the
   detached Mimas `with-gpu 1,2` launch plus the callback trap contract.
+- Diagnosed and restarted the first ROB-117 full-training attempt after a
+  DataLoader multiprocessing `OSError: AF_UNIX path too long` before the first
+  dev batch. The BVAE load in the log is the frozen binary mask VAE used for
+  the mask-token codebook/decoder, not audio conditioning. The launcher now
+  defaults to short durable local scratch at `/exp/exp4/acp21rjf/rob117-scratch`,
+  and the callback path, two-worker DataLoader smoke, and smoke-config training
+  run were revalidated before requeue.
