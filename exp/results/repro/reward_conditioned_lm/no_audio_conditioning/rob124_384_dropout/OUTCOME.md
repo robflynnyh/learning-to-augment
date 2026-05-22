@@ -1,7 +1,12 @@
 # ROB-124 Outcome
 
-Status: scaffolded for callback-backed Mimas training. Final training outcome is
-pending the detached run.
+Status: queued for callback-backed Mimas training. Final training outcome is
+pending the detached run and callback.
+
+Launch branch/commit:
+
+- Branch: `symphony/ROB-124-384-dropout-mask-lm`
+- Commit: `63f16096c7dcfa8e91f1bb8cf4d8f21465afaa3d`
 
 ## What Changed
 
@@ -36,6 +41,17 @@ pending the detached run.
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout/`
 - Checkpoint:
   `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_384d_dropout0p1_500ep_lr1e3.pt`
+
+## Queue Handoff
+
+- Queued: 2026-05-22 15:25 UTC
+- Screen: `rob124-reward-conditioned-mask-lm-384d-dropout0p1`
+- Queue ticket: `b530a207`
+- Pool: `1,2`
+- Queued command:
+  `screen -L -Logfile /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-124/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout/logs/rob124_no_audio_reward_conditioned_mask_lm_384d_dropout0p1_500ep_lr1e3.screen.log -dmS rob124-reward-conditioned-mask-lm-384d-dropout0p1 bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-124 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob124_reward_conditioned_mask_lm_training_384d_dropout0p1.sh'`
+- Queued commit: `63f16096c7dcfa8e91f1bb8cf4d8f21465afaa3d`
+- Callback target state: `Todo`
 
 ## Prequeue Validation
 

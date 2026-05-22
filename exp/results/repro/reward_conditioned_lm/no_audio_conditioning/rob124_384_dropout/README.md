@@ -14,6 +14,11 @@ ROB-117 no-audio reward-conditioned mask LM handoff.
 The active checkout for ROB-124 was verified to contain the ROB-117 merge
 commit before editing.
 
+ROB-124 launch branch/commit:
+
+- Branch: `symphony/ROB-124-384-dropout-mask-lm`
+- Commit: `63f16096c7dcfa8e91f1bb8cf4d8f21465afaa3d`
+
 ## Config
 
 - Full training config:
@@ -61,6 +66,25 @@ Expected full-run logs:
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout/logs/rob124_no_audio_reward_conditioned_mask_lm_384d_dropout0p1_500ep_lr1e3.log`
 - Screen log:
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout/logs/rob124_no_audio_reward_conditioned_mask_lm_384d_dropout0p1_500ep_lr1e3.screen.log`
+
+## Queue Handoff
+
+Queued on Mimas at 2026-05-22 15:25 UTC.
+
+- Screen: `rob124-reward-conditioned-mask-lm-384d-dropout0p1`
+- Queue ticket: `b530a207`
+- Pool: `1,2`
+- Queued commit: `63f16096c7dcfa8e91f1bb8cf4d8f21465afaa3d`
+- Completion callback target state: `Todo`
+
+Completion check:
+
+```bash
+screen -ls | rg 'rob124-reward-conditioned-mask-lm-384d-dropout0p1'
+tail -80 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout/logs/rob124_no_audio_reward_conditioned_mask_lm_384d_dropout0p1_500ep_lr1e3.screen.log
+tail -80 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout/logs/rob124_no_audio_reward_conditioned_mask_lm_384d_dropout0p1_500ep_lr1e3.log
+ls -lh /store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_384d_dropout0p1_500ep_lr1e3.pt
+```
 
 ## Validation Plan
 
