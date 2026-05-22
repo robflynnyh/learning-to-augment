@@ -274,3 +274,47 @@ Artifacts:
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_adaptation_wer_reward_0_vs_1.json
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_post_training_adaptation_wer_20260522.log
 ```
+
+## ROB-117 500-Epoch LR 1e-3 Follow-Up Queue
+
+Latest Linear context on 2026-05-22: Robert confirmed the previous run used the
+full training split and requested another run because dev loss was still
+decreasing. The requested hyperparameters are `training.epochs: 500` and
+`policy.lr: 1e-3`.
+
+Follow-up config:
+
+```text
+exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_500ep_lr1e3.yaml
+```
+
+The new config keeps W&B logging enabled with `training.wandb_project:
+l2augment` and keeps dev-loss early stopping enabled with `training.tolerance:
+5`. It uses a separate checkpoint path from the completed 100-epoch run:
+
+```text
+/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_500ep_lr1e3.pt
+```
+
+Prequeue validation:
+
+- Config check under the bashrc Python 3.10 / Torch 2.6 path confirmed
+  `epochs=500`, `policy.lr=1e-3`, W&B mode unset, and tolerance `5`.
+- Tiny one-file smoke reran successfully:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_smoke_500ep_lr1e3_prequeue_20260522.log`.
+- Actual follow-up launcher `EXIT` callback path passed in
+  callback-only/check-only mode:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_callback_check_500ep_lr1e3_specific_20260522.log`.
+
+Planned detached Mimas queue command:
+
+```bash
+screen -L -Logfile /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_500ep_lr1e3_20260522.screen.log -dmS rob117-reward-conditioned-mask-lm-500ep-lr1e3 bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob117_reward_conditioned_mask_lm_training_500ep_lr1e3.sh'
+```
+
+Expected logs:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_500ep_lr1e3_20260522.log
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_500ep_lr1e3_20260522.screen.log
+```

@@ -535,3 +535,48 @@ Artifacts:
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_adaptation_wer_reward_0_vs_1.json
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_post_training_adaptation_wer_20260522.log
 ```
+
+## ROB-117 500-Epoch LR 1e-3 Follow-Up Queue
+
+After the 100-epoch run reached the configured epoch limit with dev loss still
+decreasing, Robert requested a second full training run with `training.epochs:
+500` and `policy.lr: 1e-3`.
+
+Follow-up config:
+
+```text
+exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_500ep_lr1e3.yaml
+```
+
+The config keeps the same in-place ROB-109 rollout data root, batch size,
+W&B project, and dev-loss early stopping tolerance as the completed run. It
+writes to a distinct checkpoint so the 100-epoch checkpoint remains intact:
+
+```text
+/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_500ep_lr1e3.pt
+```
+
+Prequeue validation:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_smoke_500ep_lr1e3_prequeue_20260522.log
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_callback_check_500ep_lr1e3_specific_20260522.log
+```
+
+The smoke used the documented bashrc Python 3.10 / Torch 2.6 runtime. The
+callback check ran the actual follow-up launcher in callback-only/check-only
+mode with the follow-up config and checkpoint paths.
+
+Detached launch command:
+
+```bash
+screen -L -Logfile /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_500ep_lr1e3_20260522.screen.log -dmS rob117-reward-conditioned-mask-lm-500ep-lr1e3 bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob117_reward_conditioned_mask_lm_training_500ep_lr1e3.sh'
+```
+
+Completion check:
+
+```bash
+screen -ls | grep rob117-reward-conditioned-mask-lm-500ep-lr1e3 || true
+tail -120 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_500ep_lr1e3_20260522.log
+ls -lh /store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_500ep_lr1e3.pt
+```

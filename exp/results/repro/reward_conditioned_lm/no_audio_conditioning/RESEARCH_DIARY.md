@@ -27,3 +27,8 @@
   six reward-control runs improved WER after adaptation; reward `1.0` was better
   than reward `0.0` on two recordings and worse on one. Full results are in
   `post_training_adaptation_wer_reward_0_vs_1.json`.
+- Prepared the requested follow-up full-training config after Robert noted the
+  100-epoch run was still decreasing in loss. The new config is
+  `tedlium_per_utterance_500ep_lr1e3.yaml`, uses `training.epochs: 500` and
+  `policy.lr: 1e-3`, and saves to a distinct `500ep_lr1e3` checkpoint path so
+  the completed 100-epoch checkpoint remains available.

@@ -212,3 +212,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   adaptation epoch. All six reward-control runs improved WER after adaptation;
   reward `1.0` was better on two recordings and reward `0.0` was better on one,
   so this remains a small diagnostic rather than a full dev-set conclusion.
+- Prepared the ROB-117 follow-up full-training run requested after the 100-epoch
+  model kept decreasing in dev loss. The follow-up config uses the same rollout
+  root and model family with `training.epochs: 500`, `policy.lr: 1e-3`, W&B
+  enabled, dev-loss early stopping tolerance 5, and a separate
+  `no_audio_tedlium_per_utterance_500ep_lr1e3.pt` checkpoint path.
