@@ -39,3 +39,19 @@ for each condition, and writes
 - Screen log:
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_earnings_reward_controls/logs/rob124_384_dropout_earnings_reward_controls.screen.log`
 - Callback target state: `Todo`
+
+## Completion
+
+- Completed: 2026-05-22
+- Exit status: `0`
+- Completed conditions: `4/4`
+- Summary CSV:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_earnings_reward_controls/rob124_384_dropout_earnings_reward_controls.csv`
+- Outcome summary:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_earnings_reward_controls/OUTCOME.md`
+
+Best ROB-124 condition on this Earnings-22 test pass was uniform sampled reward
+`[0.5, 1.0]`, with updated WER `0.194943` versus the matched ROB-120 updated
+WER `0.196434`. The fixed reward `0.0` condition was slightly worse than
+ROB-120, while fixed reward `1.0` and both uniform reward controls were
+slightly better.
