@@ -202,3 +202,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   final dev loss was `2.6927917954301535`, W&B run was `5ny25k7g`, and
   post-training sanity confirmed fixed-length generation at reward controls
   `0.0` and `1.0` on a real TED-LIUM dev rollout.
+- Extended ROB-117 post-training validation after a Linear follow-up by
+  sampling the trained checkpoint at reward controls `0.0` and `1.0` on three
+  TED-LIUM dev recordings. The sampled check produced valid fixed-length masks
+  for all recordings and different token sequences between the two reward
+  controls.

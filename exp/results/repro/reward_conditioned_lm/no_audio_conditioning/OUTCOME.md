@@ -196,3 +196,35 @@ Assessment: the trained checkpoint is usable for downstream fixed-length
 generation and eval/oracle comparison. This sanity check verifies loadability,
 reward-conditioned generation entry points, and decoded mask/audio shapes; it
 does not by itself establish downstream WER quality.
+
+## ROB-117 Sampled Reward 0 vs 1 Follow-Up
+
+After the final handoff, Robert asked for the trained model to be tested on a
+few different recordings while sampling at reward controls `0.0` and `1.0`.
+
+Command:
+
+```bash
+bash -ic 'export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/post_training_sanity_check.py --sample --seed 20260522 --rollout /store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt --rollout /store/store4/data/l2augment_rollout_uvqmlm/dev/BarrySchwartz_2005G_0.pt --rollout /store/store4/data/l2augment_rollout_uvqmlm/dev/BlaiseAguerayArcas_2007_0.pt --output exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_sampled_reward_0_vs_1_check.json'
+```
+
+Output:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_sampled_reward_0_vs_1_check.json
+```
+
+Summary:
+
+| Recording | Frames | Tokens | Reward 0.0 active fraction | Reward 1.0 active fraction | Token mismatches |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `AlGore_2009_0.pt` | 1042 | 29 | 0.0649 | 0.9410 | 29/29 |
+| `BarrySchwartz_2005G_0.pt` | 732 | 19 | 0.0953 | 0.3332 | 10/19 |
+| `BlaiseAguerayArcas_2007_0.pt` | 352 | 8 | 0.2389 | 0.3484 | 7/8 |
+
+All three sampled checks loaded the checkpoint, generated exactly the
+audio-derived number of VQ tokens, decoded masks to the original audio frame
+length, and returned augmented audio with the expected input shape. The sampled
+reward controls are observably different on this small diagnostic set. This is
+still a generation sanity check rather than a downstream WER/oracle quality
+measurement.

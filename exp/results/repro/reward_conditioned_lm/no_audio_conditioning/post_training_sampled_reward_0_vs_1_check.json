@@ -1,0 +1,371 @@
+{
+  "config": "exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance.yaml",
+  "checkpoint": "/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt",
+  "rollouts": [
+    "/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt",
+    "/store/store4/data/l2augment_rollout_uvqmlm/dev/BarrySchwartz_2005G_0.pt",
+    "/store/store4/data/l2augment_rollout_uvqmlm/dev/BlaiseAguerayArcas_2007_0.pt"
+  ],
+  "checkpoint_bytes": 20842210,
+  "model_total_parameters": 2630913,
+  "sample": true,
+  "base_seed": 20260522,
+  "rollout_checks": [
+    {
+      "rollout": "/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt",
+      "reward_checks": [
+        {
+          "conditioning_reward": 0.0,
+          "sample": true,
+          "seed": 20260522,
+          "audio_frames": 1042,
+          "expected_generation_steps": 29,
+          "generated_tokens": 29,
+          "generation": [
+            1519,
+            1519,
+            858,
+            858,
+            858,
+            744,
+            744,
+            744,
+            805,
+            2009,
+            1048,
+            1834,
+            1864,
+            1471,
+            1834,
+            58,
+            1956,
+            2000,
+            236,
+            224,
+            635,
+            236,
+            104,
+            97,
+            1394,
+            311,
+            404,
+            1569,
+            369
+          ],
+          "first_12_tokens": [
+            1519,
+            1519,
+            858,
+            858,
+            858,
+            744,
+            744,
+            744,
+            805,
+            2009,
+            1048,
+            1834
+          ],
+          "mask_shape": [
+            1,
+            80,
+            1042
+          ],
+          "mask_active_fraction": 0.06487523764371872,
+          "augmented_shape": [
+            1,
+            80,
+            1042
+          ],
+          "metadata_generation_length": 29,
+          "metadata_target_output_length": 1042
+        },
+        {
+          "conditioning_reward": 1.0,
+          "sample": true,
+          "seed": 20260522,
+          "audio_frames": 1042,
+          "expected_generation_steps": 29,
+          "generated_tokens": 29,
+          "generation": [
+            581,
+            1714,
+            1765,
+            219,
+            524,
+            978,
+            2001,
+            304,
+            384,
+            1879,
+            1741,
+            4,
+            807,
+            807,
+            807,
+            807,
+            807,
+            807,
+            807,
+            807,
+            807,
+            807,
+            1988,
+            1472,
+            106,
+            1298,
+            1369,
+            151,
+            495
+          ],
+          "first_12_tokens": [
+            581,
+            1714,
+            1765,
+            219,
+            524,
+            978,
+            2001,
+            304,
+            384,
+            1879,
+            1741,
+            4
+          ],
+          "mask_shape": [
+            1,
+            80,
+            1042
+          ],
+          "mask_active_fraction": 0.9410029053688049,
+          "augmented_shape": [
+            1,
+            80,
+            1042
+          ],
+          "metadata_generation_length": 29,
+          "metadata_target_output_length": 1042
+        }
+      ],
+      "reward_0_vs_1_comparison": {
+        "token_match_fraction": 0.0,
+        "token_mismatch_count": 29,
+        "mask_active_fraction_delta_reward_1_minus_0": 0.8761276677250862
+      }
+    },
+    {
+      "rollout": "/store/store4/data/l2augment_rollout_uvqmlm/dev/BarrySchwartz_2005G_0.pt",
+      "reward_checks": [
+        {
+          "conditioning_reward": 0.0,
+          "sample": true,
+          "seed": 20260523,
+          "audio_frames": 732,
+          "expected_generation_steps": 19,
+          "generated_tokens": 19,
+          "generation": [
+            486,
+            1453,
+            2026,
+            1590,
+            1590,
+            1590,
+            1590,
+            307,
+            701,
+            845,
+            701,
+            845,
+            845,
+            845,
+            845,
+            845,
+            845,
+            845,
+            845
+          ],
+          "first_12_tokens": [
+            486,
+            1453,
+            2026,
+            1590,
+            1590,
+            1590,
+            1590,
+            307,
+            701,
+            845,
+            701,
+            845
+          ],
+          "mask_shape": [
+            1,
+            80,
+            732
+          ],
+          "mask_active_fraction": 0.0953039601445198,
+          "augmented_shape": [
+            1,
+            80,
+            732
+          ],
+          "metadata_generation_length": 19,
+          "metadata_target_output_length": 732
+        },
+        {
+          "conditioning_reward": 1.0,
+          "sample": true,
+          "seed": 20260523,
+          "audio_frames": 732,
+          "expected_generation_steps": 19,
+          "generated_tokens": 19,
+          "generation": [
+            486,
+            1453,
+            2026,
+            1590,
+            1896,
+            1590,
+            1884,
+            307,
+            701,
+            845,
+            701,
+            1884,
+            1094,
+            1927,
+            1516,
+            1875,
+            1516,
+            684,
+            684
+          ],
+          "first_12_tokens": [
+            486,
+            1453,
+            2026,
+            1590,
+            1896,
+            1590,
+            1884,
+            307,
+            701,
+            845,
+            701,
+            1884
+          ],
+          "mask_shape": [
+            1,
+            80,
+            732
+          ],
+          "mask_active_fraction": 0.3331967294216156,
+          "augmented_shape": [
+            1,
+            80,
+            732
+          ],
+          "metadata_generation_length": 19,
+          "metadata_target_output_length": 732
+        }
+      ],
+      "reward_0_vs_1_comparison": {
+        "token_match_fraction": 0.47368421052631576,
+        "token_mismatch_count": 10,
+        "mask_active_fraction_delta_reward_1_minus_0": 0.2378927692770958
+      }
+    },
+    {
+      "rollout": "/store/store4/data/l2augment_rollout_uvqmlm/dev/BlaiseAguerayArcas_2007_0.pt",
+      "reward_checks": [
+        {
+          "conditioning_reward": 0.0,
+          "sample": true,
+          "seed": 20260524,
+          "audio_frames": 352,
+          "expected_generation_steps": 8,
+          "generated_tokens": 8,
+          "generation": [
+            1203,
+            1163,
+            1163,
+            1853,
+            1345,
+            2005,
+            1451,
+            1479
+          ],
+          "first_12_tokens": [
+            1203,
+            1163,
+            1163,
+            1853,
+            1345,
+            2005,
+            1451,
+            1479
+          ],
+          "mask_shape": [
+            1,
+            80,
+            352
+          ],
+          "mask_active_fraction": 0.23888494074344635,
+          "augmented_shape": [
+            1,
+            80,
+            352
+          ],
+          "metadata_generation_length": 8,
+          "metadata_target_output_length": 352
+        },
+        {
+          "conditioning_reward": 1.0,
+          "sample": true,
+          "seed": 20260524,
+          "audio_frames": 352,
+          "expected_generation_steps": 8,
+          "generated_tokens": 8,
+          "generation": [
+            295,
+            491,
+            1733,
+            1733,
+            1265,
+            2005,
+            1734,
+            1733
+          ],
+          "first_12_tokens": [
+            295,
+            491,
+            1733,
+            1733,
+            1265,
+            2005,
+            1734,
+            1733
+          ],
+          "mask_shape": [
+            1,
+            80,
+            352
+          ],
+          "mask_active_fraction": 0.34843748807907104,
+          "augmented_shape": [
+            1,
+            80,
+            352
+          ],
+          "metadata_generation_length": 8,
+          "metadata_target_output_length": 352
+        }
+      ],
+      "reward_0_vs_1_comparison": {
+        "token_match_fraction": 0.125,
+        "token_mismatch_count": 7,
+        "mask_active_fraction_delta_reward_1_minus_0": 0.1095525473356247
+      }
+    }
+  ]
+}

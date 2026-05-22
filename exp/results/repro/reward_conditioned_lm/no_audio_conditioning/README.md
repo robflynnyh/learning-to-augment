@@ -487,3 +487,25 @@ fixed-length generation/eval/oracle comparison. The immediate caveat is that
 the reward-control behavior has only been checked as a load/shape/generation
 sanity test here; downstream WER/oracle comparison should still evaluate the
 actual augmentation quality.
+
+Follow-up sampled reward-control check after the ROB-117 Linear request:
+
+```bash
+bash -ic 'export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/post_training_sanity_check.py --sample --seed 20260522 --rollout /store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt --rollout /store/store4/data/l2augment_rollout_uvqmlm/dev/BarrySchwartz_2005G_0.pt --rollout /store/store4/data/l2augment_rollout_uvqmlm/dev/BlaiseAguerayArcas_2007_0.pt --output exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_sampled_reward_0_vs_1_check.json'
+```
+
+This sampled run used the same checkpoint and checked three different
+TED-LIUM dev recordings. Reward `0.0` versus `1.0` produced valid fixed-length
+masks for every recording and different sampled token sequences:
+
+| Recording | Frames | Tokens | Token mismatches | Mask active fraction at reward 0.0 | Mask active fraction at reward 1.0 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `AlGore_2009_0.pt` | 1042 | 29 | 29/29 | 0.0649 | 0.9410 |
+| `BarrySchwartz_2005G_0.pt` | 732 | 19 | 10/19 | 0.0953 | 0.3332 |
+| `BlaiseAguerayArcas_2007_0.pt` | 352 | 8 | 7/8 | 0.2389 | 0.3484 |
+
+Artifact:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_sampled_reward_0_vs_1_check.json
+```

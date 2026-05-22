@@ -16,3 +16,9 @@
 - Interpretation: the checkpoint is usable for downstream fixed-length
   eval/oracle comparison, but downstream WER/oracle scoring is still needed to
   measure augmentation quality.
+- Followed up on the Linear request to sample at reward controls `0.0` and
+  `1.0` on three different TED-LIUM dev recordings. The sampled diagnostic
+  wrote
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_sampled_reward_0_vs_1_check.json`;
+  all three recordings produced fixed-length masks and different reward-0 vs
+  reward-1 token sequences.
