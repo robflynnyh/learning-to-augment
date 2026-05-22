@@ -17,6 +17,9 @@ exp/results/repro/sweeps/uvqlm/logs/
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scratch/
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/wandb/
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout/logs/
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout/scratch/
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout/wandb/
 symphony/.env
 
 # Distribution / packaging

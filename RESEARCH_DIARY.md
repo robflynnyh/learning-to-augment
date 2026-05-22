@@ -203,6 +203,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
   adaptation-WER check. The 10-mask sample now has committed PDF/PNG
   visualizations under
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/`.
+- Started ROB-124 as the controlled ROB-117 capacity/dropout follow-up. The new
+  config trains the same no-audio reward-conditioned mask LM with
+  `hidden_dim: 384` and `dropout: 0.1`, using the same UVQLM rollout data,
+  reward normalization, Mimas callback wrapper discipline, and a separate
+  result root under
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout/`.
 - Set up ROB-120 Earnings-22 reward-control evaluation for the ROB-117
   `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt` checkpoint. The
   result root is

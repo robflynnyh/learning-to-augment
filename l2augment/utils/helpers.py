@@ -38,6 +38,9 @@ def save_model(model, config, save_path=None, log_command=print):
         if torch.isnan(param).any():
             isnan = True
     if isnan == False:
+        save_dir = os.path.dirname(save_path)
+        if save_dir:
+            os.makedirs(save_dir, exist_ok=True)
         torch.save({
             'model_state_dict': model.state_dict(),
             'config': config

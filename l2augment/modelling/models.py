@@ -2142,6 +2142,7 @@ class RewardConditionedMaskLM(Policy):
             conditioning_reward_range=None,
             reward_encoder='timestep',
             sample_generation=True,
+            dropout=0.0,
             **kwargs
         ) -> None:
         super().__init__()
@@ -2154,6 +2155,7 @@ class RewardConditionedMaskLM(Policy):
             low, high = sorted(float(item) for item in self.conditioning_reward_range)
             self.conditioning_reward_range = (low, high)
         self.sample_generation = sample_generation
+        self.dropout = float(dropout)
 
         self.mask_enc = BinaryVariationalAutoEncoder(**mask_vae_config)
         if mask_vae_state_dict_path is not None:
@@ -2183,9 +2185,11 @@ class RewardConditionedMaskLM(Policy):
             hidden_size=hidden_dim,
             num_layers=4,
             batch_first=True,
+            dropout=self.dropout,
         )
         self.prediction = nn.Sequential(
             nn.LayerNorm(hidden_dim),
+            nn.Dropout(self.dropout),
             nn.Linear(hidden_dim, self.codebook_size + 1)
         )
 
