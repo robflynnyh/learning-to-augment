@@ -439,3 +439,51 @@ Expected checkpoint:
 ```text
 /store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt
 ```
+
+## ROB-117 Training Outcome
+
+The corrected retry completed on 2026-05-22 through detached Mimas `screen`
+session `rob117-reward-conditioned-mask-lm-retry` and `with-gpu 1,2`.
+
+Run evidence:
+
+- Branch: `symphony/ROB-117-train-no-audio-reward-conditioned-mask-lm`
+- Commit: `80f389d6a89ebc830d07572639657c5abef1cb8d`
+- Main log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_retry_20260521.log`
+- Screen log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_retry_20260521.screen.log`
+- W&B: project `l2augment`, run `dry-thunder-2166`
+  (`https://wandb.ai/wobrob101/l2augment/runs/5ny25k7g`)
+- Final checkpoint:
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt`
+
+The training process reached `100/100` epochs and exited with status `0`.
+The final checkpoint is 20M (`20842210` bytes). The final logged dev loss was
+`2.6927917954301535`; early stopping did not trigger because the run reached
+the configured maximum epoch count first.
+
+Post-training sanity:
+
+```bash
+bash -ic 'export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/post_training_sanity_check.py'
+```
+
+The sanity check loaded the trained checkpoint on CPU and ran fixed-length
+generation/augment on
+`/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt` at reward
+controls `0.0` and `1.0`. Both controls produced exactly 29 VQ tokens for the
+1042-frame sample, returned masks of shape `[1, 80, 1042]`, and returned
+augmented audio of shape `[1, 80, 1042]`.
+
+Sanity artifact:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_sanity_check.json
+```
+
+Usability assessment: the checkpoint is loadable and usable for downstream
+fixed-length generation/eval/oracle comparison. The immediate caveat is that
+the reward-control behavior has only been checked as a load/shape/generation
+sanity test here; downstream WER/oracle comparison should still evaluate the
+actual augmentation quality.

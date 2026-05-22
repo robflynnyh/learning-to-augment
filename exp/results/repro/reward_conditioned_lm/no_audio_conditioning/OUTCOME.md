@@ -149,3 +149,50 @@ Fix and validation before requeue:
 - Reran the documented one-file training smoke through the actual wrapper using
   the smoke config and the short scratch path. Log:
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_smoke_retry_20260521.log`.
+
+## ROB-117 Completed Training Outcome
+
+The corrected detached retry completed successfully on 2026-05-22.
+
+- Exit status: `0`
+- Branch: `symphony/ROB-117-train-no-audio-reward-conditioned-mask-lm`
+- Commit: `80f389d6a89ebc830d07572639657c5abef1cb8d`
+- Runner: `screen:rob117-reward-conditioned-mask-lm-retry`
+- Launch command:
+  `screen -L -Logfile /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_retry_20260521.screen.log -dmS rob117-reward-conditioned-mask-lm-retry bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117 && LOG_PATH=/exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_retry_20260521.log SCREEN_LOG_PATH=/exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_retry_20260521.screen.log SCREEN_NAME=rob117-reward-conditioned-mask-lm-retry /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob117_reward_conditioned_mask_lm_training.sh'`
+- Main log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_retry_20260521.log`
+- Screen log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_retry_20260521.screen.log`
+- W&B: project `l2augment`, run `dry-thunder-2166`
+  (`https://wandb.ai/wobrob101/l2augment/runs/5ny25k7g`)
+- Checkpoint:
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt`
+
+The run reached the configured maximum epoch count (`100/100`) and saved the
+final checkpoint. Final logged dev loss was `2.6927917954301535`; dev-loss early
+stopping was configured but did not trigger before `training.epochs`.
+
+Post-training sanity command:
+
+```bash
+bash -ic 'export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/post_training_sanity_check.py'
+```
+
+Sanity result:
+
+- Output:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_sanity_check.json`
+- Checkpoint load succeeded on CPU under the bashrc Python 3.10 / Torch 2.6 path.
+- Real dev rollout:
+  `/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt`
+- Reward controls checked: `0.0` and `1.0`
+- Audio frames: `1042`
+- Expected/generated VQ tokens: `29` at both reward controls
+- Decoded mask shape: `[1, 80, 1042]` at both reward controls
+- Augmented audio shape: `[1, 80, 1042]` at both reward controls
+
+Assessment: the trained checkpoint is usable for downstream fixed-length
+generation and eval/oracle comparison. This sanity check verifies loadability,
+reward-conditioned generation entry points, and decoded mask/audio shapes; it
+does not by itself establish downstream WER quality.

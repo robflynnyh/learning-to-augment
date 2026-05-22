@@ -196,3 +196,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   defaults to short durable local scratch at `/exp/exp4/acp21rjf/rob117-scratch`,
   and the callback path, two-worker DataLoader smoke, and smoke-config training
   run were revalidated before requeue.
+- Finalized ROB-117 after the corrected Mimas retry completed with exit status
+  0. The trained no-audio reward-conditioned mask LM checkpoint is
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt`;
+  final dev loss was `2.6927917954301535`, W&B run was `5ny25k7g`, and
+  post-training sanity confirmed fixed-length generation at reward controls
+  `0.0` and `1.0` on a real TED-LIUM dev rollout.
