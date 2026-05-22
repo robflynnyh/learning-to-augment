@@ -22,3 +22,8 @@
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_sampled_reward_0_vs_1_check.json`;
   all three recordings produced fixed-length masks and different reward-0 vs
   reward-1 token sequences.
+- Added the clarified WER-before/after-adaptation diagnostic for the same three
+  recordings. With sampled ROB-117 masks and one `lr=1e-5` adaptation epoch, all
+  six reward-control runs improved WER after adaptation; reward `1.0` was better
+  than reward `0.0` on two recordings and worse on one. Full results are in
+  `post_training_adaptation_wer_reward_0_vs_1.json`.

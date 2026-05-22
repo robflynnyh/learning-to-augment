@@ -509,3 +509,29 @@ Artifact:
 ```text
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_sampled_reward_0_vs_1_check.json
 ```
+
+Follow-up adaptation WER check after Robert clarified the request:
+
+```bash
+/store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- bash -ic 'export TMPDIR=/exp/exp4/acp21rjf/rob117-scratch/tmp; export L2A_TEDLIUM3_LEGACY_DIR=/store/store4/data/TEDLIUM_release-3/legacy/; export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/post_training_adaptation_wer.py'
+```
+
+This ran on Mimas GPU 2 through the scheduler. It uses the trained checkpoint,
+TED-LIUM dev recordings matching the sampled diagnostic, `cpu_rollout_policy`,
+sampled masks, one adaptation epoch, and `lr=1e-5`.
+
+| Recording | Reward | WER before adaptation | WER after adaptation | Delta |
+| --- | ---: | ---: | ---: | ---: |
+| `AlGore_2009` | 0.0 | 0.1335 | 0.1241 | -0.0094 |
+| `AlGore_2009` | 1.0 | 0.1335 | 0.1224 | -0.0111 |
+| `BarrySchwartz_2005G` | 0.0 | 0.0513 | 0.0486 | -0.0027 |
+| `BarrySchwartz_2005G` | 1.0 | 0.0513 | 0.0468 | -0.0046 |
+| `BlaiseAguerayArcas_2007` | 0.0 | 0.1487 | 0.1373 | -0.0114 |
+| `BlaiseAguerayArcas_2007` | 1.0 | 0.1487 | 0.1400 | -0.0087 |
+
+Artifacts:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_adaptation_wer_reward_0_vs_1.json
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_post_training_adaptation_wer_20260522.log
+```

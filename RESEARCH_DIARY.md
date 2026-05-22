@@ -207,3 +207,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   TED-LIUM dev recordings. The sampled check produced valid fixed-length masks
   for all recordings and different token sequences between the two reward
   controls.
+- Added the ROB-117 clarified WER diagnostic for those same recordings using
+  `cpu_rollout_policy`, sampled reward-conditioned masks, and one `lr=1e-5`
+  adaptation epoch. All six reward-control runs improved WER after adaptation;
+  reward `1.0` was better on two recordings and reward `0.0` was better on one,
+  so this remains a small diagnostic rather than a full dev-set conclusion.

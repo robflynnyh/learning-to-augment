@@ -228,3 +228,49 @@ length, and returned augmented audio with the expected input shape. The sampled
 reward controls are observably different on this small diagnostic set. This is
 still a generation sanity check rather than a downstream WER/oracle quality
 measurement.
+
+## ROB-117 Reward 0 vs 1 Adaptation WER Follow-Up
+
+Robert clarified that the follow-up should report WER before and after
+adaptation in the same sampled reward-control setting. I added
+`exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/post_training_adaptation_wer.py`
+and ran it through the Mimas scheduler on GPU 2.
+
+Command:
+
+```bash
+/store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- bash -ic 'export TMPDIR=/exp/exp4/acp21rjf/rob117-scratch/tmp; export L2A_TEDLIUM3_LEGACY_DIR=/store/store4/data/TEDLIUM_release-3/legacy/; export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/post_training_adaptation_wer.py'
+```
+
+Run settings:
+
+- Checkpoint:
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt`
+- TED-LIUM base: `/store/store4/data/TEDLIUM_release-3/legacy/`
+- Split: `dev`
+- Rollout: `cpu_rollout_policy`
+- Adaptation: one epoch, `lr=1e-5`
+- Generation: sampled, reward controls `0.0` and `1.0`
+
+Results:
+
+| Recording | Dataset index | Utterances | Reward | WER before adaptation | WER after adaptation | Delta |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `AlGore_2009` | 3 | 46 | 0.0 | 0.1335 | 0.1241 | -0.0094 |
+| `AlGore_2009` | 3 | 46 | 1.0 | 0.1335 | 0.1224 | -0.0111 |
+| `BarrySchwartz_2005G` | 0 | 106 | 0.0 | 0.0513 | 0.0486 | -0.0027 |
+| `BarrySchwartz_2005G` | 0 | 106 | 1.0 | 0.0513 | 0.0468 | -0.0046 |
+| `BlaiseAguerayArcas_2007` | 5 | 42 | 0.0 | 0.1487 | 0.1373 | -0.0114 |
+| `BlaiseAguerayArcas_2007` | 5 | 42 | 1.0 | 0.1487 | 0.1400 | -0.0087 |
+
+All six sampled adaptation runs improved over the pre-adaptation WER. Reward
+`1.0` gave a larger improvement than reward `0.0` on `AlGore_2009` and
+`BarrySchwartz_2005G`; reward `0.0` was better on `BlaiseAguerayArcas_2007`.
+This is a small three-recording diagnostic, not a full dev-set result.
+
+Artifacts:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_adaptation_wer_reward_0_vs_1.json
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_post_training_adaptation_wer_20260522.log
+```
