@@ -209,6 +209,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
   reward normalization, Mimas callback wrapper discipline, and a separate
   result root under
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout/`.
+- Completed the ROB-124 384-dim/dropout training run. The callback-backed Mimas
+  run wrote
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_384d_dropout0p1_500ep_lr1e3.pt`;
+  post-training fixed-length reward `0.0`/`1.0` sanity passed, and the best
+  logged dev loss `2.624727` modestly improved over the ROB-117 resumed
+  baseline estimate `2.653739`.
 - Set up ROB-120 Earnings-22 reward-control evaluation for the ROB-117
   `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt` checkpoint. The
   result root is
