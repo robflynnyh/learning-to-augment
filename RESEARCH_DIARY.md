@@ -224,3 +224,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `lr=1e-5`. Checkpoint-load/generation preflight and a cropped Earnings CPU
   adaptation smoke passed; the full GPU comparison should be interpreted only
   from the wrapper-generated CSV/`OUTCOME.md`, not from the cropped smoke.
+- Started the ROB-124 follow-up Earnings-22 reward-control evaluation for the
+  384-dim/dropout checkpoint. The wrapper mirrors ROB-120's four reward-control
+  conditions but uses
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_384d_dropout0p1_500ep_lr1e3.pt`
+  with `hidden_dim: 384` and `dropout: 0.1`; the result root is
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_earnings_reward_controls/`.
