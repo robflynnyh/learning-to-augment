@@ -203,3 +203,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
   adaptation-WER check. The 10-mask sample now has committed PDF/PNG
   visualizations under
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/`.
+- Set up ROB-120 Earnings-22 reward-control evaluation for the ROB-117
+  `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt` checkpoint. The
+  result root is
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob120_earnings_reward_controls/`;
+  the wrapper generates fixed `0.0`, fixed `1.0`, uniform `[0.0, 1.0]`, and
+  uniform `[0.5, 1.0]` configs, then evaluates Earnings test adaptation at
+  `lr=1e-5`. Checkpoint-load/generation preflight and a cropped Earnings CPU
+  adaptation smoke passed; the full GPU comparison should be interpreted only
+  from the wrapper-generated CSV/`OUTCOME.md`, not from the cropped smoke.
