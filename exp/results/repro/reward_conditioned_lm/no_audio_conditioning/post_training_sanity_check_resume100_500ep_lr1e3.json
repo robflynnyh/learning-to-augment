@@ -1,0 +1,155 @@
+{
+  "config": "exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_resume100_500ep_lr1e3.yaml",
+  "checkpoint": "/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt",
+  "rollouts": [
+    "/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt"
+  ],
+  "checkpoint_bytes": 20845282,
+  "model_total_parameters": 2630913,
+  "sample": false,
+  "base_seed": 123456,
+  "rollout_checks": [
+    {
+      "rollout": "/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt",
+      "reward_checks": [
+        {
+          "conditioning_reward": 0.0,
+          "sample": false,
+          "seed": 123456,
+          "audio_frames": 1042,
+          "expected_generation_steps": 29,
+          "generated_tokens": 29,
+          "generation": [
+            815,
+            496,
+            782,
+            782,
+            782,
+            782,
+            1135,
+            1135,
+            1135,
+            1135,
+            1135,
+            1135,
+            812,
+            812,
+            812,
+            812,
+            812,
+            812,
+            812,
+            812,
+            812,
+            812,
+            812,
+            812,
+            812,
+            812,
+            812,
+            812,
+            812
+          ],
+          "first_12_tokens": [
+            815,
+            496,
+            782,
+            782,
+            782,
+            782,
+            1135,
+            1135,
+            1135,
+            1135,
+            1135,
+            1135
+          ],
+          "mask_shape": [
+            1,
+            80,
+            1042
+          ],
+          "mask_active_fraction": 0.30000001192092896,
+          "augmented_shape": [
+            1,
+            80,
+            1042
+          ],
+          "metadata_generation_length": 29,
+          "metadata_target_output_length": 1042
+        },
+        {
+          "conditioning_reward": 1.0,
+          "sample": false,
+          "seed": 123456,
+          "audio_frames": 1042,
+          "expected_generation_steps": 29,
+          "generated_tokens": 29,
+          "generation": [
+            650,
+            464,
+            464,
+            773,
+            773,
+            773,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719
+          ],
+          "first_12_tokens": [
+            650,
+            464,
+            464,
+            773,
+            773,
+            773,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719,
+            1719
+          ],
+          "mask_shape": [
+            1,
+            80,
+            1042
+          ],
+          "mask_active_fraction": 1.0,
+          "augmented_shape": [
+            1,
+            80,
+            1042
+          ],
+          "metadata_generation_length": 29,
+          "metadata_target_output_length": 1042
+        }
+      ],
+      "reward_0_vs_1_comparison": {
+        "token_match_fraction": 0.0,
+        "token_mismatch_count": 29,
+        "mask_active_fraction_delta_reward_1_minus_0": 0.699999988079071
+      }
+    }
+  ]
+}

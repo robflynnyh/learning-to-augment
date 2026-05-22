@@ -40,3 +40,16 @@
   `1e-3`, and resume W&B run `5ny25k7g`.
   The resume smoke and actual launcher callback-only check passed before
   queueing.
+- The resume-100 500-epoch LR `1e-3` run exited cleanly with status `0` from
+  detached Mimas screen `rob117-reward-conditioned-mask-lm-resume100-500ep-lr1e3`.
+  Dev-loss patience fired after five non-improving validation passes, restoring
+  the best previous state. First resumed validation loss was
+  `2.653739192269065`; final logged validation loss before rollback was
+  `2.6558073686830923`.
+- The resumed checkpoint is
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt`.
+  Post-training sanity loaded it and confirmed fixed-length generation at
+  reward controls `0.0` and `1.0` on `AlGore_2009_0.pt`; both produced 29 VQ
+  tokens, `[1, 80, 1042]` masks, and `[1, 80, 1042]` augmented audio. Treat the
+  checkpoint as usable for downstream eval/oracle comparison, but not as a
+  validated improvement over the 100-epoch checkpoint.

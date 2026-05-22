@@ -222,3 +222,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
   resume config starts at epoch `100`, targets epoch `500`, uses LR `1e-3`,
   loads `no_audio_tedlium_per_utterance.pt`, resumes W&B run `5ny25k7g`, and
   writes to `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt`.
+- Completed the ROB-117 resume-100 500-epoch LR `1e-3` run. It exited cleanly
+  from detached Mimas screen `rob117-reward-conditioned-mask-lm-resume100-500ep-lr1e3`
+  after dev-loss patience fired; first resumed validation loss was
+  `2.653739192269065`, and final logged validation loss before rollback was
+  `2.6558073686830923`. The saved checkpoint
+  `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt` passed a
+  fixed-length generation sanity check at reward controls `0.0` and `1.0`, so
+  it is usable for downstream eval/oracle comparison, but the LR `1e-3` resume
+  did not validate an improvement over the 100-epoch state.
