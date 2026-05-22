@@ -1,0 +1,77 @@
+{
+  "config": "exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance.yaml",
+  "checkpoint": "/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt",
+  "rollout": "/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt",
+  "checkpoint_bytes": 20842210,
+  "model_total_parameters": 2630913,
+  "reward_checks": [
+    {
+      "conditioning_reward": 0.0,
+      "sample": false,
+      "audio_frames": 1042,
+      "expected_generation_steps": 29,
+      "generated_tokens": 29,
+      "first_12_tokens": [
+        815,
+        496,
+        782,
+        782,
+        782,
+        782,
+        1135,
+        1135,
+        1135,
+        1135,
+        1135,
+        1135
+      ],
+      "mask_shape": [
+        1,
+        80,
+        1042
+      ],
+      "mask_active_fraction": 0.30000001192092896,
+      "augmented_shape": [
+        1,
+        80,
+        1042
+      ],
+      "metadata_generation_length": 29,
+      "metadata_target_output_length": 1042
+    },
+    {
+      "conditioning_reward": 1.0,
+      "sample": false,
+      "audio_frames": 1042,
+      "expected_generation_steps": 29,
+      "generated_tokens": 29,
+      "first_12_tokens": [
+        650,
+        464,
+        464,
+        773,
+        773,
+        773,
+        1719,
+        1719,
+        1719,
+        1719,
+        1719,
+        1719
+      ],
+      "mask_shape": [
+        1,
+        80,
+        1042
+      ],
+      "mask_active_fraction": 1.0,
+      "augmented_shape": [
+        1,
+        80,
+        1042
+      ],
+      "metadata_generation_length": 29,
+      "metadata_target_output_length": 1042
+    }
+  ]
+}

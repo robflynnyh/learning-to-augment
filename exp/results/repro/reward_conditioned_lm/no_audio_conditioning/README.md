@@ -388,3 +388,371 @@ per-utterance min-max normalized: 0.0, 0.5, 1.0
    layers from the existing UMLM checkpoint?
 4. Should the conditioning reward at eval time be fixed to high target values,
    swept over several fixed values, or sampled from a range?
+
+## ROB-117 Training Launch
+
+ROB-117 queues the active full config introduced in ROB-114:
+
+```bash
+exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance.yaml
+```
+
+The full config trains on
+`/store/store4/data/l2augment_rollout_uvqmlm/{train,dev}`, keeps W&B logging
+enabled through `training.wandb_project: l2augment`, and uses dev-loss early
+stopping with `training.tolerance: 5`.
+
+Preflight on 2026-05-21:
+
+```bash
+bash -ic 'export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; export WANDB_MODE=disabled; python exp/train_freq_mask.py --config exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_smoke.yaml'
+```
+
+This passed under the bashrc Python 3.10 / Torch 2.6 runtime and logged to:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_smoke_20260521.log
+```
+
+The long Mimas launch wrapper is:
+
+```bash
+scripts/launch_rob117_reward_conditioned_mask_lm_training.sh
+```
+
+It keeps logs, W&B files, caches, and scratch under this result directory and
+uses the Linear completion callback trap. The actual trap path was smoke-tested
+with:
+
+```bash
+ROB117_CALLBACK_ONLY=1 ROB117_CALLBACK_CHECK_ONLY=1 CALLBACK_TARGET_STATE=Todo scripts/launch_rob117_reward_conditioned_mask_lm_training.sh
+```
+
+The detached queue command is:
+
+```bash
+screen -L -Logfile exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training.screen.log -dmS rob117-reward-conditioned-mask-lm bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob117_reward_conditioned_mask_lm_training.sh'
+```
+
+Expected checkpoint:
+
+```text
+/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt
+```
+
+## ROB-117 Training Outcome
+
+The corrected retry completed on 2026-05-22 through detached Mimas `screen`
+session `rob117-reward-conditioned-mask-lm-retry` and `with-gpu 1,2`.
+
+Run evidence:
+
+- Branch: `symphony/ROB-117-train-no-audio-reward-conditioned-mask-lm`
+- Commit: `80f389d6a89ebc830d07572639657c5abef1cb8d`
+- Main log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_retry_20260521.log`
+- Screen log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_retry_20260521.screen.log`
+- W&B: project `l2augment`, run `dry-thunder-2166`
+  (`https://wandb.ai/wobrob101/l2augment/runs/5ny25k7g`)
+- Final checkpoint:
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt`
+
+The training process reached `100/100` epochs and exited with status `0`.
+The final checkpoint is 20M (`20842210` bytes). The final logged dev loss
+before the metric reset fix was `2.6927917954301535`, but that value was a
+cumulative average over validation passes in the training process rather than
+the standalone epoch-100 checkpoint loss. Early stopping did not trigger because
+the run reached the configured maximum epoch count first.
+
+Post-training sanity:
+
+```bash
+bash -ic 'export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/post_training_sanity_check.py'
+```
+
+The sanity check loaded the trained checkpoint on CPU and ran fixed-length
+generation/augment on
+`/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt` at reward
+controls `0.0` and `1.0`. Both controls produced exactly 29 VQ tokens for the
+1042-frame sample, returned masks of shape `[1, 80, 1042]`, and returned
+augmented audio of shape `[1, 80, 1042]`.
+
+Sanity artifact:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_sanity_check.json
+```
+
+Usability assessment: the checkpoint is loadable and usable for downstream
+fixed-length generation/eval/oracle comparison. The immediate caveat is that
+the reward-control behavior has only been checked as a load/shape/generation
+sanity test here; downstream WER/oracle comparison should still evaluate the
+actual augmentation quality.
+
+Follow-up sampled reward-control check after the ROB-117 Linear request:
+
+```bash
+bash -ic 'export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/post_training_sanity_check.py --sample --seed 20260522 --rollout /store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt --rollout /store/store4/data/l2augment_rollout_uvqmlm/dev/BarrySchwartz_2005G_0.pt --rollout /store/store4/data/l2augment_rollout_uvqmlm/dev/BlaiseAguerayArcas_2007_0.pt --output exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_sampled_reward_0_vs_1_check.json'
+```
+
+This sampled run used the same checkpoint and checked three different
+TED-LIUM dev recordings. Reward `0.0` versus `1.0` produced valid fixed-length
+masks for every recording and different sampled token sequences:
+
+| Recording | Frames | Tokens | Token mismatches | Mask active fraction at reward 0.0 | Mask active fraction at reward 1.0 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `AlGore_2009_0.pt` | 1042 | 29 | 29/29 | 0.0649 | 0.9410 |
+| `BarrySchwartz_2005G_0.pt` | 732 | 19 | 10/19 | 0.0953 | 0.3332 |
+| `BlaiseAguerayArcas_2007_0.pt` | 352 | 8 | 7/8 | 0.2389 | 0.3484 |
+
+Artifact:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_sampled_reward_0_vs_1_check.json
+```
+
+Follow-up adaptation WER check after Robert clarified the request:
+
+```bash
+/store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- bash -ic 'export TMPDIR=/exp/exp4/acp21rjf/rob117-scratch/tmp; export L2A_TEDLIUM3_LEGACY_DIR=/store/store4/data/TEDLIUM_release-3/legacy/; export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/post_training_adaptation_wer.py'
+```
+
+This ran on Mimas GPU 2 through the scheduler. It uses the trained checkpoint,
+TED-LIUM dev recordings matching the sampled diagnostic, `cpu_rollout_policy`,
+sampled masks, one adaptation epoch, and `lr=1e-5`.
+
+| Recording | Reward | WER before adaptation | WER after adaptation | Delta |
+| --- | ---: | ---: | ---: | ---: |
+| `AlGore_2009` | 0.0 | 0.1335 | 0.1241 | -0.0094 |
+| `AlGore_2009` | 1.0 | 0.1335 | 0.1224 | -0.0111 |
+| `BarrySchwartz_2005G` | 0.0 | 0.0513 | 0.0486 | -0.0027 |
+| `BarrySchwartz_2005G` | 1.0 | 0.0513 | 0.0468 | -0.0046 |
+| `BlaiseAguerayArcas_2007` | 0.0 | 0.1487 | 0.1373 | -0.0114 |
+| `BlaiseAguerayArcas_2007` | 1.0 | 0.1487 | 0.1400 | -0.0087 |
+
+Artifacts:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_adaptation_wer_reward_0_vs_1.json
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_post_training_adaptation_wer_20260522.log
+```
+
+## ROB-117 500-Epoch LR 1e-3 Follow-Up Queue
+
+After the 100-epoch run reached the configured epoch limit with dev loss still
+decreasing, Robert requested a second full training run with `training.epochs:
+500` and `policy.lr: 1e-3`.
+
+Follow-up config:
+
+```text
+exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_500ep_lr1e3.yaml
+```
+
+The config keeps the same in-place ROB-109 rollout data root, batch size,
+W&B project, and dev-loss early stopping tolerance as the completed run. It
+writes to a distinct checkpoint so the 100-epoch checkpoint remains intact:
+
+```text
+/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_500ep_lr1e3.pt
+```
+
+Prequeue validation:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_smoke_500ep_lr1e3_prequeue_20260522.log
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_callback_check_500ep_lr1e3_specific_20260522.log
+```
+
+The smoke used the documented bashrc Python 3.10 / Torch 2.6 runtime. The
+callback check ran the actual follow-up launcher in callback-only/check-only
+mode with the follow-up config and checkpoint paths.
+
+Detached launch command:
+
+```bash
+screen -L -Logfile /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_500ep_lr1e3_20260522.screen.log -dmS rob117-reward-conditioned-mask-lm-500ep-lr1e3 bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob117_reward_conditioned_mask_lm_training_500ep_lr1e3.sh'
+```
+
+Completion check:
+
+```bash
+screen -ls | grep rob117-reward-conditioned-mask-lm-500ep-lr1e3 || true
+tail -120 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_500ep_lr1e3_20260522.log
+ls -lh /store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_500ep_lr1e3.pt
+```
+
+## ROB-117 Resume-100 500-Epoch LR 1e-3 Queue
+
+Robert later clarified that the quicker follow-up should resume from the
+completed 100-epoch checkpoint and resume the same W&B run so loss is
+continuous. The fresh `500ep_lr1e3` run was stopped before a final checkpoint
+was written.
+
+Resume config:
+
+```text
+exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_resume100_500ep_lr1e3.yaml
+```
+
+Key settings:
+
+- Resume source:
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt`
+- Start epoch: `100`
+- Target epoch cap: `500`
+- LR: `1e-3`
+- W&B: project `l2augment`, run id `5ny25k7g`, `resume: must`
+- Output checkpoint:
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt`
+
+Prequeue validation:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_smoke_resume100_500ep_lr1e3_prequeue_20260522.log
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_callback_check_resume100_500ep_lr1e3_20260522.log
+```
+
+The smoke used the documented bashrc Python 3.10 / Torch 2.6 runtime through
+`with-gpu 1,2`, loaded the 100-epoch checkpoint, logged from epoch `100`, ran
+one tiny train step at LR `1e-3`, and saved smoke checkpoints. The callback
+check ran the actual resumed launcher in callback-only/check-only mode.
+
+Detached launch command:
+
+```bash
+screen -L -Logfile /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_resume100_500ep_lr1e3_20260522.screen.log -dmS rob117-reward-conditioned-mask-lm-resume100-500ep-lr1e3 bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob117_reward_conditioned_mask_lm_training_resume100_500ep_lr1e3.sh'
+```
+
+Completion check:
+
+```bash
+screen -ls | grep rob117-reward-conditioned-mask-lm-resume100-500ep-lr1e3 || true
+tail -120 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_resume100_500ep_lr1e3_20260522.log
+ls -lh /store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt
+```
+
+## ROB-117 Resume-100 500-Epoch LR 1e-3 Outcome
+
+The resumed follow-up run completed on 2026-05-22 through detached Mimas
+`screen` session `rob117-reward-conditioned-mask-lm-resume100-500ep-lr1e3`
+and `/store/store5/software/simple-gpu-schedule/with-gpu 1,2`.
+
+Run evidence:
+
+- Branch: `symphony/ROB-117-train-no-audio-reward-conditioned-mask-lm`
+- Commit: `84ce9c7c615cc67a0a775590f8f0b4ac529257d5`
+- Main log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_resume100_500ep_lr1e3_20260522.log`
+- Screen log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_resume100_500ep_lr1e3_20260522.screen.log`
+- W&B: project `l2augment`, resumed run `dry-thunder-2166` /
+  `5ny25k7g`
+  (`https://wandb.ai/wobrob101/l2augment/runs/5ny25k7g`)
+- Final checkpoint:
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt`
+
+The wrapper exited with status `0`. The run loaded the 100-epoch checkpoint,
+started from epoch `100`, and used LR `1e-3`. The first resumed validation pass
+reported `2.653739192269065`, which is the best available standalone validation
+estimate for the loaded 100-epoch checkpoint. Dev-loss patience triggered after
+five non-improving validation passes, so the training loop restored the best
+previous state and saved it to the final checkpoint path. The final logged
+validation value before rollback was `2.6558073686830923`; before the metric
+reset fix this was also cumulative within the resumed process. The old
+early-stopping signal was therefore not a strictly correct per-validation
+criterion in general, because it compared cumulative running averages. For this
+specific resumed run, recovering the per-validation estimates from the
+cumulative logs gives approximately `2.653739`, `2.657236`, `2.656021`,
+`2.656333`, `2.655912`, and `2.655604`, so the same rollback decision is still
+supported by the reconstructed per-validation losses.
+
+Post-training sanity for the resumed checkpoint:
+
+```bash
+bash -ic 'export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/post_training_sanity_check.py --config exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_resume100_500ep_lr1e3.yaml --checkpoint /store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt --output exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_sanity_check_resume100_500ep_lr1e3.json'
+```
+
+The sanity check loaded the resumed checkpoint on CPU and ran fixed-length
+generation/augment on
+`/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt` at reward
+controls `0.0` and `1.0`. Both controls produced exactly 29 VQ tokens for the
+1042-frame sample, returned masks of shape `[1, 80, 1042]`, and returned
+augmented audio of shape `[1, 80, 1042]`. Reward `0.0` versus `1.0` produced
+29/29 different greedy tokens, with mask active fractions `0.3000` and `1.0000`
+respectively.
+
+Artifact:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_sanity_check_resume100_500ep_lr1e3.json
+```
+
+Usability assessment: the resumed checkpoint is loadable and usable for
+downstream fixed-length generation/eval/oracle comparison. The caveat is that
+this LR `1e-3` resume did not improve validation loss over the starting
+100-epoch state before early stopping, so downstream comparisons should treat
+the resumed checkpoint as an additional usable candidate rather than as a
+validated improvement.
+
+Metric note: `exp/train_freq_mask.py` now resets `val_losses` at the start of
+each validation pass. Older ROB-117 logs before that fix report cumulative
+within-process averages, not pure per-epoch dev losses, and older early
+stopping decisions should be treated as smoothed/cumulative rather than exact
+per-validation patience checks.
+
+## ROB-117 Ten-Mask Reward-Control Sample
+
+Latest Linear context on 2026-05-22: Robert asked for 10 masks from the trained
+policy, with 5 sampled at reward control `0.0` and 5 sampled at reward control
+`1.0`.
+
+Command:
+
+```bash
+bash -ic 'export TMPDIR=/exp/exp4/acp21rjf/rob117-scratch/tmp; mkdir -p "$TMPDIR"; export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/generate_reward_controlled_masks.py'
+```
+
+Visualization command:
+
+```bash
+bash -ic 'export TMPDIR=/exp/exp4/acp21rjf/rob117-scratch/tmp; mkdir -p "$TMPDIR"; export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/render_reward_controlled_masks.py'
+```
+
+Settings:
+
+- Checkpoint:
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt`
+- Config:
+  `exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_resume100_500ep_lr1e3.yaml`
+- Rollout:
+  `/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt`
+- Sampling base seed: `20260522`
+
+Artifacts:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_10_sampled_masks_reward_0_vs_1.json
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_10_sampled_masks_reward_0_vs_1.pt
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/reward_conditioned_mask_samples_grid.png
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/reward_conditioned_mask_samples_grid.pdf
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/samples/
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/metadata.json
+```
+
+The JSON summary is committed. The `.pt` tensor bundle is local/ignored by Git
+and contains the actual decoded masks, generated token sequences, reward
+controls, and seeds. The visualization directory is committed and contains a
+10-mask overview grid plus individual per-sample PDF/PNG mask renders.
+
+Summary:
+
+| Reward | Samples | Mask active fraction min | Mean | Max |
+| ---: | ---: | ---: | ---: | ---: |
+| 0.0 | 5 | 0.0649 | 0.2811 | 0.8991 |
+| 1.0 | 5 | 0.2930 | 0.5156 | 0.9199 |
+
+All 10 samples loaded the resumed checkpoint, generated exactly 29 VQ tokens
+for the 1042-frame rollout, decoded masks of shape `[1, 80, 1042]`, and used
+sampling rather than greedy decoding.

@@ -184,3 +184,22 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Resolved the ROB-114 environment command docs to use `bash -ic python`, where
   `python` is aliased to `/usr/bin/python3.10`, and set trusted local policy
   checkpoint loads to `weights_only=False` for Torch 2.6.
+- Completed ROB-117 training for the no-audio reward-conditioned mask LM. The
+  corrected 100-epoch Mimas run wrote
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt`;
+  the first failure was a DataLoader `AF_UNIX path too long` issue fixed by
+  using `/exp/exp4/acp21rjf/rob117-scratch`.
+- Ran the requested resume-from-100 follow-up with LR `1e-3`, target epoch cap
+  `500`, and resumed W&B run `5ny25k7g`. Early stopping restored the first
+  resumed state, so
+  `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt` is usable for
+  downstream eval/oracle comparison but not evidence of improvement over the
+  100-epoch checkpoint.
+- Fixed validation logging in `exp/train_freq_mask.py` so future dev losses are
+  per-validation-pass values. Older ROB-117 logs were cumulative within each
+  process; reconstructed resumed-run losses still support the rollback decision.
+- Added small post-training diagnostics for fixed-length reward-controlled
+  generation, sampled reward `0.0` vs `1.0` masks, and a three-recording
+  adaptation-WER check. The 10-mask sample now has committed PDF/PNG
+  visualizations under
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/`.
