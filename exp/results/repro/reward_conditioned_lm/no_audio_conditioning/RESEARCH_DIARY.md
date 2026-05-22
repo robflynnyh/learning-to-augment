@@ -63,3 +63,9 @@
   The old early-stopping signal was smoothed by that cumulative average; for
   the resumed LR `1e-3` run, reconstructed per-validation losses still support
   the same rollback-to-starting-checkpoint decision.
+- Generated Robert's requested 10-mask sample from the trained policy: 5
+  sampled masks at reward `0.0` and 5 at reward `1.0`, using the resumed
+  checkpoint and `AlGore_2009_0.pt`. The committed summary is
+  `post_training_10_sampled_masks_reward_0_vs_1.json`; the ignored local tensor
+  bundle `post_training_10_sampled_masks_reward_0_vs_1.pt` contains the actual
+  decoded `[10, 1, 80, 1042]` masks, reward controls, seeds, and generations.

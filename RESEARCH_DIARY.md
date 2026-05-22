@@ -241,3 +241,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   The old early-stopping signal was smoothed by that cumulative average; for
   the resumed LR `1e-3` run, reconstructed per-validation losses still support
   the same rollback-to-starting-checkpoint decision.
+- Generated the requested ROB-117 10-mask reward-control sample from the
+  trained policy: 5 sampled masks at reward `0.0` and 5 at reward `1.0` from
+  `AlGore_2009_0.pt` using the resumed checkpoint. The committed summary is
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_10_sampled_masks_reward_0_vs_1.json`;
+  the ignored local tensor bundle contains the actual decoded masks.

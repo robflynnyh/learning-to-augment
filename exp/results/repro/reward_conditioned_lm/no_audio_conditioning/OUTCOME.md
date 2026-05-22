@@ -445,3 +445,47 @@ per validation pass. Older ROB-117 logs before that fix reported cumulative
 within-process averages rather than pure per-epoch dev losses, and older early
 stopping decisions should be treated as smoothed/cumulative rather than exact
 per-validation patience checks.
+
+## ROB-117 Ten-Mask Reward-Control Sample
+
+Robert asked for 10 masks from the trained policy: 5 conditioned on reward
+`0.0` and 5 conditioned on reward `1.0`.
+
+Command:
+
+```bash
+bash -ic 'export TMPDIR=/exp/exp4/acp21rjf/rob117-scratch/tmp; mkdir -p "$TMPDIR"; export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/generate_reward_controlled_masks.py'
+```
+
+Settings:
+
+- Checkpoint:
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt`
+- Config:
+  `exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_resume100_500ep_lr1e3.yaml`
+- Rollout:
+  `/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt`
+- Samples per reward: `5`
+- Sampling base seed: `20260522`
+
+Artifacts:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_10_sampled_masks_reward_0_vs_1.json
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_10_sampled_masks_reward_0_vs_1.pt
+```
+
+The `.pt` tensor bundle is ignored by Git and contains the actual sampled
+decoded masks with shape `[10, 1, 80, 1042]`, the generated token sequences,
+reward controls, seeds, and per-sample summaries.
+
+Summary:
+
+| Reward | Samples | Mask active fraction min | Mean | Max |
+| ---: | ---: | ---: | ---: | ---: |
+| 0.0 | 5 | 0.0649 | 0.2811 | 0.8991 |
+| 1.0 | 5 | 0.2930 | 0.5156 | 0.9199 |
+
+All 10 samples generated exactly 29 VQ tokens for the 1042-frame rollout and
+decoded masks to the original audio frame length. This directly answers the
+mask-generation request; it is not a downstream WER/oracle quality result.
