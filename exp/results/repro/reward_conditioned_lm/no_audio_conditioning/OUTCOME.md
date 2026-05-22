@@ -318,3 +318,55 @@ Expected logs:
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_500ep_lr1e3_20260522.log
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_500ep_lr1e3_20260522.screen.log
 ```
+
+## ROB-117 Resume-100 500-Epoch LR 1e-3 Follow-Up Queue
+
+Latest Linear context on 2026-05-22: Robert clarified that the follow-up should
+resume from the 100-epoch checkpoint and resume the same W&B run so the loss
+history is continuous. The fresh `500ep_lr1e3` run was stopped before any final
+checkpoint was written.
+
+Resume config:
+
+```text
+exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_resume100_500ep_lr1e3.yaml
+```
+
+Important settings:
+
+- Resume source:
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt`
+- Start epoch: `100`
+- Target epoch cap: `500`
+- LR: `1e-3`
+- W&B: project `l2augment`, run id `5ny25k7g`, `resume: must`
+- Output checkpoint:
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt`
+
+Prequeue validation:
+
+- `bash -n scripts/launch_rob117_reward_conditioned_mask_lm_training_resume100_500ep_lr1e3.sh scripts/launch_rob117_reward_conditioned_mask_lm_training.sh`
+- `bash -ic 'python -m py_compile exp/train_freq_mask.py'`
+- Config check under the bashrc Python 3.10 / Torch 2.6 path confirmed
+  `start_epoch=100`, `epochs=500`, `policy.lr=1e-3`, W&B resume id
+  `5ny25k7g`, and the source checkpoint exists.
+- Resume smoke through `/store/store5/software/simple-gpu-schedule/with-gpu
+  1,2`: loaded the 100-epoch checkpoint, logged epoch `100`, ran one tiny
+  train step, and saved smoke checkpoints. Log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_smoke_resume100_500ep_lr1e3_prequeue_20260522.log`.
+- Actual resumed launcher callback path passed in callback-only/check-only
+  mode. Log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_callback_check_resume100_500ep_lr1e3_20260522.log`.
+
+Planned detached Mimas queue command:
+
+```bash
+screen -L -Logfile /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_resume100_500ep_lr1e3_20260522.screen.log -dmS rob117-reward-conditioned-mask-lm-resume100-500ep-lr1e3 bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-117 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob117_reward_conditioned_mask_lm_training_resume100_500ep_lr1e3.sh'
+```
+
+Expected logs:
+
+```text
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_resume100_500ep_lr1e3_20260522.log
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/rob117_no_audio_reward_conditioned_mask_lm_training_resume100_500ep_lr1e3_20260522.screen.log
+```

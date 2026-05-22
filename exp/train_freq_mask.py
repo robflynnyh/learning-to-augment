@@ -51,7 +51,7 @@ def train_policy(
         prev_val_cer = float('inf')
         prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
 
-        cur_epoch = 0
+        cur_epoch = int(config['training'].get('start_epoch', 0))
         max_tolerance = config['training'].get('tolerance', 2)
         remaining_tolerance = max_tolerance
         running = True
@@ -146,11 +146,20 @@ def main(config):
     wandb_kwargs = {'project': config.get('training', {}).get('wandb_project', 'l2augment')}
     if config.get('training', {}).get('wandb_mode', None) is not None:
         wandb_kwargs['mode'] = config['training']['wandb_mode']
+    if config.get('training', {}).get('wandb_id', None) is not None:
+        wandb_kwargs['id'] = config['training']['wandb_id']
+    if config.get('training', {}).get('wandb_resume', None) is not None:
+        wandb_kwargs['resume'] = config['training']['wandb_resume']
     wandb.init(**wandb_kwargs)
 
     policy = load_rl_models(config=config) 
     policy_path = config['training']['model_save_path']
-    if os.path.exists(policy_path):
+    resume_policy_path = config.get('training', {}).get('resume_model_path', None)
+    if resume_policy_path is not None:
+        if not os.path.exists(resume_policy_path):
+            raise FileNotFoundError(f"Configured resume_model_path does not exist: {resume_policy_path}")
+        load_policy(policy, config, path=resume_policy_path)
+    elif os.path.exists(policy_path):
         load_policy(policy, config)
 
     device = config.get('training',{}).get('device', 'cuda')

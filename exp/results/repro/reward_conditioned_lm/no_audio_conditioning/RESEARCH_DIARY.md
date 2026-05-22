@@ -32,3 +32,11 @@
   `tedlium_per_utterance_500ep_lr1e3.yaml`, uses `training.epochs: 500` and
   `policy.lr: 1e-3`, and saves to a distinct `500ep_lr1e3` checkpoint path so
   the completed 100-epoch checkpoint remains available.
+- Stopped the fresh `500ep_lr1e3` run after Robert clarified that the follow-up
+  should resume from the 100-epoch checkpoint and continue the same W&B run.
+  Added a resume config and launcher that load
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt`,
+  start logging at epoch `100`, keep the target epoch cap at `500`, use LR
+  `1e-3`, and resume W&B run `5ny25k7g`.
+  The resume smoke and actual launcher callback-only check passed before
+  queueing.

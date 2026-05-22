@@ -217,3 +217,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   root and model family with `training.epochs: 500`, `policy.lr: 1e-3`, W&B
   enabled, dev-loss early stopping tolerance 5, and a separate
   `no_audio_tedlium_per_utterance_500ep_lr1e3.pt` checkpoint path.
+- Adjusted the ROB-117 follow-up after Robert clarified that it should resume
+  from the completed 100-epoch checkpoint and resume the same W&B run. The new
+  resume config starts at epoch `100`, targets epoch `500`, uses LR `1e-3`,
+  loads `no_audio_tedlium_per_utterance.pt`, resumes W&B run `5ny25k7g`, and
+  writes to `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt`.
