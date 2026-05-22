@@ -238,3 +238,6 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Fixed `exp/train_freq_mask.py` so validation-loss accumulation resets per
   validation pass. Older ROB-117 `avg_val_loss` logs should be read as
   cumulative within-process averages.
+  The old early-stopping signal was smoothed by that cumulative average; for
+  the resumed LR `1e-3` run, reconstructed per-validation losses still support
+  the same rollback-to-starting-checkpoint decision.

@@ -660,9 +660,13 @@ estimate for the loaded 100-epoch checkpoint. Dev-loss patience triggered after
 five non-improving validation passes, so the training loop restored the best
 previous state and saved it to the final checkpoint path. The final logged
 validation value before rollback was `2.6558073686830923`; before the metric
-reset fix this was also cumulative within the resumed process. Recovering the
-per-validation estimates from the cumulative logs gives approximately
-`2.653739`, `2.657236`, `2.656021`, `2.656333`, `2.655912`, and `2.655604`.
+reset fix this was also cumulative within the resumed process. The old
+early-stopping signal was therefore not a strictly correct per-validation
+criterion in general, because it compared cumulative running averages. For this
+specific resumed run, recovering the per-validation estimates from the
+cumulative logs gives approximately `2.653739`, `2.657236`, `2.656021`,
+`2.656333`, `2.655912`, and `2.655604`, so the same rollback decision is still
+supported by the reconstructed per-validation losses.
 
 Post-training sanity for the resumed checkpoint:
 
@@ -694,4 +698,6 @@ validated improvement.
 
 Metric note: `exp/train_freq_mask.py` now resets `val_losses` at the start of
 each validation pass. Older ROB-117 logs before that fix report cumulative
-within-process averages, not pure per-epoch dev losses.
+within-process averages, not pure per-epoch dev losses, and older early
+stopping decisions should be treated as smoothed/cumulative rather than exact
+per-validation patience checks.

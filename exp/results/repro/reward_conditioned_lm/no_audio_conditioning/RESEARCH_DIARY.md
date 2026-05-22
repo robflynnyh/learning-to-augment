@@ -60,3 +60,6 @@
 - Fixed `exp/train_freq_mask.py` so validation losses are reset for each
   validation pass instead of accumulating across epochs. Older ROB-117 logs
   before this fix should be interpreted as cumulative within-process averages.
+  The old early-stopping signal was smoothed by that cumulative average; for
+  the resumed LR `1e-3` run, reconstructed per-validation losses still support
+  the same rollback-to-starting-checkpoint decision.
