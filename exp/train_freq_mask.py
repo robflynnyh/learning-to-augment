@@ -57,11 +57,11 @@ def train_policy(
         running = True
         max_steps = config['training'].get('max_steps', -1)
 
-        val_losses = []
         while running:
             
             policy = policy.eval()
             
+            val_losses = []
             pbar = tqdm(dev_dataloader)
             for i, batch in enumerate(pbar):
                 if batch == None: continue

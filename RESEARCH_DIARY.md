@@ -199,9 +199,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Finalized ROB-117 after the corrected Mimas retry completed with exit status
   0. The trained no-audio reward-conditioned mask LM checkpoint is
   `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt`;
-  final dev loss was `2.6927917954301535`, W&B run was `5ny25k7g`, and
-  post-training sanity confirmed fixed-length generation at reward controls
-  `0.0` and `1.0` on a real TED-LIUM dev rollout.
+  final logged dev loss before the metric reset fix was `2.6927917954301535`,
+  W&B run was `5ny25k7g`, and post-training sanity confirmed fixed-length
+  generation at reward controls `0.0` and `1.0` on a real TED-LIUM dev rollout.
+  The logged value was cumulative across validation passes in that process, not
+  a standalone epoch-100 checkpoint loss.
 - Extended ROB-117 post-training validation after a Linear follow-up by
   sampling the trained checkpoint at reward controls `0.0` and `1.0` on three
   TED-LIUM dev recordings. The sampled check produced valid fixed-length masks
@@ -224,10 +226,15 @@ reproduce results, interpret metrics, or avoid known failure modes.
   writes to `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt`.
 - Completed the ROB-117 resume-100 500-epoch LR `1e-3` run. It exited cleanly
   from detached Mimas screen `rob117-reward-conditioned-mask-lm-resume100-500ep-lr1e3`
-  after dev-loss patience fired; first resumed validation loss was
-  `2.653739192269065`, and final logged validation loss before rollback was
-  `2.6558073686830923`. The saved checkpoint
+  after dev-loss patience fired; first resumed validation pass reported
+  `2.653739192269065`, the best available standalone validation estimate for
+  the loaded 100-epoch checkpoint. The final logged validation value before
+  rollback was `2.6558073686830923`, cumulative within the resumed process
+  before the metric reset fix. The saved checkpoint
   `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt` passed a
   fixed-length generation sanity check at reward controls `0.0` and `1.0`, so
   it is usable for downstream eval/oracle comparison, but the LR `1e-3` resume
   did not validate an improvement over the 100-epoch state.
+- Fixed `exp/train_freq_mask.py` so validation-loss accumulation resets per
+  validation pass. Older ROB-117 `avg_val_loss` logs should be read as
+  cumulative within-process averages.

@@ -4,7 +4,9 @@
 
 - Completed the corrected Mimas retry for the no-audio reward-conditioned mask
   LM training run. The wrapper exited with status `0`, the run reached
-  `100/100` epochs, and the final dev loss was `2.6927917954301535`.
+  `100/100` epochs. The final logged dev loss before the metric reset fix was
+  `2.6927917954301535`, but that was cumulative across validation passes in the
+  process rather than the standalone epoch-100 checkpoint loss.
 - Final checkpoint:
   `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt`.
 - W&B run: `dry-thunder-2166`
@@ -43,9 +45,11 @@
 - The resume-100 500-epoch LR `1e-3` run exited cleanly with status `0` from
   detached Mimas screen `rob117-reward-conditioned-mask-lm-resume100-500ep-lr1e3`.
   Dev-loss patience fired after five non-improving validation passes, restoring
-  the best previous state. First resumed validation loss was
-  `2.653739192269065`; final logged validation loss before rollback was
-  `2.6558073686830923`.
+  the best previous state. The first resumed validation pass reported
+  `2.653739192269065`, the best available standalone validation estimate for
+  the loaded 100-epoch checkpoint. The final logged validation value before
+  rollback was `2.6558073686830923`; before the metric reset fix this was
+  cumulative within the resumed process.
 - The resumed checkpoint is
   `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt`.
   Post-training sanity loaded it and confirmed fixed-length generation at
@@ -53,3 +57,6 @@
   tokens, `[1, 80, 1042]` masks, and `[1, 80, 1042]` augmented audio. Treat the
   checkpoint as usable for downstream eval/oracle comparison, but not as a
   validated improvement over the 100-epoch checkpoint.
+- Fixed `exp/train_freq_mask.py` so validation losses are reset for each
+  validation pass instead of accumulating across epochs. Older ROB-117 logs
+  before this fix should be interpreted as cumulative within-process averages.

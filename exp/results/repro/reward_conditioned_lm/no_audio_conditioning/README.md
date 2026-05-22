@@ -459,9 +459,11 @@ Run evidence:
   `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt`
 
 The training process reached `100/100` epochs and exited with status `0`.
-The final checkpoint is 20M (`20842210` bytes). The final logged dev loss was
-`2.6927917954301535`; early stopping did not trigger because the run reached
-the configured maximum epoch count first.
+The final checkpoint is 20M (`20842210` bytes). The final logged dev loss
+before the metric reset fix was `2.6927917954301535`, but that value was a
+cumulative average over validation passes in the training process rather than
+the standalone epoch-100 checkpoint loss. Early stopping did not trigger because
+the run reached the configured maximum epoch count first.
 
 Post-training sanity:
 
@@ -652,11 +654,15 @@ Run evidence:
   `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt`
 
 The wrapper exited with status `0`. The run loaded the 100-epoch checkpoint,
-started from epoch `100`, and used LR `1e-3`. Dev-loss patience triggered after
+started from epoch `100`, and used LR `1e-3`. The first resumed validation pass
+reported `2.653739192269065`, which is the best available standalone validation
+estimate for the loaded 100-epoch checkpoint. Dev-loss patience triggered after
 five non-improving validation passes, so the training loop restored the best
-previous state and saved it to the final checkpoint path. The first resumed
-validation loss was `2.653739192269065`; the final logged validation loss
-before rollback was `2.6558073686830923`.
+previous state and saved it to the final checkpoint path. The final logged
+validation value before rollback was `2.6558073686830923`; before the metric
+reset fix this was also cumulative within the resumed process. Recovering the
+per-validation estimates from the cumulative logs gives approximately
+`2.653739`, `2.657236`, `2.656021`, `2.656333`, `2.655912`, and `2.655604`.
 
 Post-training sanity for the resumed checkpoint:
 
@@ -685,3 +691,7 @@ this LR `1e-3` resume did not improve validation loss over the starting
 100-epoch state before early stopping, so downstream comparisons should treat
 the resumed checkpoint as an additional usable candidate rather than as a
 validated improvement.
+
+Metric note: `exp/train_freq_mask.py` now resets `val_losses` at the start of
+each validation pass. Older ROB-117 logs before that fix report cumulative
+within-process averages, not pure per-epoch dev losses.
