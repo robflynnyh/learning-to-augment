@@ -457,6 +457,12 @@ Command:
 bash -ic 'export TMPDIR=/exp/exp4/acp21rjf/rob117-scratch/tmp; mkdir -p "$TMPDIR"; export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/generate_reward_controlled_masks.py'
 ```
 
+Visualization command:
+
+```bash
+bash -ic 'export TMPDIR=/exp/exp4/acp21rjf/rob117-scratch/tmp; mkdir -p "$TMPDIR"; export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/render_reward_controlled_masks.py'
+```
+
 Settings:
 
 - Checkpoint:
@@ -473,11 +479,17 @@ Artifacts:
 ```text
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_10_sampled_masks_reward_0_vs_1.json
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_10_sampled_masks_reward_0_vs_1.pt
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/reward_conditioned_mask_samples_grid.png
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/reward_conditioned_mask_samples_grid.pdf
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/samples/
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/metadata.json
 ```
 
 The `.pt` tensor bundle is ignored by Git and contains the actual sampled
 decoded masks with shape `[10, 1, 80, 1042]`, the generated token sequences,
-reward controls, seeds, and per-sample summaries.
+reward controls, seeds, and per-sample summaries. The visualization directory
+is committed and contains a 10-mask overview grid plus individual per-sample
+PDF/PNG mask renders.
 
 Summary:
 

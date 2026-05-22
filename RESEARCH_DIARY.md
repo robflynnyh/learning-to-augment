@@ -184,65 +184,22 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Resolved the ROB-114 environment command docs to use `bash -ic python`, where
   `python` is aliased to `/usr/bin/python3.10`, and set trusted local policy
   checkpoint loads to `weights_only=False` for Torch 2.6.
-- Started ROB-117 no-audio reward-conditioned mask LM training from the merged
-  ROB-114 commit. The bashrc Python 3.10 / Torch 2.6 smoke passed, the full
-  config still has W&B logging and dev-loss early stopping enabled, and
-  `scripts/launch_rob117_reward_conditioned_mask_lm_training.sh` records the
-  detached Mimas `with-gpu 1,2` launch plus the callback trap contract.
-- Diagnosed and restarted the first ROB-117 full-training attempt after a
-  DataLoader multiprocessing `OSError: AF_UNIX path too long` before the first
-  dev batch. The BVAE load in the log is the frozen binary mask VAE used for
-  the mask-token codebook/decoder, not audio conditioning. The launcher now
-  defaults to short durable local scratch at `/exp/exp4/acp21rjf/rob117-scratch`,
-  and the callback path, two-worker DataLoader smoke, and smoke-config training
-  run were revalidated before requeue.
-- Finalized ROB-117 after the corrected Mimas retry completed with exit status
-  0. The trained no-audio reward-conditioned mask LM checkpoint is
+- Completed ROB-117 training for the no-audio reward-conditioned mask LM. The
+  corrected 100-epoch Mimas run wrote
   `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt`;
-  final logged dev loss before the metric reset fix was `2.6927917954301535`,
-  W&B run was `5ny25k7g`, and post-training sanity confirmed fixed-length
-  generation at reward controls `0.0` and `1.0` on a real TED-LIUM dev rollout.
-  The logged value was cumulative across validation passes in that process, not
-  a standalone epoch-100 checkpoint loss.
-- Extended ROB-117 post-training validation after a Linear follow-up by
-  sampling the trained checkpoint at reward controls `0.0` and `1.0` on three
-  TED-LIUM dev recordings. The sampled check produced valid fixed-length masks
-  for all recordings and different token sequences between the two reward
-  controls.
-- Added the ROB-117 clarified WER diagnostic for those same recordings using
-  `cpu_rollout_policy`, sampled reward-conditioned masks, and one `lr=1e-5`
-  adaptation epoch. All six reward-control runs improved WER after adaptation;
-  reward `1.0` was better on two recordings and reward `0.0` was better on one,
-  so this remains a small diagnostic rather than a full dev-set conclusion.
-- Prepared the ROB-117 follow-up full-training run requested after the 100-epoch
-  model kept decreasing in dev loss. The follow-up config uses the same rollout
-  root and model family with `training.epochs: 500`, `policy.lr: 1e-3`, W&B
-  enabled, dev-loss early stopping tolerance 5, and a separate
-  `no_audio_tedlium_per_utterance_500ep_lr1e3.pt` checkpoint path.
-- Adjusted the ROB-117 follow-up after Robert clarified that it should resume
-  from the completed 100-epoch checkpoint and resume the same W&B run. The new
-  resume config starts at epoch `100`, targets epoch `500`, uses LR `1e-3`,
-  loads `no_audio_tedlium_per_utterance.pt`, resumes W&B run `5ny25k7g`, and
-  writes to `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt`.
-- Completed the ROB-117 resume-100 500-epoch LR `1e-3` run. It exited cleanly
-  from detached Mimas screen `rob117-reward-conditioned-mask-lm-resume100-500ep-lr1e3`
-  after dev-loss patience fired; first resumed validation pass reported
-  `2.653739192269065`, the best available standalone validation estimate for
-  the loaded 100-epoch checkpoint. The final logged validation value before
-  rollback was `2.6558073686830923`, cumulative within the resumed process
-  before the metric reset fix. The saved checkpoint
-  `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt` passed a
-  fixed-length generation sanity check at reward controls `0.0` and `1.0`, so
-  it is usable for downstream eval/oracle comparison, but the LR `1e-3` resume
-  did not validate an improvement over the 100-epoch state.
-- Fixed `exp/train_freq_mask.py` so validation-loss accumulation resets per
-  validation pass. Older ROB-117 `avg_val_loss` logs should be read as
-  cumulative within-process averages.
-  The old early-stopping signal was smoothed by that cumulative average; for
-  the resumed LR `1e-3` run, reconstructed per-validation losses still support
-  the same rollback-to-starting-checkpoint decision.
-- Generated the requested ROB-117 10-mask reward-control sample from the
-  trained policy: 5 sampled masks at reward `0.0` and 5 at reward `1.0` from
-  `AlGore_2009_0.pt` using the resumed checkpoint. The committed summary is
-  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_10_sampled_masks_reward_0_vs_1.json`;
-  the ignored local tensor bundle contains the actual decoded masks.
+  the first failure was a DataLoader `AF_UNIX path too long` issue fixed by
+  using `/exp/exp4/acp21rjf/rob117-scratch`.
+- Ran the requested resume-from-100 follow-up with LR `1e-3`, target epoch cap
+  `500`, and resumed W&B run `5ny25k7g`. Early stopping restored the first
+  resumed state, so
+  `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt` is usable for
+  downstream eval/oracle comparison but not evidence of improvement over the
+  100-epoch checkpoint.
+- Fixed validation logging in `exp/train_freq_mask.py` so future dev losses are
+  per-validation-pass values. Older ROB-117 logs were cumulative within each
+  process; reconstructed resumed-run losses still support the rollback decision.
+- Added small post-training diagnostics for fixed-length reward-controlled
+  generation, sampled reward `0.0` vs `1.0` masks, and a three-recording
+  adaptation-WER check. The 10-mask sample now has committed PDF/PNG
+  visualizations under
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/`.
