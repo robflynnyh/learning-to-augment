@@ -26,3 +26,16 @@ screen -L -Logfile exp/results/repro/reward_conditioned_lm/no_audio_conditioning
 The wrapper generates condition configs under this directory, runs `exp/eval.py`
 for each condition, and writes
 `rob124_384_dropout_earnings_reward_controls.csv` plus `OUTCOME.md`.
+
+## Queue Handoff
+
+- Queued: 2026-05-22 19:50 UTC
+- Screen: `rob124-384-dropout-earnings-reward-controls`
+- Queue ticket: `a85da454`
+- Pool: `1,2`
+- Queued commit: `0f24bb5526c9b97a2c75d9595f8cd6a73c967c27`
+- Main log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_earnings_reward_controls/logs/rob124_384_dropout_earnings_reward_controls.log`
+- Screen log:
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_earnings_reward_controls/logs/rob124_384_dropout_earnings_reward_controls.screen.log`
+- Callback target state: `Todo`
