@@ -1,7 +1,8 @@
 # ROB-124 512-Dim Dropout Outcome
 
 Status: follow-up requested after the completed ROB-124 384/dropout handoff;
-prequeue validation passed, and full training is queued on Mimas.
+training completed successfully, and post-training fixed-length reward-control
+sanity passed.
 
 ## Scope
 
@@ -16,16 +17,7 @@ LM family and changes only the GRU hidden size relative to the completed
 - same W&B/dev-loss early-stopping contract
 - same Mimas detached `screen` + `with-gpu 1,2` + callback wrapper discipline
 
-## Comparison Points
-
-- ROB-117 256/no-dropout resumed baseline:
-  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt`
-- ROB-117 best available standalone dev loss: `2.653739192269065`
-- ROB-124 384/dropout checkpoint:
-  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_384d_dropout0p1_500ep_lr1e3.pt`
-- ROB-124 384/dropout best logged dev loss: `2.6247272274710913`
-
-## Queued 512-Dim Run
+## Training Result
 
 - Full config:
   `exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_512d_dropout0p1_500ep_lr1e3.yaml`
@@ -44,9 +36,21 @@ LM family and changes only the GRU hidden size relative to the completed
 - Screen: `rob124-reward-conditioned-mask-lm-512d-dropout0p1`
 - Queue ticket: `32c3350a`
 - Pool: `1,2`
-- Queued commit: `c36c89ee6ea5ef5be0433cd8c404026fc3009c0f`
+- Run commit recorded by wrapper: `1ed8eb26a38d59b1f9a68ce321ca9fd9f451a3d0`
+- Queued implementation commit: `c36c89ee6ea5ef5be0433cd8c404026fc3009c0f`
 - Callback target state: `Todo`
-- Queue status at handoff: waiting behind one pool `1,2` ticket
+- Callback returned status `0` on 2026-05-23 and moved ROB-124 back to
+  `Todo` for finalization.
+- W&B: `eager-terrain-2169` / `bjjnsv4j`
+  (<https://wandb.ai/wobrob101/l2augment/runs/bjjnsv4j>)
+- Runtime: bashrc Python `/usr/bin/python3.10`, Torch `2.6.0+cu124`
+- GPU assigned by `with-gpu 1,2`: `CUDA_VISIBLE_DEVICES=2`, NVIDIA RTX A4500
+- Trainable policy parameters: `8,405,505`
+- Checkpoint size: `42M` (`43,943,714` bytes)
+- Best logged dev loss: `2.6258603876287285`
+- Final validation before rollback: `2.627896092154763`
+- Early stopping: patience fired and the training loop restored the best
+  previous state before writing the final checkpoint.
 - Main log:
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_512_dropout/logs/rob124_no_audio_reward_conditioned_mask_lm_512d_dropout0p1_500ep_lr1e3.log`
 - Screen log:
@@ -70,8 +74,35 @@ Passed before queueing on 2026-05-23:
 
 The smoke reported `8.41M` trainable policy parameters and finished cleanly.
 The callback check confirmed `/usr/bin/python3.10`, Torch `2.6.0+cu124`, and
-the same wrapper callback path that will be used for the queued full run.
+the same wrapper callback path used by the full run.
 
-After successful training, run the fixed-length reward-control checkpoint-load
-sanity check at reward controls `0.0` and `1.0`, then compare dev loss against
-both the ROB-117 baseline and completed 384/dropout checkpoint.
+Post-training fixed-length reward-control checkpoint-load sanity passed:
+
+```bash
+bash -ic 'export TMPDIR=/exp/exp4/acp21rjf/rob124-512-scratch/tmp; mkdir -p "$TMPDIR"; export PYTHONPATH="$PWD:$PWD/exp:/exp/exp4/acp21rjf/long-context-asr:/exp/exp4/acp21rjf/language_modelling${PYTHONPATH:+:$PYTHONPATH}"; python exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scripts/post_training_sanity_check.py --config exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance_512d_dropout0p1_500ep_lr1e3.yaml --checkpoint /store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_512d_dropout0p1_500ep_lr1e3.pt --output exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_512_dropout/post_training_sanity_check_512d_dropout0p1_500ep_lr1e3.json'
+```
+
+Artifact:
+`exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_512_dropout/post_training_sanity_check_512d_dropout0p1_500ep_lr1e3.json`
+
+Result on `/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt`:
+
+- Checkpoint loaded on CPU.
+- Reward `0.0` and `1.0` both generated exactly `29` VQ tokens.
+- Decoded masks and augmented audio matched `[1, 80, 1042]`.
+- Reward `0.0` mask active fraction: `0.30000001192092896`.
+- Reward `1.0` mask active fraction: `1.0`.
+- Reward `0.0` vs `1.0` greedy generation mismatch: `29/29` tokens.
+
+## Comparison
+
+- ROB-117 best available standalone dev loss: `2.653739192269065`.
+- ROB-124 384/dropout best logged dev loss: `2.6247272274710913`.
+- ROB-124 512/dropout best logged dev loss: `2.6258603876287285`.
+- 512/dropout delta vs ROB-117: `-0.027878804640336745`.
+- 512/dropout delta vs 384/dropout: `+0.0011331601576371786`.
+
+The 512/dropout checkpoint is loadable and usable for downstream eval/oracle
+comparison, but it does not improve the held-out LM loss over the completed
+384/dropout checkpoint. The 384/dropout policy remains the better current
+capacity point from LM dev loss and the matched ROB-120-style Earnings eval.

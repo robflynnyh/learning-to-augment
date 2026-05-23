@@ -241,3 +241,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   validated `with-gpu 1,2` callback wrapper. The full run was queued on
   2026-05-23 as screen `rob124-reward-conditioned-mask-lm-512d-dropout0p1`,
   ticket `32c3350a`, from commit `c36c89ee6ea5ef5be0433cd8c404026fc3009c0f`.
+- Completed the ROB-124 512-dim/dropout follow-up. The callback-backed Mimas
+  run wrote
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_512d_dropout0p1_500ep_lr1e3.pt`;
+  post-training fixed-length reward `0.0`/`1.0` sanity passed with `29/29`
+  reward-control token mismatches. Its best logged dev loss `2.625860` still
+  improves over the ROB-117 resumed baseline `2.653739`, but is slightly worse
+  than the ROB-124 384/dropout checkpoint's `2.624727`, so the 384/dropout
+  model remains the better current capacity point.
