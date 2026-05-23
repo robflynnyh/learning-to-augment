@@ -249,3 +249,13 @@ reproduce results, interpret metrics, or avoid known failure modes.
   improves over the ROB-117 resumed baseline `2.653739`, but is slightly worse
   than the ROB-124 384/dropout checkpoint's `2.624727`, so the 384/dropout
   model remains the better current capacity point.
+- Started the ROB-124 RMM proposal plus reward-1 LM-rerank eval requested after
+  the 384/dropout checkpoint was confirmed as the preferred model. The new
+  policy generates 15 RMM candidate masks at each adaptation step, encodes each
+  mask with the mask BVAE, scores the VQ tokens with the 384/dropout
+  reward-conditioned mask LM at fixed reward `1.0`, then uses the lowest-CE
+  mask. The result root is
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_rmm_lm_rerank/`.
+  Prequeue checks included config generation, callback check-only, a synthetic
+  15-candidate policy augment smoke, and a cropped CPU Earnings multistep
+  rollout smoke under bashrc Python 3.10 / Torch 2.6.
