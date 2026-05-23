@@ -230,3 +230,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_384d_dropout0p1_500ep_lr1e3.pt`
   with `hidden_dim: 384` and `dropout: 0.1`; the result root is
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_earnings_reward_controls/`.
+- Added the ROB-124 512-dim/dropout follow-up scaffold after the latest Linear
+  comment requested another capacity comparison. It keeps the completed
+  384/dropout contract but sets `hidden_dim: 512`, writes to
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_512_dropout/`,
+  and uses checkpoint path
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_512d_dropout0p1_500ep_lr1e3.pt`.
+  The one-file smoke passed under the bashrc Python 3.10/Torch 2.6 path with
+  CUDA hidden because all Mimas GPUs were busy; the full run should use the
+  validated `with-gpu 1,2` callback wrapper.
