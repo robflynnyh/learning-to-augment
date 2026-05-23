@@ -34,7 +34,7 @@ The active checkout was verified to contain the ROB-117 merge commit before the
   - degenerate reward groups: `0.5`
   - no-audio training on saved VQ `generation` sequences
 
-## Planned Run
+## Queued Run
 
 - Result root:
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_512_dropout/`
@@ -53,12 +53,32 @@ Queue command:
 screen -L -Logfile /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-124/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_512_dropout/logs/rob124_no_audio_reward_conditioned_mask_lm_512d_dropout0p1_500ep_lr1e3.screen.log -dmS rob124-reward-conditioned-mask-lm-512d-dropout0p1 bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-124 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob124_reward_conditioned_mask_lm_training_512d_dropout0p1.sh'
 ```
 
+Queued on Mimas at 2026-05-23 17:42 UTC.
+
+- Screen: `rob124-reward-conditioned-mask-lm-512d-dropout0p1`
+- Queue ticket: `32c3350a`
+- Pool: `1,2`
+- Queued commit: `c36c89ee6ea5ef5be0433cd8c404026fc3009c0f`
+- Completion callback target state: `Todo`
+- Queue status at handoff: waiting behind one pool `1,2` ticket
+
 Expected full-run logs:
 
 - Main log:
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_512_dropout/logs/rob124_no_audio_reward_conditioned_mask_lm_512d_dropout0p1_500ep_lr1e3.log`
 - Screen log:
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_512_dropout/logs/rob124_no_audio_reward_conditioned_mask_lm_512d_dropout0p1_500ep_lr1e3.screen.log`
+
+Completion check:
+
+```bash
+cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-124
+/store/store5/software/simple-gpu-schedule/with-gpu --status
+screen -ls | rg 'rob124-reward-conditioned-mask-lm-512d-dropout0p1'
+tail -80 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_512_dropout/logs/rob124_no_audio_reward_conditioned_mask_lm_512d_dropout0p1_500ep_lr1e3.screen.log
+tail -80 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_512_dropout/logs/rob124_no_audio_reward_conditioned_mask_lm_512d_dropout0p1_500ep_lr1e3.log
+ls -lh /store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_512d_dropout0p1_500ep_lr1e3.pt
+```
 
 ## Prequeue Validation
 

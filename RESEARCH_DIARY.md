@@ -238,4 +238,6 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_512d_dropout0p1_500ep_lr1e3.pt`.
   The one-file smoke passed under the bashrc Python 3.10/Torch 2.6 path with
   CUDA hidden because all Mimas GPUs were busy; the full run should use the
-  validated `with-gpu 1,2` callback wrapper.
+  validated `with-gpu 1,2` callback wrapper. The full run was queued on
+  2026-05-23 as screen `rob124-reward-conditioned-mask-lm-512d-dropout0p1`,
+  ticket `32c3350a`, from commit `c36c89ee6ea5ef5be0433cd8c404026fc3009c0f`.
