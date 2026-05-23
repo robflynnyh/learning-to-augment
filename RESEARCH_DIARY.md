@@ -259,3 +259,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   Prequeue checks included config generation, callback check-only, a synthetic
   15-candidate policy augment smoke, and a cropped CPU Earnings multistep
   rollout smoke under bashrc Python 3.10 / Torch 2.6.
+- Completed the ROB-124 RMM proposal plus reward-1 LM-rerank eval. The
+  callback-backed Mimas run exited with status `0` and wrote
+  `rob124_384_dropout_rmm_lm_rerank.csv` plus `OUTCOME.md`; updated WER was
+  `0.202377` from original WER `0.235239`. This is better than unadapted
+  Earnings-22 but worse than the previous ROB-124 fixed reward `1.0` condition
+  (`+0.006923` absolute WER) and worse than the best prior ROB-124 condition
+  (`+0.007434`), so direct reward-conditioned sampling remains the stronger
+  use of the 384/dropout checkpoint for this matched eval.

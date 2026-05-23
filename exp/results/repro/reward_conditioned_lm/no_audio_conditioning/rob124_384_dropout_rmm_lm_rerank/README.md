@@ -21,6 +21,9 @@ The callback-backed launcher is:
 scripts/launch_rob124_384_dropout_rmm_lm_rerank.sh
 ```
 
+Status: completed successfully on 2026-05-23 via
+`screen:rob124-384-dropout-rmm-lm-rerank`, with callback exit status `0`.
+
 Queued full-run command:
 
 ```text
@@ -28,8 +31,23 @@ screen -L -Logfile /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/RO
 ```
 
 The wrapper writes generated configs, the raw eval text result, a CSV summary,
-and `OUTCOME.md` under this directory. While the detached run is pending, this
-directory should be treated as a queued-run scaffold rather than a final result.
+and `OUTCOME.md` under this directory.
+
+Final result:
+
+```text
+Original WER: 0.235239
+Updated WER:  0.202377
+WER delta:   -0.032862
+```
+
+The rerank policy improves substantially over unadapted Earnings-22, but it is
+worse than the prior ROB-124 reward-control evals: `+0.006923` absolute WER
+versus the ROB-124 fixed reward `1.0` condition, `+0.007434` versus the best
+ROB-124 prior condition, and `+0.004758` versus the ROB-120 fixed reward `1.0`
+baseline. The 384/dropout checkpoint remains the preferred model, but this
+specific RMM/LM CE-rerank proposal selector is not better than direct
+reward-conditioned sampling for this matched Earnings comparison.
 
 Prequeue validation:
 
