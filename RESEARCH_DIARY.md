@@ -275,3 +275,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   This setup also fixes `RewardConditionedMaskLM.augment` so adaptation-time
   calls honor `conditioning_reward_range`; without that fix, the new sampled
   reward eval would use the default fixed reward instead.
+- Paused that all-dataset follow-up before it started after the later Linear
+  comments asked whether previous sampled-reward comparisons were wrong and
+  suggested redoing the matched comparison first. The queued all-dataset ticket
+  was cancelled, and a corrected Earnings-22 rerun root was added at
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_earnings_reward_controls_corrected_sampling/`.
+  The corrected wrapper reuses the original ROB-124 Earnings reward-control
+  launcher but writes to a separate root and uses the fixed reward-range
+  sampling path.
