@@ -2300,7 +2300,11 @@ class RewardConditionedMaskLM(Policy):
         downsampled_lengths = self.mask_enc.calc_downsampled_length(lengths)
         target_prediction_steps = int(downsampled_lengths[0].item())
         if conditioning_reward is None:
-            conditioning_reward = self.default_conditioning_reward
+            if self.conditioning_reward_range is None:
+                conditioning_reward = self.default_conditioning_reward
+            else:
+                low, high = self.conditioning_reward_range
+                conditioning_reward = torch.empty(1, device=audio.device).uniform_(low, high).item()
 
         mask_pred, generation = self.generate(
             conditioning_reward=conditioning_reward,

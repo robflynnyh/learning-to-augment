@@ -267,3 +267,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   (`+0.006923` absolute WER) and worse than the best prior ROB-124 condition
   (`+0.007434`), so direct reward-conditioned sampling remains the stronger
   use of the 384/dropout checkpoint for this matched eval.
+- Started the 2026-05-24 ROB-124 all-dataset follow-up requested after ROB-108:
+  evaluate the preferred 384/dropout checkpoint with reward sampled from
+  `[0.5, 1.0]` on TED-LIUM, Earnings22, CHiME-6, Rev16, and TAL test splits for
+  1 and 5 adaptation epochs at `lr=1e-5`. The result root is
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling/`.
+  This setup also fixes `RewardConditionedMaskLM.augment` so adaptation-time
+  calls honor `conditioning_reward_range`; without that fix, the new sampled
+  reward eval would use the default fixed reward instead.
