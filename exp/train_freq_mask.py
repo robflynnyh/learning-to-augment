@@ -51,17 +51,17 @@ def train_policy(
         prev_val_cer = float('inf')
         prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
 
-        cur_epoch = 0
+        cur_epoch = int(config['training'].get('start_epoch', 0))
         max_tolerance = config['training'].get('tolerance', 2)
         remaining_tolerance = max_tolerance
         running = True
         max_steps = config['training'].get('max_steps', -1)
 
-        val_losses = []
         while running:
             
             policy = policy.eval()
             
+            val_losses = []
             pbar = tqdm(dev_dataloader)
             for i, batch in enumerate(pbar):
                 if batch == None: continue
@@ -128,20 +128,38 @@ def prepare_data(config, split='train'):
     for rollout_dir in rollout_dirs:
         rollout_directory = os.path.join(rollout_dir, split)
 
-        all_rollouts_cur = os.listdir(rollout_directory)
+        all_rollouts_cur = sorted(os.listdir(rollout_directory))
         all_rollouts_cur = [el for el in all_rollouts_cur if el.endswith('.pt')]
         all_rollouts_cur = [os.path.join(rollout_directory, el) for el in all_rollouts_cur]
 
         all_rollouts.extend(all_rollouts_cur)
 
+    max_files = config.get('generation', {}).get(f'{split}_max_files', None)
+    if max_files is None:
+        max_files = config.get('generation', {}).get('max_files_per_split', None)
+    if max_files is not None:
+        all_rollouts = all_rollouts[:int(max_files)]
+
     return all_rollouts
 
 def main(config):
-    wandb.init(project="l2augment")
+    wandb_kwargs = {'project': config.get('training', {}).get('wandb_project', 'l2augment')}
+    if config.get('training', {}).get('wandb_mode', None) is not None:
+        wandb_kwargs['mode'] = config['training']['wandb_mode']
+    if config.get('training', {}).get('wandb_id', None) is not None:
+        wandb_kwargs['id'] = config['training']['wandb_id']
+    if config.get('training', {}).get('wandb_resume', None) is not None:
+        wandb_kwargs['resume'] = config['training']['wandb_resume']
+    wandb.init(**wandb_kwargs)
 
     policy = load_rl_models(config=config) 
     policy_path = config['training']['model_save_path']
-    if os.path.exists(policy_path):
+    resume_policy_path = config.get('training', {}).get('resume_model_path', None)
+    if resume_policy_path is not None:
+        if not os.path.exists(resume_policy_path):
+            raise FileNotFoundError(f"Configured resume_model_path does not exist: {resume_policy_path}")
+        load_policy(policy, config, path=resume_policy_path)
+    elif os.path.exists(policy_path):
         load_policy(policy, config)
 
     device = config.get('training',{}).get('device', 'cuda')
@@ -202,6 +220,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = OmegaConf.load(args.config)
     main(config)
-
-
-

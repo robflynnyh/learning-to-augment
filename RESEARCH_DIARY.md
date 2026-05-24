@@ -139,8 +139,80 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `/store/store4/data/l2augment_rollout_uvqmlm/`. The wrapper uses a real
   `EXIT` trap, logs store4 space before copying, and can be resumed with the
   same command if interrupted.
-2026-05-21 - ROB-108 setup: added a dedicated Mimas wrapper and summarizer for
-test-split RFM/RMM/UFMR/UVQLM evals across TED-LIUM, Earnings22, CHiME-6,
-Rev16, and TAL. Result root is
-`exp/results/repro/sweeps/rob108_test_policy_evals/`; repeat-aware rows are
-kept in `rob108_test_policy_evals.csv` and `OUTCOME.md`.
+## 2026-05-21
+
+- ROB-108 setup: added a dedicated Mimas wrapper and summarizer for test-split
+  RFM/RMM/UFMR/UVQLM evals across TED-LIUM, Earnings22, CHiME-6, Rev16, and
+  TAL. Result root is `exp/results/repro/sweeps/rob108_test_policy_evals/`;
+  repeat-aware rows are kept in `rob108_test_policy_evals.csv` and
+  `OUTCOME.md`.
+- Verified ROB-109 UVQLM dev rollout provenance and reward tensor semantics in
+  `exp/results/repro/unconditional_lm/ROB-109_rollout_verification/OUTCOME.md`.
+  The Mimas UMLM/BVAE checkpoints are byte-identical to the Stanage checkpoint
+  paths used by the original UMLM generation config, and the synced dev rollout
+  files use reward shape `(10, 2, 2)` as 10 masks by `[CER, WER]` by
+  `[before, after]`.
+- Extended ROB-109 after review with behavior-level VQ-sequence verification:
+  `exp/results/scripts/verify_rob109_uvqlm_rollout_sequences.py` re-decodes all
+  5,070 saved dev `generation` sequences through the current Mimas BVAE
+  checkpoint and scores them with the current Mimas UMLM checkpoint. The summary
+  JSON in the ROB-109 result directory records 12 mismatched mask pixels out of
+  460,274,400 and saved-sequence mean NLL `2.8811` versus random-code mean NLL
+  `10.7293`.
+- Added the ROB-111 review plan for a no-audio reward-conditioned mask LM under
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/`. The plan
+  trains from saved ROB-109 VQ `generation` sequences, keeps the large rollout
+  dataset in place, uses per-utterance WER-delta controls, and uses
+  fixed-length audio-derived generation without EOS supervision.
+- Implemented the ROB-114 no-audio reward-conditioned mask LM path:
+  `RewardConditionedMaskLMDataset`, `RewardConditionedMaskLM` collate,
+  `RewardConditionedMaskLM`, active full/smoke configs, and smoke validation
+  script under
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/`. The model
+  conditions the first decoder input on normalized reward and trains only on
+  fixed-length saved VQ generations, without EOS targets.
+- Validated the initial ROB-114 implementation with the Torch 2.8 `speech-diff`
+  environment: 2-file
+  train/dev stats, finite CPU CE/backward, fixed 7-token generation at two
+  reward values, real-rollout augment length check, and a one-file
+  `exp/train_freq_mask.py` smoke with W&B disabled.
+- Addressed ROB-114 PR review by switching reward controls to bounded per-file
+  min-max normalization with degenerate groups mapped to `0.5`, using multistep
+  evaluation in the active config, increasing full-run early-stop tolerance to
+  5, and validating the path in the normal `flash_attn_pytorch2` project env.
+- Removed the remaining ROB-114 import/load guards after PR review: `lcasr`,
+  `torchaudio`, and `eval` now fail at import time as in the project env, and
+  ROB-109 rollout files are loaded with the normal `torch.load` path. The
+  no-guard direct-load validation was rerun under the bashrc Python 3.10 /
+  Torch `2.6.0+cu124` runtime.
+- Resolved the ROB-114 environment command docs to use `bash -ic python`, where
+  `python` is aliased to `/usr/bin/python3.10`, and set trusted local policy
+  checkpoint loads to `weights_only=False` for Torch 2.6.
+- Completed ROB-117 training for the no-audio reward-conditioned mask LM. The
+  corrected 100-epoch Mimas run wrote
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt`;
+  the first failure was a DataLoader `AF_UNIX path too long` issue fixed by
+  using `/exp/exp4/acp21rjf/rob117-scratch`.
+- Ran the requested resume-from-100 follow-up with LR `1e-3`, target epoch cap
+  `500`, and resumed W&B run `5ny25k7g`. Early stopping restored the first
+  resumed state, so
+  `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt` is usable for
+  downstream eval/oracle comparison but not evidence of improvement over the
+  100-epoch checkpoint.
+- Fixed validation logging in `exp/train_freq_mask.py` so future dev losses are
+  per-validation-pass values. Older ROB-117 logs were cumulative within each
+  process; reconstructed resumed-run losses still support the rollback decision.
+- Added small post-training diagnostics for fixed-length reward-controlled
+  generation, sampled reward `0.0` vs `1.0` masks, and a three-recording
+  adaptation-WER check. The 10-mask sample now has committed PDF/PNG
+  visualizations under
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/`.
+- Set up ROB-120 Earnings-22 reward-control evaluation for the ROB-117
+  `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt` checkpoint. The
+  result root is
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob120_earnings_reward_controls/`;
+  the wrapper generates fixed `0.0`, fixed `1.0`, uniform `[0.0, 1.0]`, and
+  uniform `[0.5, 1.0]` configs, then evaluates Earnings test adaptation at
+  `lr=1e-5`. Checkpoint-load/generation preflight and a cropped Earnings CPU
+  adaptation smoke passed; the full GPU comparison should be interpreted only
+  from the wrapper-generated CSV/`OUTCOME.md`, not from the cropped smoke.

@@ -1,0 +1,118 @@
+{
+  "input": "exp/results/repro/reward_conditioned_lm/no_audio_conditioning/post_training_10_sampled_masks_reward_0_vs_1.pt",
+  "grid_path_png": "reward_conditioned_mask_samples_grid.png",
+  "grid_path_pdf": "reward_conditioned_mask_samples_grid.pdf",
+  "num_samples": 10,
+  "samples": [
+    {
+      "sample_index": 0,
+      "conditioning_reward": 0.0,
+      "mask_path_png": "samples/sample_00_reward_0p0_mask.png",
+      "mask_path_pdf": "samples/sample_00_reward_0p0_mask.pdf",
+      "mask_shape": [
+        80,
+        1042
+      ],
+      "mask_active_fraction": 0.06487523764371872
+    },
+    {
+      "sample_index": 1,
+      "conditioning_reward": 0.0,
+      "mask_path_png": "samples/sample_01_reward_0p0_mask.png",
+      "mask_path_pdf": "samples/sample_01_reward_0p0_mask.pdf",
+      "mask_shape": [
+        80,
+        1042
+      ],
+      "mask_active_fraction": 0.1113123819231987
+    },
+    {
+      "sample_index": 2,
+      "conditioning_reward": 0.0,
+      "mask_path_png": "samples/sample_02_reward_0p0_mask.png",
+      "mask_path_pdf": "samples/sample_02_reward_0p0_mask.pdf",
+      "mask_shape": [
+        80,
+        1042
+      ],
+      "mask_active_fraction": 0.2344289869070053
+    },
+    {
+      "sample_index": 3,
+      "conditioning_reward": 0.0,
+      "mask_path_png": "samples/sample_03_reward_0p0_mask.png",
+      "mask_path_pdf": "samples/sample_03_reward_0p0_mask.pdf",
+      "mask_shape": [
+        80,
+        1042
+      ],
+      "mask_active_fraction": 0.8990882635116577
+    },
+    {
+      "sample_index": 4,
+      "conditioning_reward": 0.0,
+      "mask_path_png": "samples/sample_04_reward_0p0_mask.png",
+      "mask_path_pdf": "samples/sample_04_reward_0p0_mask.pdf",
+      "mask_shape": [
+        80,
+        1042
+      ],
+      "mask_active_fraction": 0.09582533687353134
+    },
+    {
+      "sample_index": 5,
+      "conditioning_reward": 1.0,
+      "mask_path_png": "samples/sample_05_reward_1p0_mask.png",
+      "mask_path_pdf": "samples/sample_05_reward_1p0_mask.pdf",
+      "mask_shape": [
+        80,
+        1042
+      ],
+      "mask_active_fraction": 0.9198896288871765
+    },
+    {
+      "sample_index": 6,
+      "conditioning_reward": 1.0,
+      "mask_path_png": "samples/sample_06_reward_1p0_mask.png",
+      "mask_path_pdf": "samples/sample_06_reward_1p0_mask.pdf",
+      "mask_shape": [
+        80,
+        1042
+      ],
+      "mask_active_fraction": 0.30460652709007263
+    },
+    {
+      "sample_index": 7,
+      "conditioning_reward": 1.0,
+      "mask_path_png": "samples/sample_07_reward_1p0_mask.png",
+      "mask_path_pdf": "samples/sample_07_reward_1p0_mask.pdf",
+      "mask_shape": [
+        80,
+        1042
+      ],
+      "mask_active_fraction": 0.3415786921977997
+    },
+    {
+      "sample_index": 8,
+      "conditioning_reward": 1.0,
+      "mask_path_png": "samples/sample_08_reward_1p0_mask.png",
+      "mask_path_pdf": "samples/sample_08_reward_1p0_mask.pdf",
+      "mask_shape": [
+        80,
+        1042
+      ],
+      "mask_active_fraction": 0.7191458940505981
+    },
+    {
+      "sample_index": 9,
+      "conditioning_reward": 1.0,
+      "mask_path_png": "samples/sample_09_reward_1p0_mask.png",
+      "mask_path_pdf": "samples/sample_09_reward_1p0_mask.pdf",
+      "mask_shape": [
+        80,
+        1042
+      ],
+      "mask_active_fraction": 0.2929942309856415
+    }
+  ]
+}

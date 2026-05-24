@@ -1,0 +1,54 @@
+checkpointing:
+  asr_model: /store/store5/data/acp21rjf_checkpoints/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt
+
+training:
+  device: cuda
+  random_seed: 123456
+  batch_size: 48
+  epochs: 500
+  tolerance: 5
+  num_workers: 8
+  prefetch_factor: 4
+  wandb_project: l2augment
+  model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_500ep_lr1e3.pt
+  tmp_model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_500ep_lr1e3_tmp.pt
+
+evaluation:
+  id: ROB-117-reward-conditioned-mask-lm-tedlium-dev-500ep-lr1e3
+  dataset: tedlium
+  split: dev
+  rollout_fn: multistep
+  use_cer: false
+  epochs: 1
+  augmentation_config:
+    conditioning_reward: 1.0
+    sample: true
+  optim_args:
+    lr: 1e-5
+  save_path: exp/results/repro/reward_conditioned_lm/no_audio_conditioning/tedlium_dev_eval_500ep_lr1e3.txt
+
+collate_function: RewardConditionedMaskLM
+dataset_class: RewardConditionedMaskLMDataset
+
+dataset:
+  reward_metric: wer
+  normalization: per_utterance_minmax
+  degenerate_range_eps: 1e-6
+  degenerate_value: 0.5
+
+policy:
+  lr: 1e-3
+  class: RewardConditionedMaskLM
+  config:
+    hidden_dim: 256
+    default_conditioning_reward: 1.0
+    reward_encoder: timestep
+    sample_generation: true
+    mask_vae_state_dict_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/bvae/bvae_USINGTHISFORNOW_2048gpu.pt
+    mask_vae_config:
+      latent_dim: 128
+      codebook_size: 2048
+      use_vq: true
+
+generation:
+  save_dir: /store/store4/data/l2augment_rollout_uvqmlm

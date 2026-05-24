@@ -1,0 +1,77 @@
+{
+  "config": "exp/configs/reward_conditioned_lm/no_audio_conditioning/tedlium_per_utterance.yaml",
+  "checkpoint": "/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance.pt",
+  "checkpoint_bytes": 20842210,
+  "policy_checkpoint_config_id": "ROB-114-reward-conditioned-mask-lm-tedlium-dev",
+  "tedlium_base": "/store/store4/data/TEDLIUM_release-3/legacy/",
+  "split": "dev",
+  "recording_ids": [
+    "AlGore_2009",
+    "BarrySchwartz_2005G",
+    "BlaiseAguerayArcas_2007"
+  ],
+  "rewards": [
+    0.0,
+    1.0
+  ],
+  "sample": true,
+  "epochs": 1,
+  "lr": 1e-05,
+  "seed": 20260522,
+  "results": [
+    {
+      "recording_id": "AlGore_2009",
+      "dataset_index": 3,
+      "conditioning_reward": 0.0,
+      "num_utterances": 46,
+      "original_wer": 0.13350340136054423,
+      "updated_wer": 0.12414965986394558,
+      "wer_delta_updated_minus_original": -0.00935374149659865
+    },
+    {
+      "recording_id": "AlGore_2009",
+      "dataset_index": 3,
+      "conditioning_reward": 1.0,
+      "num_utterances": 46,
+      "original_wer": 0.13350340136054423,
+      "updated_wer": 0.12244897959183673,
+      "wer_delta_updated_minus_original": -0.011054421768707495
+    },
+    {
+      "recording_id": "BarrySchwartz_2005G",
+      "dataset_index": 0,
+      "conditioning_reward": 0.0,
+      "num_utterances": 106,
+      "original_wer": 0.05133657351154314,
+      "updated_wer": 0.04860267314702309,
+      "wer_delta_updated_minus_original": -0.0027339003645200505
+    },
+    {
+      "recording_id": "BarrySchwartz_2005G",
+      "dataset_index": 0,
+      "conditioning_reward": 1.0,
+      "num_utterances": 106,
+      "original_wer": 0.05133657351154314,
+      "updated_wer": 0.04678007290400972,
+      "wer_delta_updated_minus_original": -0.0045565006075334175
+    },
+    {
+      "recording_id": "BlaiseAguerayArcas_2007",
+      "dataset_index": 5,
+      "conditioning_reward": 0.0,
+      "num_utterances": 42,
+      "original_wer": 0.148721399730821,
+      "updated_wer": 0.13728129205921938,
+      "wer_delta_updated_minus_original": -0.011440107671601613
+    },
+    {
+      "recording_id": "BlaiseAguerayArcas_2007",
+      "dataset_index": 5,
+      "conditioning_reward": 1.0,
+      "num_utterances": 42,
+      "original_wer": 0.148721399730821,
+      "updated_wer": 0.13997308209959622,
+      "wer_delta_updated_minus_original": -0.008748317631224772
+    }
+  ]
+}

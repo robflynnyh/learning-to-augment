@@ -1,0 +1,76 @@
+{
+  "train_stats": {
+    "files": 2,
+    "samples": 20,
+    "degenerate_reward_groups": 0,
+    "finite_normalized_rewards": true,
+    "finite_raw_rewards": true,
+    "normalized_rewards_in_unit_interval": true,
+    "normalized_reward_min": 0.0,
+    "normalized_reward_max": 1.0,
+    "generation_lengths": [
+      2,
+      24
+    ]
+  },
+  "dev_stats": {
+    "files": 2,
+    "samples": 20,
+    "degenerate_reward_groups": 0,
+    "finite_normalized_rewards": true,
+    "finite_raw_rewards": true,
+    "normalized_rewards_in_unit_interval": true,
+    "normalized_reward_min": 0.0,
+    "normalized_reward_max": 1.0,
+    "generation_lengths": [
+      29,
+      48
+    ]
+  },
+  "model_smoke": {
+    "loss": 7.714467525482178,
+    "logged_losses": {
+      "loss": 7.714467525482178,
+      "total_loss": 7.714467525482178
+    },
+    "fixed_length_generation_steps": 7,
+    "fixed_length_generations": {
+      "0.0": [
+        1362,
+        1362,
+        1180,
+        1180,
+        246,
+        246,
+        246
+      ],
+      "1.0": [
+        1180,
+        1242,
+        1242,
+        1242,
+        205,
+        1311,
+        1311
+      ]
+    }
+  },
+  "augment_smoke": {
+    "source_path": "/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt",
+    "audio_frames": 1042,
+    "audio_derived_generation_length": 29,
+    "metadata_generation_length": 29,
+    "generated_tokens": 29,
+    "mask_shape": [
+      1,
+      80,
+      1042
+    ],
+    "augmented_shape": [
+      1,
+      80,
+      1042
+    ],
+    "conditioning_reward": 1.0
+  }
+}
