@@ -283,3 +283,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   The corrected wrapper reuses the original ROB-124 Earnings reward-control
   launcher but writes to a separate root and uses the fixed reward-range
   sampling path.
+- Completed the corrected ROB-124 Earnings-22 matched reward-control rerun on
+  2026-05-24. All four cells completed; true uniform `[0.5, 1.0]` was best at
+  updated WER `0.194433`, beating the matched ROB-120 row by `0.002001`
+  absolute WER. This supports resuming the paused all-dataset `[0.5, 1.0]`
+  sampled-reward eval for the 384/dropout checkpoint.

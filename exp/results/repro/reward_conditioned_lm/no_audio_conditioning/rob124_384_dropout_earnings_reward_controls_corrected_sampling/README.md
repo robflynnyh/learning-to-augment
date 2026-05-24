@@ -16,6 +16,16 @@ Scope:
 - Result CSV: `rob124_384_dropout_earnings_reward_controls.csv`.
 - Outcome: `OUTCOME.md`.
 
+Status:
+
+- Completed via callback-backed Mimas `screen` run on 2026-05-24.
+- All four matched Earnings-22 reward-control conditions completed.
+- The corrected true sampled `[0.5, 1.0]` condition was the best ROB-124 row
+  at updated WER `0.194433`, beating the matched ROB-120 row by `0.002001`
+  absolute WER.
+- This corrected small comparison supports resuming the paused all-dataset
+  sampled-reward follow-up.
+
 The wrapper is:
 
 ```bash

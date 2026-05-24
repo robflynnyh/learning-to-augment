@@ -1,0 +1,1 @@
+ID: ROB-124-earnings22-test-384d-dropout0p1-RewardConditionedMaskLMReward1-epoch1-lr1e-5 - Dataset: earnings22 - Split: test - Epochs: 1 - Original_WER: 0.2352184302432449 - Updated_WER: 0.19674039580908032

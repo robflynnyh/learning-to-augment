@@ -8,7 +8,7 @@
 - Datasets: `tedlium`, `earnings22`, `chime6`, `rev16`, `TAL`; all `test` split
 - Adaptation: `epochs=1` and `epochs=5`, `lr=1e-5`, multistep rollout
 - Branch: `symphony/ROB-124-384-dropout-mask-lm`
-- Commit: `41372c442cf27f6b8215bd74e37784d404399b0d`
+- Commit: `1d5609134199f89bdf117b9002d671b53d744852`
 - Main log: `/exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-124/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling/logs/rob124_384_dropout_all_dataset_reward_sampling.log`
 - Screen log: `/exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-124/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling/logs/rob124_384_dropout_all_dataset_reward_sampling.screen.log`
 - Queued command: `screen -L -Logfile /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-124/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling/logs/rob124_384_dropout_all_dataset_reward_sampling.screen.log -dmS rob124-384-dropout-all-dataset-sampling bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-124 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob124_384_dropout_all_dataset_reward_sampling.sh'`
