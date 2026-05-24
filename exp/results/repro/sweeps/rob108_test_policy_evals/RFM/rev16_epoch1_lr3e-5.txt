@@ -1,0 +1,1 @@
+ID: ROB-108-rev16-test-RFM-rev16_epoch1_lr3e-5-repeat1 - Dataset: rev16 - Split: test - Epochs: 1 - Original_WER: 0.17250922980294434 - Updated_WER: 0.16829135028314943
