@@ -1,0 +1,51 @@
+# ROB-132 Audio SSL-Conditioned Mask LM
+
+This experiment extends the ROB-124 reward-conditioned mask LM from
+`p(mask | reward)` to `p(mask | reward, SSL)`.
+
+## Planned Model
+
+- Policy class: `AudioRewardConditionedMaskLM`
+- Audio representation: frozen torchaudio `HUBERT_BASE` SSL features
+- Decoder: 4-layer causal transformer, `hidden_dim=384`, `num_heads=8`,
+  dropout `0.1`, rotary self-attention, cross-attention over projected SSL
+  features
+- Mask target: same binary mask VAE codebook sequence used by ROB-124
+- Reward normalization: ROB-124 per-utterance WER min-max normalization, with
+  degenerate reward groups mapped to `0.5`
+
+## Storage Policy
+
+The SSL model is frozen. Full-rate SSL features are not committed and are not
+stored under `/store/store4`. The cache builder stores only mask-token-aligned
+fp16 sidecars under:
+
+```text
+/store/store5/data/acp21rjf_checkpoints/l2augment/ssl_feature_cache/rob132_hubert_base_tedlium_per_utterance/
+```
+
+Training keeps only two model files: one final checkpoint and one overwritten
+temporary/best-so-far checkpoint.
+
+## Main Configs
+
+- Full training config:
+  `exp/configs/reward_conditioned_lm/audio_ssl_conditioning/tedlium_per_utterance_hubert_base_transformer384_dropout0p1_500ep_lr1e3.yaml`
+- Smoke config:
+  `exp/configs/reward_conditioned_lm/audio_ssl_conditioning/tedlium_per_utterance_hubert_base_transformer384_dropout0p1_smoke.yaml`
+- Launch wrapper:
+  `scripts/launch_rob132_audio_ssl_mask_lm_training.sh`
+
+## Full Launch Command
+
+```bash
+screen -L -Logfile /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-132/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/logs/rob132_audio_ssl_hubert_base_transformer384_dropout0p1_500ep_lr1e3.screen.log -dmS rob132-audio-ssl-mask-lm-transformer384 bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-132 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob132_audio_ssl_mask_lm_training.sh'
+```
+
+## Initial Caveat
+
+The ROB-124 rollout files contain 80-channel spectrogram tensors, not raw
+waveform. The SSL cache builder maps TED-LIUM rollout filenames back to STM
+utterance indices, loads the corresponding raw waveform segment from
+`/store/store4/data/TEDLIUM_release-3/legacy`, extracts HuBERT features, and
+interpolates them to the saved mask-token length.

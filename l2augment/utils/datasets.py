@@ -205,7 +205,45 @@ class RewardConditionedMaskLMDataset(Dataset):
             return None
 
 
+class AudioRewardConditionedMaskLMDataset(RewardConditionedMaskLMDataset):
+    def __init__(
+            self,
+            files,
+            ssl_cache_dir,
+            ssl_feature_key='ssl_features',
+            **kwargs,
+        ):
+        super().__init__(files, **kwargs)
+        self.ssl_cache_dir = ssl_cache_dir
+        self.ssl_feature_key = ssl_feature_key
+
+    def _cache_path(self, rollout_path):
+        split = os.path.basename(os.path.dirname(rollout_path))
+        return os.path.join(self.ssl_cache_dir, split, os.path.basename(rollout_path))
+
+    def __getitem__(self, idx):
+        item = super().__getitem__(idx)
+        if item is None:
+            return None
+        try:
+            cache_path = self._cache_path(item['source_path'])
+            if not os.path.exists(cache_path):
+                raise FileNotFoundError(f"Missing SSL cache sidecar: {cache_path}")
+            cached = torch.load(cache_path, map_location='cpu', weights_only=False)
+            audio_features = cached[self.ssl_feature_key].to(dtype=torch.float16)
+            if audio_features.ndim != 2:
+                raise ValueError(f"Expected 2D SSL features in {cache_path}, got {tuple(audio_features.shape)}")
+            item['audio_features'] = audio_features
+            item['audio_feature_length'] = torch.tensor(audio_features.shape[0], dtype=torch.long)
+            item['audio_feature_cache_path'] = cache_path
+            return item
+        except Exception as e:
+            self.logger(f"Error loading audio-conditioned mask LM data: {e}")
+            return None
+
+
 dataset_classes_dict['default'] = CustomDataset
 dataset_classes_dict['MultiStepDataset'] = MultiStepDataset
 dataset_classes_dict['MultiStepFMDataset'] = MultiStepFMDataset
 dataset_classes_dict['RewardConditionedMaskLMDataset'] = RewardConditionedMaskLMDataset
+dataset_classes_dict['AudioRewardConditionedMaskLMDataset'] = AudioRewardConditionedMaskLMDataset

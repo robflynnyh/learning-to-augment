@@ -1,0 +1,22 @@
+[
+  {
+    "status": "built",
+    "rollout": "/store/store4/data/l2augment_rollout_uvqmlm/train/911Mothers_2010W_0.pt",
+    "output": "exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/smoke/ssl_feature_cache/train/911Mothers_2010W_0.pt",
+    "shape": [
+      2,
+      768
+    ],
+    "seconds": 1.240000000000002
+  },
+  {
+    "status": "built",
+    "rollout": "/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt",
+    "output": "exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/smoke/ssl_feature_cache/dev/AlGore_2009_0.pt",
+    "shape": [
+      29,
+      768
+    ],
+    "seconds": 10.420000000000002
+  }
+]

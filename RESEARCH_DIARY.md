@@ -297,3 +297,14 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `1.000000`. The result supports the 384/dropout checkpoint and sampled
   reward `[0.5, 1.0]`, especially at 1 adaptation epoch, but longer adaptation
   should be treated as dataset-sensitive.
+- Started ROB-132 audio+reward-conditioned mask LM work from the ROB-124 PR
+  head because the implementation depends on ROB-124's dropout and
+  reward-range fixes. Added `AudioRewardConditionedMaskLM`, a 384-dim
+  transformer decoder with rotary self-attention and cross-attention to frozen
+  HuBERT-base SSL features. The HuBERT sidecar builder maps TED-LIUM rollout
+  filenames back to STM utterance indices, loads raw `.sph` segments from
+  `/store/store4/data/TEDLIUM_release-3/legacy`, and stores only
+  mask-token-aligned fp16 features under `/store/store5`. A CPU smoke of the
+  actual wrapper built two train/two dev sidecars, ran one tiny training epoch,
+  and saved a smoke checkpoint; deterministic generation sanity passed at
+  reward controls `0.0` and `1.0`.

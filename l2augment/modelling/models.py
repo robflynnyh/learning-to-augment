@@ -1,6 +1,7 @@
 from torch.nn import Module
 from torch import nn, Tensor
 import torch
+import math
 from einops import rearrange, repeat
 from lcasr.components.batchrenorm import BatchRenorm1d
 from torch.distributions import Normal
@@ -2346,6 +2347,371 @@ class RewardConditionedMaskLM(Policy):
         return ce_loss, {'loss': ce_loss, 'total_loss': ce_loss}
 
 
+def _rotate_half(x):
+    x_even = x[..., ::2]
+    x_odd = x[..., 1::2]
+    return torch.stack((-x_odd, x_even), dim=-1).flatten(-2)
+
+
+class RotaryEmbedding(nn.Module):
+    def __init__(self, dim, base=10000):
+        super().__init__()
+        if dim % 2 != 0:
+            raise ValueError("Rotary dimension must be even")
+        inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
+
+    def forward(self, seq_len, device, dtype):
+        positions = torch.arange(seq_len, device=device, dtype=self.inv_freq.dtype)
+        freqs = torch.einsum("i,j->ij", positions, self.inv_freq)
+        emb = torch.repeat_interleave(freqs, repeats=2, dim=-1)
+        return emb.cos().to(dtype=dtype), emb.sin().to(dtype=dtype)
+
+
+class AudioRewardConditionedTransformerBlock(nn.Module):
+    def __init__(self, hidden_dim, num_heads, ffn_dim, dropout=0.1, rotary_base=10000):
+        super().__init__()
+        if hidden_dim % num_heads != 0:
+            raise ValueError("hidden_dim must be divisible by num_heads")
+
+        self.hidden_dim = hidden_dim
+        self.num_heads = num_heads
+        self.head_dim = hidden_dim // num_heads
+
+        self.self_norm = nn.LayerNorm(hidden_dim)
+        self.self_qkv = nn.Linear(hidden_dim, hidden_dim * 3)
+        self.self_out = nn.Linear(hidden_dim, hidden_dim)
+        self.rotary = RotaryEmbedding(self.head_dim, base=rotary_base)
+
+        self.cross_norm = nn.LayerNorm(hidden_dim)
+        self.cross_q = nn.Linear(hidden_dim, hidden_dim)
+        self.cross_kv = nn.Linear(hidden_dim, hidden_dim * 2)
+        self.cross_out = nn.Linear(hidden_dim, hidden_dim)
+
+        self.ff_norm = nn.LayerNorm(hidden_dim)
+        self.ff = nn.Sequential(
+            nn.Linear(hidden_dim, ffn_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(ffn_dim, hidden_dim),
+        )
+        self.dropout = nn.Dropout(dropout)
+
+    def _split_heads(self, x):
+        b, t, _ = x.shape
+        return x.view(b, t, self.num_heads, self.head_dim).transpose(1, 2)
+
+    def _merge_heads(self, x):
+        b, _, t, _ = x.shape
+        return x.transpose(1, 2).contiguous().view(b, t, self.hidden_dim)
+
+    def _apply_rotary(self, q, k):
+        cos, sin = self.rotary(q.size(-2), q.device, q.dtype)
+        cos = cos[None, None, :, :]
+        sin = sin[None, None, :, :]
+        return (q * cos) + (_rotate_half(q) * sin), (k * cos) + (_rotate_half(k) * sin)
+
+    def forward(self, x, audio_memory, target_padding_mask=None, audio_padding_mask=None):
+        residual = x
+        h = self.self_norm(x)
+        q, k, v = self.self_qkv(h).chunk(3, dim=-1)
+        q, k, v = self._split_heads(q), self._split_heads(k), self._split_heads(v)
+        q, k = self._apply_rotary(q, k)
+
+        scale = 1.0 / math.sqrt(self.head_dim)
+        scores = torch.matmul(q, k.transpose(-1, -2)) * scale
+        seq_len = x.size(1)
+        causal_mask = torch.ones(seq_len, seq_len, dtype=torch.bool, device=x.device).triu(1)
+        scores = scores.masked_fill(causal_mask[None, None], -torch.finfo(scores.dtype).max)
+        if target_padding_mask is not None:
+            scores = scores.masked_fill(target_padding_mask[:, None, None, :], -torch.finfo(scores.dtype).max)
+        attn = torch.softmax(scores, dim=-1)
+        x = residual + self.dropout(self.self_out(self._merge_heads(torch.matmul(attn, v))))
+
+        residual = x
+        h = self.cross_norm(x)
+        q = self._split_heads(self.cross_q(h))
+        k, v = self.cross_kv(audio_memory).chunk(2, dim=-1)
+        k, v = self._split_heads(k), self._split_heads(v)
+        scores = torch.matmul(q, k.transpose(-1, -2)) * scale
+        if audio_padding_mask is not None:
+            scores = scores.masked_fill(audio_padding_mask[:, None, None, :], -torch.finfo(scores.dtype).max)
+        attn = torch.softmax(scores, dim=-1)
+        x = residual + self.dropout(self.cross_out(self._merge_heads(torch.matmul(attn, v))))
+
+        x = x + self.dropout(self.ff(self.ff_norm(x)))
+        return x
+
+
+class AudioRewardConditionedMaskLM(Policy):
+    def __init__(
+            self,
+            hidden_dim=384,
+            ssl_dim=768,
+            num_heads=8,
+            decoder_layers=4,
+            ffn_dim=None,
+            dropout=0.1,
+            rotary_base=10000,
+            mask_vae_config:Dict={},
+            mask_vae_state_dict_path:str=None,
+            default_conditioning_reward=0.0,
+            conditioning_reward_range=None,
+            reward_encoder='timestep',
+            sample_generation=True,
+            **kwargs
+        ) -> None:
+        super().__init__()
+
+        self.default_conditioning_reward = default_conditioning_reward
+        self.conditioning_reward_range = conditioning_reward_range
+        if self.conditioning_reward_range is not None:
+            if len(self.conditioning_reward_range) != 2:
+                raise ValueError("conditioning_reward_range must contain exactly two values")
+            low, high = sorted(float(item) for item in self.conditioning_reward_range)
+            self.conditioning_reward_range = (low, high)
+        self.sample_generation = sample_generation
+        self.hidden_dim = hidden_dim
+        self.ssl_dim = ssl_dim
+        self.dropout = float(dropout)
+
+        self.mask_enc = BinaryVariationalAutoEncoder(**mask_vae_config)
+        if mask_vae_state_dict_path is not None:
+            mask_vae_state_dict = torch.load(mask_vae_state_dict_path, map_location='cpu', weights_only=False)['model_state_dict']
+            self.mask_enc.load_state_dict(mask_vae_state_dict)
+            print(f'Loaded VAE state dict from {mask_vae_state_dict_path}')
+        self.mask_enc.eval()
+        for param in self.mask_enc.parameters():
+            param.requires_grad = False
+
+        self.codebook_size = self.mask_enc.VQ.codebook_size
+        self.embeddings = nn.Embedding(self.codebook_size + 1, hidden_dim, padding_idx=self.codebook_size)
+        self.audio_projection = nn.Sequential(
+            nn.LayerNorm(ssl_dim),
+            nn.Linear(ssl_dim, hidden_dim),
+        )
+
+        if reward_encoder == 'timestep':
+            self.reward_encoder = timestep_encoder(hidden_dim=hidden_dim)
+        elif reward_encoder == 'mlp':
+            self.reward_encoder = nn.Sequential(
+                nn.Linear(1, hidden_dim),
+                nn.SiLU(),
+                nn.Linear(hidden_dim, hidden_dim),
+            )
+        else:
+            raise ValueError(f"Unsupported reward encoder: {reward_encoder}")
+
+        ffn_dim = ffn_dim or hidden_dim * 4
+        self.decoder = nn.ModuleList([
+            AudioRewardConditionedTransformerBlock(
+                hidden_dim=hidden_dim,
+                num_heads=num_heads,
+                ffn_dim=ffn_dim,
+                dropout=dropout,
+                rotary_base=rotary_base,
+            )
+            for _ in range(decoder_layers)
+        ])
+        self.prediction = nn.Sequential(
+            nn.LayerNorm(hidden_dim),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, self.codebook_size + 1),
+        )
+
+    def total_parameters(self):
+        params_decoder = sum(p.numel() for p in self.decoder.parameters())
+        params_prediction = sum(p.numel() for p in self.prediction.parameters())
+        params_embeddings = sum(p.numel() for p in self.embeddings.parameters())
+        params_reward_encoder = sum(p.numel() for p in self.reward_encoder.parameters())
+        params_audio_projection = sum(p.numel() for p in self.audio_projection.parameters())
+        return params_decoder + params_prediction + params_embeddings + params_reward_encoder + params_audio_projection
+
+    def _audio_padding_mask(self, audio_features, audio_feature_lengths):
+        if audio_feature_lengths is None:
+            return None
+        return torch.arange(audio_features.size(1), device=audio_features.device) >= audio_feature_lengths[:, None]
+
+    def decode(self, mask_emb, generation_lengths, audio_features, audio_feature_lengths=None):
+        audio_memory = self.audio_projection(audio_features.to(dtype=mask_emb.dtype))
+        target_padding_mask = torch.arange(mask_emb.size(1), device=mask_emb.device) >= generation_lengths[:, None]
+        audio_padding_mask = self._audio_padding_mask(audio_features, audio_feature_lengths)
+
+        x = mask_emb
+        for layer in self.decoder:
+            x = layer(
+                x,
+                audio_memory=audio_memory,
+                target_padding_mask=target_padding_mask,
+                audio_padding_mask=audio_padding_mask,
+            )
+        return self.prediction(x)
+
+    def forward(self, generations, generation_lengths, rewards, audio_features, audio_feature_lengths=None):
+        rewards = rewards.to(dtype=self.embeddings.weight.dtype)
+        reward_emb = self.reward_encoder(rewards.unsqueeze(-1)).unsqueeze(1)
+        if generations.size(1) > 1:
+            previous_emb = self.embeddings(generations[:, :-1])
+            mask_emb = torch.cat((reward_emb, previous_emb), dim=1)
+        else:
+            mask_emb = reward_emb
+
+        predictions = self.decode(mask_emb, generation_lengths, audio_features, audio_feature_lengths)
+        return predictions, generation_lengths, {'mask_emb': mask_emb}
+
+    def _sample_conditioning_reward(self, conditioning_reward, device):
+        if conditioning_reward is not None:
+            return conditioning_reward
+        if self.conditioning_reward_range is None:
+            return self.default_conditioning_reward
+        low, high = self.conditioning_reward_range
+        return torch.empty(1, device=device).uniform_(low, high).item()
+
+    @torch.no_grad()
+    def generate(
+            self,
+            audio_features,
+            audio_feature_length=None,
+            conditioning_reward=None,
+            sample=None,
+            target_output_length=None,
+            target_prediction_steps=None,
+            device='cpu'
+        ):
+        if audio_features is None:
+            raise ValueError("AudioRewardConditionedMaskLM.generate requires audio_features")
+        if audio_features.dim() == 2:
+            audio_features = audio_features.unsqueeze(0)
+        audio_features = audio_features.to(device)
+        if audio_feature_length is None:
+            audio_feature_length = torch.tensor([audio_features.size(1)], dtype=torch.long, device=device)
+        elif not torch.is_tensor(audio_feature_length):
+            audio_feature_length = torch.tensor([int(audio_feature_length)], dtype=torch.long, device=device)
+        else:
+            audio_feature_length = audio_feature_length.to(device)
+
+        conditioning_reward = self._sample_conditioning_reward(conditioning_reward, device)
+        if sample is None:
+            sample = self.sample_generation
+
+        outputs = []
+        total_steps = 80 if target_prediction_steps is None else int(target_prediction_steps)
+        mode = self.training
+        self.eval()
+
+        for _ in range(total_steps):
+            reward = torch.as_tensor([conditioning_reward], dtype=torch.float32, device=device)
+            if len(outputs) == 0:
+                generations = torch.empty(1, 1, dtype=torch.long, device=device)
+                generation_lengths = torch.tensor([1], dtype=torch.long, device=device)
+            else:
+                previous = torch.tensor(outputs, dtype=torch.long, device=device).unsqueeze(0)
+                generations = torch.cat((previous, torch.zeros(1, 1, dtype=torch.long, device=device)), dim=1)
+                generation_lengths = torch.tensor([len(outputs) + 1], dtype=torch.long, device=device)
+
+            pred, _, _ = self(
+                generations=generations,
+                generation_lengths=generation_lengths,
+                rewards=reward,
+                audio_features=audio_features,
+                audio_feature_lengths=audio_feature_length,
+            )
+            pred = pred[:, generation_lengths.item() - 1:generation_lengths.item()]
+            if target_prediction_steps is not None:
+                pred[..., self.codebook_size] = -torch.finfo(pred.dtype).max
+            probs = pred.softmax(-1)
+            if sample:
+                idx = torch.multinomial(probs.squeeze(1), 1)
+            else:
+                idx = probs.argmax(-1)
+            outputs.append(idx.squeeze().item())
+            if idx.item() == self.codebook_size:
+                break
+
+        outputs = [el for el in outputs if el != self.codebook_size]
+        if len(outputs) == 0:
+            return False
+        outputs = torch.tensor(outputs, device=device)
+
+        mask_latent = self.mask_enc.VQ.codebook[outputs][None].transpose(-1, -2)
+        mask_h = self.mask_enc.latent_to_hidden(mask_latent)
+        mask_h = self.mask_enc.rnn_out(mask_h) + mask_h
+        mask_h = self.mask_enc.decoder(mask_h)
+
+        if target_output_length is not None:
+            mask_h = torch.nn.functional.interpolate(mask_h, size=target_output_length, mode='linear', align_corners=False)
+
+        mask_pred = self.mask_enc.output(mask_h).sigmoid()
+        mask_pred = torch.round(mask_pred, decimals=0).to(dtype=torch.long)
+
+        if mode:
+            self.train()
+            self.mask_enc.eval()
+
+        return mask_pred, outputs
+
+    @torch.no_grad()
+    def augment(self, audio, audio_features=None, audio_feature_length=None, conditioning_reward=None, sample=None, *args, **kwargs):
+        assert audio.size(0) == 1, 'only batch size 1 is supported atm'
+        if audio_features is None:
+            raise ValueError("AudioRewardConditionedMaskLM.augment requires audio_features")
+        mode = self.training
+        self.eval()
+
+        lengths = torch.tensor([audio.size(-1)], device=audio.device)
+        downsampled_lengths = self.mask_enc.calc_downsampled_length(lengths)
+        target_prediction_steps = int(downsampled_lengths[0].item())
+
+        mask_pred, generation = self.generate(
+            audio_features=audio_features,
+            audio_feature_length=audio_feature_length,
+            conditioning_reward=conditioning_reward,
+            sample=sample,
+            target_prediction_steps=target_prediction_steps,
+            target_output_length=int(lengths[0].item()),
+            device=audio.device,
+        )
+
+        audio = audio * mask_pred
+
+        if mode:
+            self.train()
+
+        return audio, mask_pred, {
+            'generation': generation,
+            'conditioning_reward': conditioning_reward,
+            'generation_length': target_prediction_steps,
+            'target_output_length': int(lengths[0].item()),
+        }
+
+    def forward_pass(self, batch, device, **kwargs):
+        generations = batch['generations'].to(device)
+        generation_lengths = batch['generation_lengths'].to(device)
+        rewards = batch['rewards'].to(device)
+        audio_features = batch['audio_features'].to(device)
+        audio_feature_lengths = batch['audio_feature_lengths'].to(device)
+
+        predictions, generation_lengths, _ = self(
+            generations=generations,
+            generation_lengths=generation_lengths,
+            rewards=rewards,
+            audio_features=audio_features,
+            audio_feature_lengths=audio_feature_lengths,
+        )
+
+        lengths_mask = torch.arange(generations.size(-1), device=device) >= generation_lengths[:, None]
+        ce_loss = nn.functional.cross_entropy(
+            input=predictions.transpose(-1, -2),
+            target=generations,
+            ignore_index=-100,
+            reduction='none',
+        )
+        ce_loss = ce_loss.masked_fill(lengths_mask, 0)
+        ce_loss = ce_loss.sum() / ((~lengths_mask).sum())
+
+        return ce_loss, {'loss': ce_loss, 'total_loss': ce_loss}
+
+
 class RMMRewardConditionedMaskLMReranker(Policy):
     def __init__(
             self,
@@ -2546,6 +2912,7 @@ policy_dict['MultiStepMaskRanker'] = MultiStepMaskRanker
 
 policy_dict['UnconditionalMaskGenerator'] = UnconditionalMaskGenerator
 policy_dict['RewardConditionedMaskLM'] = RewardConditionedMaskLM
+policy_dict['AudioRewardConditionedMaskLM'] = AudioRewardConditionedMaskLM
 policy_dict['RMMRewardConditionedMaskLMReranker'] = RMMRewardConditionedMaskLMReranker
 policy_dict['ConditionalMaskGenerator'] = ConditionalMaskGenerator
 policy_dict['ConditionalMultiStepMaskGenerator'] = ConditionalMultiStepMaskGenerator
