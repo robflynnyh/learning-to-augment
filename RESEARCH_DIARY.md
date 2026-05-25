@@ -297,3 +297,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `1.000000`. The result supports the 384/dropout checkpoint and sampled
   reward `[0.5, 1.0]`, especially at 1 adaptation epoch, but longer adaptation
   should be treated as dataset-sensitive.
+- Started the 2026-05-25 ROB-124 follow-up requested in Linear: rerun the same
+  all-dataset 384/dropout eval with reward sampled from `[0.0, 1.0]` for
+  epochs `1` and `5` on GPU pool `1,2`. The separate result root is
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling_0to1/`.
+  The launch path reuses the corrected `conditioning_reward_range` adaptation
+  code and keeps the previous `[0.5, 1.0]` artifacts intact.

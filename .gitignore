@@ -31,6 +31,8 @@ exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_rmm_lm_rerank/wandb/
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling/logs/
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling/wandb/
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling_0to1/logs/
+exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling_0to1/wandb/
 symphony/.env
 
 # Distribution / packaging

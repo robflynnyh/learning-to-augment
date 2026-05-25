@@ -23,9 +23,6 @@ DATASETS = {
     "rev16": ("rev16", "test"),
     "TAL": ("this_american_life", "test"),
 }
-METHOD = "RewardConditionedMaskLMUniform0p5to1"
-CONDITION = "uniform_0.5_1.0"
-LABEL = "uniform sampled reward [0.5, 1.0]"
 
 
 def parse_result(path: Path, expected_dataset: str, expected_split: str, expected_epochs: int) -> dict[str, float] | None:
@@ -81,6 +78,10 @@ def expected_rows(
     epochs: tuple[int, ...],
     lr: str,
     repeats: tuple[int, ...],
+    method: str,
+    condition: str,
+    label: str,
+    reward_range: str,
 ) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for dataset_tag in datasets:
@@ -92,19 +93,19 @@ def expected_rows(
                 tag = f"{dataset_tag}_{split}_epoch{epoch_count}_lr{lr}{repeat_suffix}"
                 rows.append(
                     {
-                        "condition": CONDITION,
-                        "label": LABEL,
+                        "condition": condition,
+                        "label": label,
                         "dataset_tag": dataset_tag,
                         "dataset": dataset,
                         "split": split,
-                        "method": METHOD,
-                        "reward_range": "0.5:1.0",
+                        "method": method,
+                        "reward_range": reward_range,
                         "repeat": str(repeat),
                         "seed": str(seed),
                         "epochs": str(epoch_count),
                         "lr": lr,
-                        "config_path": display_path(result_root / METHOD / "configs" / f"{tag}.yaml"),
-                        "result_path": display_path(result_root / METHOD / f"{tag}.txt"),
+                        "config_path": display_path(result_root / method / "configs" / f"{tag}.yaml"),
+                        "result_path": display_path(result_root / method / f"{tag}.txt"),
                     }
                 )
     return rows
@@ -116,8 +117,12 @@ def collect_rows(
     epochs: tuple[int, ...],
     lr: str,
     repeats: tuple[int, ...],
+    method: str,
+    condition: str,
+    label: str,
+    reward_range: str,
 ) -> list[dict[str, str]]:
-    rows = expected_rows(result_root, datasets, epochs, lr, repeats)
+    rows = expected_rows(result_root, datasets, epochs, lr, repeats, method, condition, label, reward_range)
     for row in rows:
         parsed = parse_result(
             Path(row["result_path"]),
@@ -190,24 +195,26 @@ def write_csv(rows: list[dict[str, str]], path: Path) -> None:
 def write_markdown(
     rows: list[dict[str, str]],
     path: Path,
+    csv_path: Path,
     checkpoint: str,
     command: str,
     branch: str,
     commit: str,
     log_path: str,
     screen_log_path: str,
+    title: str,
+    reward_control: str,
 ) -> None:
     complete = sum(row["status"] == "complete" for row in rows)
     missing = [row for row in rows if row["status"] != "complete"]
-    csv_path = path.with_name("rob124_384_dropout_all_dataset_reward_sampling.csv")
     lines = [
-        "# ROB-124 384-Dropout All-Dataset Reward Sampling Eval",
+        f"# {title}",
         "",
         "## Metadata",
         "",
         f"- Checkpoint: `{checkpoint}`",
         "- Policy: `RewardConditionedMaskLM`, `hidden_dim=384`, `dropout=0.1`",
-        "- Reward control: sampled uniformly from `[0.5, 1.0]` during each adaptation mask generation step",
+        f"- Reward control: sampled uniformly from `{reward_control}` during each adaptation mask generation step",
         "- Datasets: `tedlium`, `earnings22`, `chime6`, `rev16`, `TAL`; all `test` split",
         "- Adaptation: `epochs=1` and `epochs=5`, `lr=1e-5`, multistep rollout",
         f"- Branch: `{branch}`",
@@ -261,6 +268,11 @@ def main() -> None:
     parser.add_argument("--epochs", default="1 5")
     parser.add_argument("--lr", default="1e-5")
     parser.add_argument("--repeats", default="1")
+    parser.add_argument("--method", default="RewardConditionedMaskLMUniform0p5to1")
+    parser.add_argument("--condition", default="uniform_0.5_1.0")
+    parser.add_argument("--label", default="uniform sampled reward [0.5, 1.0]")
+    parser.add_argument("--reward-range", default="0.5:1.0")
+    parser.add_argument("--reward-control", default="[0.5, 1.0]")
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--command", required=True)
     parser.add_argument("--branch", required=True)
@@ -269,25 +281,34 @@ def main() -> None:
     parser.add_argument("--screen-log-path", required=True)
     parser.add_argument("--csv-name", default="rob124_384_dropout_all_dataset_reward_sampling.csv")
     parser.add_argument("--outcome-name", default="OUTCOME.md")
+    parser.add_argument("--title", default="ROB-124 384-Dropout All-Dataset Reward Sampling Eval")
     args = parser.parse_args()
 
+    csv_path = args.result_root / args.csv_name
     rows = collect_rows(
         args.result_root,
         datasets=parse_strings(args.datasets),
         epochs=parse_ints(args.epochs),
         lr=args.lr,
         repeats=parse_ints(args.repeats),
+        method=args.method,
+        condition=args.condition,
+        label=args.label,
+        reward_range=args.reward_range,
     )
-    write_csv(rows, args.result_root / args.csv_name)
+    write_csv(rows, csv_path)
     write_markdown(
         rows,
         args.result_root / args.outcome_name,
+        csv_path=csv_path,
         checkpoint=args.checkpoint,
         command=args.command,
         branch=args.branch,
         commit=args.commit,
         log_path=args.log_path,
         screen_log_path=args.screen_log_path,
+        title=args.title,
+        reward_control=args.reward_control,
     )
     print(f"[rob124-alldata-summary] wrote {args.result_root / args.csv_name}")
     print(f"[rob124-alldata-summary] wrote {args.result_root / args.outcome_name}")

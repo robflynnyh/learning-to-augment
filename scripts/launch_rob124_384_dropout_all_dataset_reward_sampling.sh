@@ -18,6 +18,15 @@ LOG_PATH="${LOG_PATH:-${RESULT_ROOT}/logs/rob124_384_dropout_all_dataset_reward_
 SCREEN_LOG_PATH="${SCREEN_LOG_PATH:-${RESULT_ROOT}/logs/rob124_384_dropout_all_dataset_reward_sampling.screen.log}"
 SCREEN_NAME="${SCREEN_NAME:-rob124-384-dropout-all-dataset-sampling}"
 RUNNER_LABEL="${RUNNER_LABEL:-screen:${SCREEN_NAME}}"
+REWARD_RANGE_LOW="${ROB124_ALLDATA_REWARD_RANGE_LOW:-0.5}"
+REWARD_RANGE_HIGH="${ROB124_ALLDATA_REWARD_RANGE_HIGH:-1.0}"
+REWARD_RANGE_ID="${ROB124_ALLDATA_REWARD_RANGE_ID:-0p5to1}"
+REWARD_RANGE_LABEL="${ROB124_ALLDATA_REWARD_RANGE_LABEL:-[0.5, 1.0]}"
+METHOD="${ROB124_ALLDATA_METHOD:-RewardConditionedMaskLMUniform${REWARD_RANGE_ID}}"
+CONDITION="${ROB124_ALLDATA_CONDITION:-uniform_0.5_1.0}"
+LABEL="${ROB124_ALLDATA_LABEL:-uniform sampled reward [0.5, 1.0]}"
+CSV_NAME="${ROB124_ALLDATA_CSV_NAME:-rob124_384_dropout_all_dataset_reward_sampling.csv}"
+OUTCOME_TITLE="${ROB124_ALLDATA_OUTCOME_TITLE:-ROB-124 384-Dropout All-Dataset Reward Sampling Eval}"
 CHECKPOINT_PATH="${CHECKPOINT_PATH:-/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_384d_dropout0p1_500ep_lr1e3.pt}"
 ASR_CKPT="${ASR_CKPT:-/store/store5/data/acp21rjf_checkpoints/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt}"
 MASK_VAE_CKPT="${MASK_VAE_CKPT:-/store/store5/data/acp21rjf_checkpoints/l2augment/models/bvae/bvae_USINGTHISFORNOW_2048gpu.pt}"
@@ -51,7 +60,7 @@ on_exit() {
     --branch "${GIT_BRANCH}"
     --commit "${GIT_COMMIT}"
     --target-state "${CALLBACK_TARGET_STATE:-Todo}"
-    --note "${CALLBACK_NOTE:-ROB-124 384/dropout all-dataset sampled reward [0.5, 1.0] eval wrapper exited. Inspect OUTCOME.md under ${RESULT_ROOT}.}"
+    --note "${CALLBACK_NOTE:-ROB-124 384/dropout all-dataset sampled reward ${REWARD_RANGE_LABEL} eval wrapper exited. Inspect OUTCOME.md under ${RESULT_ROOT}.}"
     --tail-lines "${CALLBACK_TAIL_LINES:-80}"
     --max-log-chars "${CALLBACK_MAX_LOG_CHARS:-6000}"
     --max-comment-chars "${CALLBACK_MAX_COMMENT_CHARS:-10000}"
@@ -93,6 +102,8 @@ echo "[rob124-alldata] result_root=${RESULT_ROOT}"
 echo "[rob124-alldata] checkpoint=${CHECKPOINT_PATH}"
 echo "[rob124-alldata] asr_ckpt=${ASR_CKPT}"
 echo "[rob124-alldata] mask_vae_ckpt=${MASK_VAE_CKPT}"
+echo "[rob124-alldata] reward_range=${REWARD_RANGE_LABEL}"
+echo "[rob124-alldata] method=${METHOD}"
 echo "[rob124-alldata] datasets=${DATASETS}"
 echo "[rob124-alldata] epochs=${EPOCHS}"
 echo "[rob124-alldata] lr=${LR}"
@@ -140,7 +151,7 @@ for required_dir in "${L2A_EARNINGS22_DIR}" "${L2A_TEDLIUM3_LEGACY_DIR}" "${L2A_
   fi
 done
 
-python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${CHECKPOINT_PATH}" "${MASK_VAE_CKPT}" "${LINEAR_ISSUE}" "${DATASETS}" "${EPOCHS}" "${LR}" "${REPEATS}" <<'PY'
+python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${CHECKPOINT_PATH}" "${MASK_VAE_CKPT}" "${LINEAR_ISSUE}" "${DATASETS}" "${EPOCHS}" "${LR}" "${REPEATS}" "${REWARD_RANGE_LOW}" "${REWARD_RANGE_HIGH}" "${METHOD}" "${REWARD_RANGE_ID}" <<'PY'
 import sys
 from pathlib import Path
 
@@ -153,6 +164,10 @@ dataset_tags = tuple(sys.argv[6].split())
 epochs = tuple(int(item) for item in sys.argv[7].split())
 lr = sys.argv[8]
 repeats = tuple(int(item) for item in sys.argv[9].split())
+reward_low = sys.argv[10]
+reward_high = sys.argv[11]
+method = sys.argv[12]
+reward_range_id = sys.argv[13]
 
 datasets = {
     "tedlium": ("tedlium", "test"),
@@ -161,7 +176,6 @@ datasets = {
     "rev16": ("rev16", "test"),
     "TAL": ("this_american_life", "test"),
 }
-method = "RewardConditionedMaskLMUniform0p5to1"
 
 (root / method / "configs").mkdir(parents=True, exist_ok=True)
 for dataset_tag in dataset_tags:
@@ -190,7 +204,7 @@ training:
   num_workers: 0
 
 evaluation:
-  id: {linear_issue}-{dataset_tag}-{split}-384d-dropout0p1-uniform0p5to1-epoch{epoch_count}-lr{lr}-repeat{repeat}
+  id: {linear_issue}-{dataset_tag}-{split}-384d-dropout0p1-uniform{reward_range_id}-epoch{epoch_count}-lr{lr}-repeat{repeat}
   dataset: {dataset}
   split: {split}
   rollout_fn: multistep
@@ -210,7 +224,7 @@ policy:
     hidden_dim: 384
     dropout: 0.1
     default_conditioning_reward: 1.0
-    conditioning_reward_range: [0.5, 1.0]
+    conditioning_reward_range: [{reward_low}, {reward_high}]
     reward_encoder: timestep
     sample_generation: true
     mask_vae_state_dict_path: {mask_vae_ckpt}
@@ -235,7 +249,14 @@ python3 scripts/summarize_rob124_384_dropout_all_dataset_reward_sampling.py \
   --branch "${GIT_BRANCH}" \
   --commit "${GIT_COMMIT}" \
   --log-path "${LOG_PATH}" \
-  --screen-log-path "${SCREEN_LOG_PATH}"
+  --screen-log-path "${SCREEN_LOG_PATH}" \
+  --method "${METHOD}" \
+  --condition "${CONDITION}" \
+  --label "${LABEL}" \
+  --reward-range "${REWARD_RANGE_LOW}:${REWARD_RANGE_HIGH}" \
+  --reward-control "${REWARD_RANGE_LABEL}" \
+  --csv-name "${CSV_NAME}" \
+  --title "${OUTCOME_TITLE}"
 
 if [ "${ROB124_ALLDATA_CONFIG_ONLY:-0}" = "1" ]; then
   echo "[rob124-alldata] config-only smoke path requested; exiting before eval."
@@ -246,7 +267,6 @@ RUN_DATASETS="${ROB124_ALLDATA_RUN_DATASETS:-${DATASETS}}"
 RUN_EPOCHS="${ROB124_ALLDATA_RUN_EPOCHS:-${EPOCHS}}"
 RUN_REPEATS="${ROB124_ALLDATA_RUN_REPEATS:-${REPEATS}}"
 EVAL_SCRIPT="${ROB124_ALLDATA_EVAL_SCRIPT:-eval.py}"
-METHOD="RewardConditionedMaskLMUniform0p5to1"
 
 if [ "${ROB124_ALLDATA_SMOKE:-0}" = "1" ]; then
   RUN_DATASETS="${ROB124_ALLDATA_SMOKE_DATASETS:-tedlium}"
@@ -309,6 +329,13 @@ python3 scripts/summarize_rob124_384_dropout_all_dataset_reward_sampling.py \
   --branch "${GIT_BRANCH}" \
   --commit "${GIT_COMMIT}" \
   --log-path "${LOG_PATH}" \
-  --screen-log-path "${SCREEN_LOG_PATH}"
+  --screen-log-path "${SCREEN_LOG_PATH}" \
+  --method "${METHOD}" \
+  --condition "${CONDITION}" \
+  --label "${LABEL}" \
+  --reward-range "${REWARD_RANGE_LOW}:${REWARD_RANGE_HIGH}" \
+  --reward-control "${REWARD_RANGE_LABEL}" \
+  --csv-name "${CSV_NAME}" \
+  --title "${OUTCOME_TITLE}"
 
 echo "[rob124-alldata] finished"
