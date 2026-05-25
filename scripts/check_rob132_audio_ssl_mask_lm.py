@@ -11,17 +11,31 @@ import torch
 from omegaconf import OmegaConf
 
 from l2augment.utils.helpers import load_rl_models, load_model as load_policy
+from l2augment.utils.datasets import AudioRewardConditionedMaskLMDataset
 
 
 def cache_path_for_rollout(cache_root: Path, rollout_path: Path) -> Path:
     return cache_root / rollout_path.parent.name / rollout_path.name
 
 
+def load_audio_features(config, rollout_path: Path, cache_root: Path | None):
+    if cache_root is not None:
+        cache_path = cache_path_for_rollout(cache_root, rollout_path)
+        cached = torch.load(cache_path, map_location="cpu", weights_only=False)
+        return cached["ssl_features"], str(cache_path), int(cached.get("target_steps", cached["ssl_features"].shape[0]))
+
+    dataset = AudioRewardConditionedMaskLMDataset([str(rollout_path)], **config.get("dataset", {}))
+    item = dataset[0]
+    if item is None:
+        raise RuntimeError(f"Failed to load audio-conditioned item for {rollout_path}")
+    return item["audio_features"], "on_the_fly", int(item["generation_length"])
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
     parser.add_argument("--checkpoint", default=None)
-    parser.add_argument("--cache-root", type=Path, required=True)
+    parser.add_argument("--cache-root", type=Path, default=None)
     parser.add_argument("--rollout", type=Path, action="append", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -36,15 +50,15 @@ def main() -> None:
 
     results = []
     for rollout_path in args.rollout:
-        cached = torch.load(cache_path_for_rollout(args.cache_root, rollout_path), map_location="cpu", weights_only=False)
-        audio_features = cached["ssl_features"].to(args.device)
+        audio_features, feature_source, target_steps = load_audio_features(config, rollout_path, args.cache_root)
+        audio_features = audio_features.to(args.device)
         per_reward = {}
         for reward in (0.0, 1.0):
             generated = policy.generate(
                 audio_features=audio_features,
                 conditioning_reward=reward,
                 sample=False,
-                target_prediction_steps=int(cached["target_steps"]),
+                target_prediction_steps=target_steps,
                 device=args.device,
             )
             if generated is False:
@@ -59,7 +73,7 @@ def main() -> None:
             }
         results.append({
             "rollout": str(rollout_path),
-            "cache": str(cache_path_for_rollout(args.cache_root, rollout_path)),
+            "feature_source": feature_source,
             "rewards": per_reward,
         })
 

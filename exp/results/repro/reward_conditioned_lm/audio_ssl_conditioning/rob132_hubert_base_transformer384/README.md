@@ -14,10 +14,12 @@ This experiment extends the ROB-124 reward-conditioned mask LM from
 - Reward normalization: ROB-124 per-utterance WER min-max normalization, with
   degenerate reward groups mapped to `0.5`
 
-## Storage Policy
+## SSL Feature Policy
 
 The SSL model is frozen. Full-rate SSL features are not committed and are not
-stored under `/store/store4`. The cache builder stores only mask-token-aligned
+stored under `/store/store4`. Training computes frozen HuBERT features
+on-the-fly from the mapped raw TED-LIUM utterance segments. The sidecar builder
+is retained only as a verification/debug helper; it can write mask-token-aligned
 fp16 sidecars under:
 
 ```text
@@ -45,10 +47,11 @@ screen -L -Logfile /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/RO
 ## Initial Caveat
 
 The ROB-124 rollout files contain 80-channel spectrogram tensors, not raw
-waveform. The SSL cache builder maps TED-LIUM rollout filenames back to STM
-utterance indices, loads the corresponding raw waveform segment from
-`/store/store4/data/TEDLIUM_release-3/legacy`, extracts HuBERT features, and
-interpolates them to the saved mask-token length.
+waveform. `AudioRewardConditionedMaskLMDataset` maps TED-LIUM rollout filenames
+back to STM utterance indices, loads the corresponding raw waveform segment
+from `/store/store4/data/TEDLIUM_release-3/legacy`, extracts HuBERT features
+on-the-fly, and interpolates them to the saved mask-token length. Optional
+sidecars are supported only for smoke/debug reuse.
 
 ## Mapping Check
 
@@ -60,3 +63,16 @@ spectrogram length exactly.
 
 Artifact:
 `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/mapping_verification_sample.json`
+
+## Smoke Validation
+
+The callback wrapper smoke was rerun after switching the configs to
+`ssl_feature_mode: on_the_fly`. With CUDA hidden, it loaded raw TED-LIUM
+utterance segments, extracted frozen HuBERT features in the dataset, completed
+one tiny validation/train cycle, and saved the ignored smoke checkpoint.
+
+Generation sanity without a cache also passed at reward controls `0.0` and
+`1.0` for one train rollout and one dev rollout.
+
+Artifact:
+`exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/smoke/post_training_generation_sanity_on_the_fly.json`

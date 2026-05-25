@@ -35,7 +35,10 @@ dataset:
   normalization: per_utterance_minmax
   degenerate_range_eps: 1e-6
   degenerate_value: 0.5
-  ssl_cache_dir: /store/store5/data/acp21rjf_checkpoints/l2augment/ssl_feature_cache/rob132_hubert_base_tedlium_per_utterance
+  ssl_feature_mode: on_the_fly
+  ssl_bundle: HUBERT_BASE
+  ssl_device: cpu
+  tedlium_base: /store/store4/data/TEDLIUM_release-3/legacy
 
 policy:
   lr: 1e-3

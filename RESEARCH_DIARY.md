@@ -308,3 +308,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   actual wrapper built two train/two dev sidecars, ran one tiny training epoch,
   and saved a smoke checkpoint; deterministic generation sanity passed at
   reward controls `0.0` and `1.0`.
+- Updated ROB-132 after the follow-up comment that on-the-fly SSL computation
+  is acceptable. The training dataset now maps each TED-LIUM rollout to its raw
+  utterance segment and extracts frozen HuBERT-base features directly in
+  `__getitem__`; the sidecar builder remains only for verification/debug reuse.
+  The main and smoke configs use `ssl_feature_mode: on_the_fly`, so full
+  training no longer requires a precomputed SSL feature cache.
