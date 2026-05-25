@@ -114,3 +114,35 @@ time grid per example using `generation_lengths` and `audio_feature_lengths`.
 The configs now set `ssl_device: cuda`; DataLoader workers are disabled for
 this path so CUDA HuBERT extraction happens in the main training process
 instead of inside forked workers.
+
+## 2026-05-25 Native Full-Batch OOM Fix
+
+The first native-HuBERT full training retry from commit
+`c9746ad723cf809f52915c18eff8ac680cd80fdc` OOMed during validation while
+projecting audio features. The immediate cause was not the SSL checkpoint or
+checkpoint retention. It was the batch shape: each rollout file contains 10
+candidate mask sequences, and the previous collate duplicated the same HuBERT
+feature tensor once per candidate. With `batch_size: 48`, validation projected
+480 copies of the padded audio memory.
+
+The fixed collate path stores one padded SSL feature tensor per rollout and an
+`audio_item_idxs` vector mapping candidate rows back to their rollout audio.
+`AudioRewardConditionedMaskLM` now projects unique audio tensors once, then
+indexes projected memory back to candidate rows before decoder cross-attention.
+The training loop also evaluates validation batches under `torch.no_grad()`
+and stores early-stopping snapshots on CPU rather than keeping a second model
+copy on GPU.
+
+Post-fix validation:
+
+- `py_compile` passed for the touched training, model, collate, and sanity
+  scripts.
+- Synthetic CPU forward-pass check passed with 20 candidate rows sharing 2
+  unique audio tensors.
+- Mimas full-batch dev prefix passed two `batch_size: 48` validation batches:
+  shapes `(480, 54)` with unique audio `(48, 918, 768)` at 5.7 GB peak, then
+  `(480, 66)` with unique audio `(48, 1117, 768)` at 7.25 GB peak.
+- Mimas train backward prefix passed one `batch_size: 48` train batch:
+  shape `(480, 27)` with unique audio `(48, 488, 768)` at 8.22 GB peak.
+- The callback wrapper passed `ROB132_CALLBACK_CHECK_ONLY=1`, and the real
+  smoke wrapper passed with callbacks disabled.

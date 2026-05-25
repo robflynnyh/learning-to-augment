@@ -49,7 +49,7 @@ def train_policy(
         policy = policy.train()
 
         prev_val_cer = float('inf')
-        prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
+        prev_state_dict = {k:v.detach().cpu().clone() for k,v in policy.state_dict().items()}
 
         cur_epoch = int(config['training'].get('start_epoch', 0))
         max_tolerance = config['training'].get('tolerance', 2)
@@ -65,8 +65,9 @@ def train_policy(
             pbar = tqdm(dev_dataloader)
             for i, batch in enumerate(pbar):
                 if batch == None: continue
-              
-                loss, losses = policy.forward_pass(batch, device)
+
+                with torch.no_grad():
+                    loss, losses = policy.forward_pass(batch, device)
                 if loss == None: continue
                 val_losses.append(loss.item())
         
@@ -84,7 +85,7 @@ def train_policy(
             if (avg_val_loss > prev_val_cer) or torch.isnan(torch.tensor(avg_val_loss)): remaining_tolerance -= 1
             else:
                 prev_val_cer = avg_val_loss
-                prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
+                prev_state_dict = {k:v.detach().cpu().clone() for k,v in policy.state_dict().items()}
                 remaining_tolerance = max_tolerance
 
             if remaining_tolerance == 0:

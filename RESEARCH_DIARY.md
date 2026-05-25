@@ -329,3 +329,14 @@ reproduce results, interpret metrics, or avoid known failure modes.
   train/validation pass and refreshed the ignored smoke checkpoint. A follow-up
   GPU generation sanity wrote
   `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/smoke/post_training_generation_sanity_native_gpu.json`.
+- Fixed the ROB-132 native-HuBERT full-run OOM from commit
+  `c9746ad723cf809f52915c18eff8ac680cd80fdc`. Each TED-LIUM rollout has 10
+  candidate mask sequences, so the old audio collate duplicated the same
+  HuBERT tensor 10 times and projected 480 audio memories for a `batch_size:
+  48` validation batch. The collate/model path now keeps one padded SSL tensor
+  per rollout and uses `audio_item_idxs` to map projected audio memory back to
+  candidate rows. The training loop also runs validation under
+  `torch.no_grad()` and keeps early-stopping state snapshots on CPU. Targeted
+  Mimas checks after the fix passed two full-size dev batches at peaks 5.7 GB
+  and 7.25 GB, one train backward batch at 8.22 GB, callback check-only, and
+  the real smoke wrapper with callbacks disabled.

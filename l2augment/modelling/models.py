@@ -2582,10 +2582,15 @@ class AudioRewardConditionedMaskLM(Policy):
             return None
         return torch.arange(audio_features.size(1), device=audio_features.device) >= audio_feature_lengths[:, None]
 
-    def decode(self, mask_emb, generation_lengths, audio_features, audio_feature_lengths=None):
+    def decode(self, mask_emb, generation_lengths, audio_features, audio_feature_lengths=None, audio_item_idxs=None):
         audio_memory = self.audio_projection(audio_features.to(dtype=mask_emb.dtype))
+        if audio_item_idxs is not None:
+            audio_item_idxs = audio_item_idxs.to(device=audio_memory.device)
+            audio_memory = audio_memory.index_select(0, audio_item_idxs)
+            if audio_feature_lengths is not None:
+                audio_feature_lengths = audio_feature_lengths.index_select(0, audio_item_idxs)
         target_padding_mask = torch.arange(mask_emb.size(1), device=mask_emb.device) >= generation_lengths[:, None]
-        audio_padding_mask = self._audio_padding_mask(audio_features, audio_feature_lengths)
+        audio_padding_mask = self._audio_padding_mask(audio_memory, audio_feature_lengths)
 
         x = mask_emb
         for layer in self.decoder:
@@ -2599,7 +2604,7 @@ class AudioRewardConditionedMaskLM(Policy):
             )
         return self.prediction(x)
 
-    def forward(self, generations, generation_lengths, rewards, audio_features, audio_feature_lengths=None):
+    def forward(self, generations, generation_lengths, rewards, audio_features, audio_feature_lengths=None, audio_item_idxs=None):
         rewards = rewards.to(dtype=self.embeddings.weight.dtype)
         reward_emb = self.reward_encoder(rewards.unsqueeze(-1)).unsqueeze(1)
         if generations.size(1) > 1:
@@ -2608,7 +2613,7 @@ class AudioRewardConditionedMaskLM(Policy):
         else:
             mask_emb = reward_emb
 
-        predictions = self.decode(mask_emb, generation_lengths, audio_features, audio_feature_lengths)
+        predictions = self.decode(mask_emb, generation_lengths, audio_features, audio_feature_lengths, audio_item_idxs)
         return predictions, generation_lengths, {'mask_emb': mask_emb}
 
     def _sample_conditioning_reward(self, conditioning_reward, device):
@@ -2742,6 +2747,9 @@ class AudioRewardConditionedMaskLM(Policy):
         rewards = batch['rewards'].to(device)
         audio_features = batch['audio_features'].to(device)
         audio_feature_lengths = batch['audio_feature_lengths'].to(device)
+        audio_item_idxs = batch.get('audio_item_idxs', None)
+        if audio_item_idxs is not None:
+            audio_item_idxs = audio_item_idxs.to(device)
 
         predictions, generation_lengths, _ = self(
             generations=generations,
@@ -2749,6 +2757,7 @@ class AudioRewardConditionedMaskLM(Policy):
             rewards=rewards,
             audio_features=audio_features,
             audio_feature_lengths=audio_feature_lengths,
+            audio_item_idxs=audio_item_idxs,
         )
 
         lengths_mask = torch.arange(generations.size(-1), device=device) >= generation_lengths[:, None]

@@ -271,15 +271,17 @@ def AudioRewardConditionedMaskLM_fn(batch: List[Dict[str, torch.Tensor]]) -> Dic
     audio_features = []
     audio_feature_lengths = []
     audio_feature_cache_paths = []
+    audio_item_idxs = []
     for item in batch:
         if item is None:
             continue
         cur_count = item['generation'].shape[0]
+        audio_idx = len(audio_features)
         cur_features = item['audio_features'].to(dtype=torch.float16)
-        for _ in range(cur_count):
-            audio_features.append(cur_features)
-            audio_feature_lengths.append(int(item['audio_feature_length']))
-            audio_feature_cache_paths.append(item['audio_feature_cache_path'])
+        audio_features.append(cur_features)
+        audio_feature_lengths.append(int(item['audio_feature_length']))
+        audio_feature_cache_paths.append(item['audio_feature_cache_path'])
+        audio_item_idxs.extend([audio_idx] * cur_count)
 
     max_length = max(features.shape[0] for features in audio_features)
     feature_dim = audio_features[0].shape[-1]
@@ -295,6 +297,7 @@ def AudioRewardConditionedMaskLM_fn(batch: List[Dict[str, torch.Tensor]]) -> Dic
 
     collated['audio_features'] = torch.stack(padded_features, dim=0)
     collated['audio_feature_lengths'] = torch.tensor(audio_feature_lengths, dtype=torch.long)
+    collated['audio_item_idxs'] = torch.tensor(audio_item_idxs, dtype=torch.long)
     collated['audio_feature_cache_paths'] = audio_feature_cache_paths
     return collated
 
