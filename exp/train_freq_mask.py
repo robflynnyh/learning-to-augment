@@ -185,13 +185,20 @@ def main(config):
 
     collate_function = collate_functions_dict[config.get('collate_function', 'default')]
     
+    num_workers = config['training'].get('num_workers', 12)
+    prefetch_factor = config['training'].get('prefetch_factor', 6)
+    dataloader_kwargs = {
+        'num_workers': num_workers,
+    }
+    if num_workers > 0 and prefetch_factor is not None:
+        dataloader_kwargs['prefetch_factor'] = prefetch_factor
+
     train_dataloader = DataLoader(
         train_dataset, 
         batch_size=config['training']['batch_size'], 
         shuffle=True, 
         collate_fn=collate_function,
-        num_workers=config['training'].get('num_workers', 12),
-        prefetch_factor=config['training'].get('prefetch_factor', 6),
+        **dataloader_kwargs,
     )
 
     dev_dataloader = DataLoader(
@@ -199,8 +206,7 @@ def main(config):
         batch_size=config['training']['batch_size'], 
         shuffle=False, 
         collate_fn=collate_function,
-        num_workers=config['training'].get('num_workers', 12),
-        prefetch_factor=config['training'].get('prefetch_factor', 6),
+        **dataloader_kwargs,
     )
 
 

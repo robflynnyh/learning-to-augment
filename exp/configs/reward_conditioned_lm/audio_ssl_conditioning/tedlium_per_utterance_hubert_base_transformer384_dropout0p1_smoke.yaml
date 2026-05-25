@@ -8,8 +8,8 @@ training:
   epochs: 1
   tolerance: 2
   max_steps: 1
-  num_workers: 1
-  prefetch_factor: 1
+  num_workers: 0
+  prefetch_factor: null
   wandb_project: l2augment
   wandb_mode: disabled
   model_save_path: exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/smoke/audio_ssl_hubert_base_transformer384_dropout0p1_smoke.pt
@@ -38,8 +38,9 @@ dataset:
   degenerate_range_eps: 1e-6
   degenerate_value: 0.5
   ssl_feature_mode: on_the_fly
+  ssl_feature_alignment: native
   ssl_bundle: HUBERT_BASE
-  ssl_device: cpu
+  ssl_device: cuda
   tedlium_base: /store/store4/data/TEDLIUM_release-3/legacy
 
 policy:

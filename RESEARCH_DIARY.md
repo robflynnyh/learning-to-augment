@@ -314,3 +314,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `__getitem__`; the sidecar builder remains only for verification/debug reuse.
   The main and smoke configs use `ssl_feature_mode: on_the_fly`, so full
   training no longer requires a precomputed SSL feature cache.
+- Corrected ROB-132 after follow-up Linear comments on positional information
+  and HuBERT placement. The first full run from commit
+  `df72289324412e43d1f274037062382b9153953d` was interrupted because it used
+  content-only cross-attention to SSL memory and `ssl_device: cpu`. The model
+  now keeps native HuBERT frame sequences, applies RoPE to cross-attention Q/K
+  as well as decoder self-attention, and scales native SSL key positions onto
+  the mask-token time grid for cross-attention. The ROB-132 configs run frozen
+  HuBERT extraction on CUDA with `num_workers: 0` to avoid CUDA work inside
+  DataLoader workers.

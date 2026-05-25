@@ -2363,7 +2363,15 @@ class RotaryEmbedding(nn.Module):
 
     def forward(self, seq_len, device, dtype):
         positions = torch.arange(seq_len, device=device, dtype=self.inv_freq.dtype)
+        return self.forward_positions(positions, dtype=dtype)
+
+    def forward_positions(self, positions, dtype):
         freqs = torch.einsum("i,j->ij", positions, self.inv_freq)
+        emb = torch.repeat_interleave(freqs, repeats=2, dim=-1)
+        return emb.cos().to(dtype=dtype), emb.sin().to(dtype=dtype)
+
+    def forward_batch_positions(self, positions, dtype):
+        freqs = positions.to(dtype=self.inv_freq.dtype)[..., None] * self.inv_freq
         emb = torch.repeat_interleave(freqs, repeats=2, dim=-1)
         return emb.cos().to(dtype=dtype), emb.sin().to(dtype=dtype)
 
@@ -2405,13 +2413,46 @@ class AudioRewardConditionedTransformerBlock(nn.Module):
         b, _, t, _ = x.shape
         return x.transpose(1, 2).contiguous().view(b, t, self.hidden_dim)
 
-    def _apply_rotary(self, q, k):
-        cos, sin = self.rotary(q.size(-2), q.device, q.dtype)
-        cos = cos[None, None, :, :]
-        sin = sin[None, None, :, :]
-        return (q * cos) + (_rotate_half(q) * sin), (k * cos) + (_rotate_half(k) * sin)
+    def _apply_rotary_one(self, x, positions=None):
+        if positions is None:
+            cos, sin = self.rotary(x.size(-2), x.device, x.dtype)
+            cos = cos[None, None, :, :]
+            sin = sin[None, None, :, :]
+        elif positions.ndim == 1:
+            cos, sin = self.rotary.forward_positions(positions.to(device=x.device), dtype=x.dtype)
+            cos = cos[None, None, :, :]
+            sin = sin[None, None, :, :]
+        else:
+            cos, sin = self.rotary.forward_batch_positions(positions.to(device=x.device), dtype=x.dtype)
+            cos = cos[:, None, :, :]
+            sin = sin[:, None, :, :]
+        return (x * cos) + (_rotate_half(x) * sin)
 
-    def forward(self, x, audio_memory, target_padding_mask=None, audio_padding_mask=None):
+    def _apply_rotary(self, q, k, q_positions=None, k_positions=None):
+        return self._apply_rotary_one(q, q_positions), self._apply_rotary_one(k, k_positions)
+
+    @staticmethod
+    def _cross_positions(query_len, key_len, query_lengths, key_lengths, device, dtype):
+        query_positions = torch.arange(query_len, device=device, dtype=dtype)
+        if query_lengths is None or key_lengths is None:
+            key_positions = torch.arange(key_len, device=device, dtype=dtype)
+            return query_positions, key_positions
+
+        key_positions = torch.arange(key_len, device=device, dtype=dtype)[None, :]
+        query_lengths = query_lengths.to(device=device, dtype=dtype).clamp_min(1)
+        key_lengths = key_lengths.to(device=device, dtype=dtype).clamp_min(1)
+        scale = ((query_lengths - 1).clamp_min(1) / (key_lengths - 1).clamp_min(1))[:, None]
+        return query_positions, key_positions * scale
+
+    def forward(
+            self,
+            x,
+            audio_memory,
+            target_lengths=None,
+            audio_lengths=None,
+            target_padding_mask=None,
+            audio_padding_mask=None
+        ):
         residual = x
         h = self.self_norm(x)
         q, k, v = self.self_qkv(h).chunk(3, dim=-1)
@@ -2433,6 +2474,15 @@ class AudioRewardConditionedTransformerBlock(nn.Module):
         q = self._split_heads(self.cross_q(h))
         k, v = self.cross_kv(audio_memory).chunk(2, dim=-1)
         k, v = self._split_heads(k), self._split_heads(v)
+        q_positions, k_positions = self._cross_positions(
+            query_len=q.size(-2),
+            key_len=k.size(-2),
+            query_lengths=target_lengths,
+            key_lengths=audio_lengths,
+            device=x.device,
+            dtype=q.dtype,
+        )
+        q, k = self._apply_rotary(q, k, q_positions=q_positions, k_positions=k_positions)
         scores = torch.matmul(q, k.transpose(-1, -2)) * scale
         if audio_padding_mask is not None:
             scores = scores.masked_fill(audio_padding_mask[:, None, None, :], -torch.finfo(scores.dtype).max)
@@ -2542,6 +2592,8 @@ class AudioRewardConditionedMaskLM(Policy):
             x = layer(
                 x,
                 audio_memory=audio_memory,
+                target_lengths=generation_lengths,
+                audio_lengths=audio_feature_lengths,
                 target_padding_mask=target_padding_mask,
                 audio_padding_mask=audio_padding_mask,
             )

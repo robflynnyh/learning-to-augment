@@ -213,6 +213,7 @@ class AudioRewardConditionedMaskLMDataset(RewardConditionedMaskLMDataset):
             ssl_cache_dir=None,
             ssl_feature_mode='on_the_fly',
             ssl_feature_key='ssl_features',
+            ssl_feature_alignment='native',
             ssl_bundle='HUBERT_BASE',
             ssl_device='cpu',
             tedlium_base='/store/store4/data/TEDLIUM_release-3/legacy',
@@ -223,6 +224,7 @@ class AudioRewardConditionedMaskLMDataset(RewardConditionedMaskLMDataset):
         self.ssl_cache_dir = ssl_cache_dir
         self.ssl_feature_mode = ssl_feature_mode
         self.ssl_feature_key = ssl_feature_key
+        self.ssl_feature_alignment = ssl_feature_alignment
         self.ssl_bundle_name = ssl_bundle
         self.ssl_device = ssl_device
         self.tedlium_base = tedlium_base
@@ -234,6 +236,9 @@ class AudioRewardConditionedMaskLMDataset(RewardConditionedMaskLMDataset):
         valid_modes = {'on_the_fly', 'cache', 'auto'}
         if self.ssl_feature_mode not in valid_modes:
             raise ValueError(f"ssl_feature_mode must be one of {sorted(valid_modes)}")
+        valid_alignments = {'native', 'mask_token'}
+        if self.ssl_feature_alignment not in valid_alignments:
+            raise ValueError(f"ssl_feature_alignment must be one of {sorted(valid_alignments)}")
 
     def _cache_path(self, rollout_path):
         if self.ssl_cache_dir is None:
@@ -329,7 +334,11 @@ class AudioRewardConditionedMaskLMDataset(RewardConditionedMaskLMDataset):
             features = features[-1]
         if feature_lengths is not None:
             features = features[:, :int(feature_lengths[0].item())]
-        audio_features = self._align_features(features.cpu(), int(target_steps)).to(dtype=torch.float16)
+        if self.ssl_feature_alignment == 'mask_token':
+            audio_features = self._align_features(features.cpu(), int(target_steps))
+        else:
+            audio_features = features.squeeze(0).cpu().contiguous()
+        audio_features = audio_features.to(dtype=torch.float16)
 
         cache_path = self._cache_path(rollout_path)
         if self.write_ssl_cache and cache_path is not None:
@@ -344,6 +353,7 @@ class AudioRewardConditionedMaskLMDataset(RewardConditionedMaskLMDataset):
                 'start': utterance['start'],
                 'end': utterance['end'],
                 'target_steps': int(target_steps),
+                'ssl_feature_alignment': self.ssl_feature_alignment,
             }, cache_path)
         return audio_features, cache_path
 

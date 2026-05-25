@@ -8,8 +8,8 @@ This experiment extends the ROB-124 reward-conditioned mask LM from
 - Policy class: `AudioRewardConditionedMaskLM`
 - Audio representation: frozen torchaudio `HUBERT_BASE` SSL features
 - Decoder: 4-layer causal transformer, `hidden_dim=384`, `num_heads=8`,
-  dropout `0.1`, rotary self-attention, cross-attention over projected SSL
-  features
+  dropout `0.1`, rotary decoder self-attention, and rotary cross-attention
+  over projected SSL features
 - Mask target: same binary mask VAE codebook sequence used by ROB-124
 - Reward normalization: ROB-124 per-utterance WER min-max normalization, with
   degenerate reward groups mapped to `0.5`
@@ -18,9 +18,9 @@ This experiment extends the ROB-124 reward-conditioned mask LM from
 
 The SSL model is frozen. Full-rate SSL features are not committed and are not
 stored under `/store/store4`. Training computes frozen HuBERT features
-on-the-fly from the mapped raw TED-LIUM utterance segments. The sidecar builder
-is retained only as a verification/debug helper; it can write mask-token-aligned
-fp16 sidecars under:
+on-the-fly on the allocated GPU from the mapped raw TED-LIUM utterance
+segments. The sidecar builder is retained only as a verification/debug helper;
+it can write mask-token-aligned fp16 sidecars under:
 
 ```text
 /store/store5/data/acp21rjf_checkpoints/l2augment/ssl_feature_cache/rob132_hubert_base_tedlium_per_utterance/
@@ -49,9 +49,9 @@ screen -L -Logfile /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/RO
 The ROB-124 rollout files contain 80-channel spectrogram tensors, not raw
 waveform. `AudioRewardConditionedMaskLMDataset` maps TED-LIUM rollout filenames
 back to STM utterance indices, loads the corresponding raw waveform segment
-from `/store/store4/data/TEDLIUM_release-3/legacy`, extracts HuBERT features
-on-the-fly, and interpolates them to the saved mask-token length. Optional
-sidecars are supported only for smoke/debug reuse.
+from `/store/store4/data/TEDLIUM_release-3/legacy`, and extracts native-rate
+HuBERT features on-the-fly. Optional mask-token-aligned sidecars are supported
+only for smoke/debug reuse, not for the main training path.
 
 ## Mapping Check
 
@@ -87,3 +87,19 @@ The HuBERT checkpoint is stored outside the repository at:
 ```
 
 That checkpoint is 361M. The ignored smoke model checkpoint is 54M.
+
+## 2026-05-25 Position And SSL Device Correction
+
+A first full training run was interrupted after a Linear follow-up pointed out
+two issues: cross-attention did not include an explicit query/KV positional
+signal, and HuBERT extraction was configured on CPU. The interrupted run should
+be treated only as a content-only cross-attention baseline attempt.
+
+The corrected implementation applies RoPE to both decoder self-attention and
+mask-to-SSL cross-attention Q/K tensors. The main path now keeps native HuBERT
+frame sequences instead of resizing them to the mask-token length. For
+cross-attention RoPE, native SSL key positions are scaled onto the mask-token
+time grid per example using `generation_lengths` and `audio_feature_lengths`.
+The configs now set `ssl_device: cuda`; DataLoader workers are disabled for
+this path so CUDA HuBERT extraction happens in the main training process
+instead of inside forked workers.

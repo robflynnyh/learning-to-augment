@@ -7,8 +7,8 @@ training:
   batch_size: 48
   epochs: 500
   tolerance: 5
-  num_workers: 8
-  prefetch_factor: 4
+  num_workers: 0
+  prefetch_factor: null
   wandb_project: l2augment
   model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/audio_ssl_hubert_base_tedlium_per_utterance_transformer384_dropout0p1_500ep_lr1e3.pt
   tmp_model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/audio_ssl_hubert_base_tedlium_per_utterance_transformer384_dropout0p1_500ep_lr1e3_tmp.pt
@@ -36,8 +36,9 @@ dataset:
   degenerate_range_eps: 1e-6
   degenerate_value: 0.5
   ssl_feature_mode: on_the_fly
+  ssl_feature_alignment: native
   ssl_bundle: HUBERT_BASE
-  ssl_device: cpu
+  ssl_device: cuda
   tedlium_base: /store/store4/data/TEDLIUM_release-3/legacy
 
 policy:
