@@ -288,3 +288,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
   updated WER `0.194433`, beating the matched ROB-120 row by `0.002001`
   absolute WER. This supports resuming the paused all-dataset `[0.5, 1.0]`
   sampled-reward eval for the 384/dropout checkpoint.
+- Completed the ROB-124 all-dataset `[0.5, 1.0]` sampled-reward follow-up on
+  2026-05-25. The callback-backed Mimas run exited with status `0`, completed
+  all 10 cells, and wrote
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling/OUTCOME.md`.
+  Nine of ten cells improved WER versus the unadapted original WER; the only
+  regression was CHiME-6 at 5 adaptation epochs, which moved from `0.843620` to
+  `1.000000`. The result supports the 384/dropout checkpoint and sampled
+  reward `[0.5, 1.0]`, especially at 1 adaptation epoch, but longer adaptation
+  should be treated as dataset-sensitive.

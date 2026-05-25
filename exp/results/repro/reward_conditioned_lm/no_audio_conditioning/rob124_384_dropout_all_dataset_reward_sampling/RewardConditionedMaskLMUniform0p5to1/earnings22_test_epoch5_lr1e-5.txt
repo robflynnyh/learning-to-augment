@@ -1,0 +1,1 @@
+ID: ROB-124-earnings22-test-384d-dropout0p1-uniform0p5to1-epoch5-lr1e-5-repeat1 - Dataset: earnings22 - Split: test - Epochs: 5 - Original_WER: 0.23523885382840104 - Updated_WER: 0.18226007393337826

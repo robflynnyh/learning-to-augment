@@ -17,6 +17,12 @@ Scope:
 - Result CSV: `rob124_384_dropout_all_dataset_reward_sampling.csv`.
 - Outcome: `OUTCOME.md`.
 
+Final status: the callback-backed Mimas run exited with status `0` and
+completed all `10/10` cells. The result is broadly positive at 1 adaptation
+epoch and mixed at 5 epochs because the CHiME-6 5-epoch cell regressed to WER
+`1.0`. Treat the 5-epoch setting as dataset-sensitive rather than uniformly
+better.
+
 The wrapper is:
 
 ```bash
