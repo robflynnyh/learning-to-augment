@@ -303,3 +303,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling_0to1/`.
   The launch path reuses the corrected `conditioning_reward_range` adaptation
   code and keeps the previous `[0.5, 1.0]` artifacts intact.
+- Corrected the 2026-05-25 ROB-124 follow-up after the latest Linear comment
+  clarified that the intended scope is two separate fixed-reward sweeps, not a
+  sampled `[0.0, 1.0]` run. The sampled queue was stopped before GPU eval while
+  still waiting in `with-gpu`. The active replacement root is
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_fixed_rewards_0_and_1/`
+  with 20 cells: fixed reward `1.0` and fixed reward `0.0` across five
+  datasets and epochs `1` and `5`.

@@ -1,5 +1,11 @@
 # ROB-124 384-Dropout All-Dataset Reward Sampling [0.0, 1.0] Eval
 
+Cancelled before GPU eval after the latest Linear clarification. This scaffold
+represented sampled reward `[0.0, 1.0]`, but the requested follow-up is two
+separate fixed-reward sweeps: `conditioning_reward: 1.0` and
+`conditioning_reward: 0.0`. The active replacement result root is
+`exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_fixed_rewards_0_and_1/`.
+
 ## Metadata
 
 - Checkpoint: `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_384d_dropout0p1_500ep_lr1e3.pt`
@@ -13,7 +19,8 @@
 - Screen log: `/exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-124/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling_0to1/logs/rob124_384_dropout_all_dataset_reward_sampling_0to1.screen.log`
 - Queued command: `screen -L -Logfile /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-124/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling_0to1/logs/rob124_384_dropout_all_dataset_reward_sampling_0to1.screen.log -dmS rob124-384-dropout-all-dataset-sampling-0to1 bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-124 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob124_384_dropout_all_dataset_reward_sampling_0to1.sh'`
 
-Completed cells: `0/10`.
+Completed cells: `0/10`. The queued screen was stopped while still waiting in
+`with-gpu`; no sampled `[0.0, 1.0]` eval cells were run.
 
 ## Aggregate
 
