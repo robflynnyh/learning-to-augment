@@ -323,3 +323,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   the mask-token time grid for cross-attention. The ROB-132 configs run frozen
   HuBERT extraction on CUDA with `num_workers: 0` to avoid CUDA work inside
   DataLoader workers.
+- Validated the corrected ROB-132 path with a queued native-HuBERT CUDA smoke
+  on Mimas ticket `26b4debf` at commit
+  `90f8c466a34147442a5cf89cf26b156be31c684b`; the wrapper completed one tiny
+  train/validation pass and refreshed the ignored smoke checkpoint. A follow-up
+  GPU generation sanity wrote
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/smoke/post_training_generation_sanity_native_gpu.json`.

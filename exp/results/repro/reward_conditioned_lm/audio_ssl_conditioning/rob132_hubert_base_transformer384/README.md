@@ -88,6 +88,17 @@ The HuBERT checkpoint is stored outside the repository at:
 
 That checkpoint is 361M. The ignored smoke model checkpoint is 54M.
 
+After the native-HuBERT/CUDA correction, a second queued smoke ran through
+`with-gpu 1,2` on Mimas ticket `26b4debf`; it acquired GPU 1, used commit
+`90f8c466a34147442a5cf89cf26b156be31c684b`, extracted native HuBERT features
+on CUDA, completed the tiny train/validation path, and refreshed the ignored
+smoke checkpoint. A GPU generation sanity check then loaded that smoke
+checkpoint and generated masks for one train and one dev rollout with
+on-the-fly native HuBERT features.
+
+Artifact:
+`exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/smoke/post_training_generation_sanity_native_gpu.json`
+
 ## 2026-05-25 Position And SSL Device Correction
 
 A first full training run was interrupted after a Linear follow-up pointed out
