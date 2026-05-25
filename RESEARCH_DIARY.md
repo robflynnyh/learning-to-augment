@@ -340,3 +340,13 @@ reproduce results, interpret metrics, or avoid known failure modes.
   Mimas checks after the fix passed two full-size dev batches at peaks 5.7 GB
   and 7.25 GB, one train backward batch at 8.22 GB, callback check-only, and
   the real smoke wrapper with callbacks disabled.
+- Fixed the remaining ROB-132 native-HuBERT training OOM from commit
+  `37b541e00ccd137c3211620073fe75462c58d9ac`. The second failure happened in
+  transformer cross-attention after audio deduplication, so the new path keeps
+  the logical `batch_size: 48` but chunks 480 candidate rows into
+  `candidate_microbatch_size: 120` inside `AudioRewardConditionedMaskLM` and
+  backprops each chunk immediately before one optimizer step. Validation passed
+  synthetic CPU full-vs-chunked loss equality, synthetic CPU chunked
+  `training_step()`, a Mimas full-config prefix with 2 dev and 20 train batches
+  peaking at 4.352 GB, callback check-only, and the real smoke wrapper with
+  callbacks disabled.

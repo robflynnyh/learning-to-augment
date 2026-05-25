@@ -5,6 +5,7 @@ training:
   device: cuda
   random_seed: 123456
   batch_size: 2
+  policy_training_step: true
   epochs: 1
   tolerance: 2
   max_steps: 1
@@ -51,6 +52,7 @@ policy:
     ssl_dim: 768
     num_heads: 8
     decoder_layers: 4
+    candidate_microbatch_size: 8
     dropout: 0.1
     default_conditioning_reward: 1.0
     reward_encoder: timestep

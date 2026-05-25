@@ -146,3 +146,41 @@ Post-fix validation:
   shape `(480, 27)` with unique audio `(48, 488, 768)` at 8.22 GB peak.
 - The callback wrapper passed `ROB132_CALLBACK_CHECK_ONLY=1`, and the real
   smoke wrapper passed with callbacks disabled.
+
+## 2026-05-25 Candidate Microbatch OOM Fix
+
+The second full native-HuBERT retry from commit
+`37b541e00ccd137c3211620073fe75462c58d9ac` OOMed in cross-attention RoPE during
+training batch 15. The deduplicated SSL tensor path was still correct; the
+remaining memory pressure came from expanding native HuBERT memory to all 480
+candidate rows inside the transformer decoder.
+
+The current config keeps the physical rollout batch at `batch_size: 48`, but
+sets `candidate_microbatch_size: 120` and enables `training.policy_training_step`.
+`AudioRewardConditionedMaskLM.training_step()` now backpropagates each
+candidate-row chunk immediately, accumulates gradients across the logical batch,
+clips once, and steps the optimizer once. This preserves the effective 48-file
+batch without retaining all 480 candidate-row attention graphs at once.
+
+Validation after this fix:
+
+- `py_compile` passed for the touched training, model, collate, and ROB-132
+  check scripts.
+- Synthetic CPU eval check matched full-batch and chunked forward loss exactly
+  with 10 candidate rows mapped to 3 unique audio memories.
+- Synthetic CPU `training_step()` completed with finite loss using
+  `candidate_microbatch_size: 4`.
+- Mimas full-config GPU prefix used `batch_size: 48` and
+  `candidate_microbatch_size: 120`; it passed 2 dev batches and 20 train
+  batches. The longest observed train prefix audio shape was
+  `(48, 727, 768)`, and peak allocated memory stayed at `4.352 GB`.
+- Callback check-only passed via
+  `logs/rob132_callback_check_after_microbatch.log`.
+- The real smoke wrapper passed with callbacks disabled via
+  `logs/rob132_smoke_after_microbatch.log`.
+
+Prefix validation log:
+
+```text
+exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/logs/rob132_microbatch_gpu_prefix_20260525.log
+```

@@ -102,14 +102,18 @@ def train_policy(
             pbar = tqdm(dataloader)
             for i, batch in enumerate(pbar):
                 if batch == None: continue
-              
-                loss, losses = policy.forward_pass(batch, device, wandb=wandb)
+
+                if config['training'].get('policy_training_step', False):
+                    loss, losses = policy.training_step(batch, device, optim)
+                else:
+                    loss, losses = policy.forward_pass(batch, device, wandb=wandb)
                 if loss == None: continue
         
                 wandb.log({'policy_loss':loss.item(), 'epoch': cur_epoch, **{k:v.item() for k,v in losses.items()}})
                 
                 pbar.set_description(desc=f'loss: {loss.item()}')
-                backward_pass(loss, policy, optim)
+                if not config['training'].get('policy_training_step', False):
+                    backward_pass(loss, policy, optim)
 
                 if max_steps != -1 and i >= max_steps:
                     break

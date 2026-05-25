@@ -2509,6 +2509,7 @@ class AudioRewardConditionedMaskLM(Policy):
             conditioning_reward_range=None,
             reward_encoder='timestep',
             sample_generation=True,
+            candidate_microbatch_size=None,
             **kwargs
         ) -> None:
         super().__init__()
@@ -2524,6 +2525,9 @@ class AudioRewardConditionedMaskLM(Policy):
         self.hidden_dim = hidden_dim
         self.ssl_dim = ssl_dim
         self.dropout = float(dropout)
+        self.candidate_microbatch_size = (
+            None if candidate_microbatch_size is None else int(candidate_microbatch_size)
+        )
 
         self.mask_enc = BinaryVariationalAutoEncoder(**mask_vae_config)
         if mask_vae_state_dict_path is not None:
@@ -2741,7 +2745,15 @@ class AudioRewardConditionedMaskLM(Policy):
             'target_output_length': int(lengths[0].item()),
         }
 
-    def forward_pass(self, batch, device, **kwargs):
+    def _candidate_slices(self, rows):
+        microbatch_size = self.candidate_microbatch_size
+        if microbatch_size is None or microbatch_size <= 0 or microbatch_size >= rows:
+            yield 0, rows
+            return
+        for start in range(0, rows, microbatch_size):
+            yield start, min(start + microbatch_size, rows)
+
+    def _move_forward_batch(self, batch, device):
         generations = batch['generations'].to(device)
         generation_lengths = batch['generation_lengths'].to(device)
         rewards = batch['rewards'].to(device)
@@ -2750,7 +2762,17 @@ class AudioRewardConditionedMaskLM(Policy):
         audio_item_idxs = batch.get('audio_item_idxs', None)
         if audio_item_idxs is not None:
             audio_item_idxs = audio_item_idxs.to(device)
+        return generations, generation_lengths, rewards, audio_features, audio_feature_lengths, audio_item_idxs
 
+    def _loss_sum_for_rows(
+            self,
+            generations,
+            generation_lengths,
+            rewards,
+            audio_features,
+            audio_feature_lengths,
+            audio_item_idxs=None,
+        ):
         predictions, generation_lengths, _ = self(
             generations=generations,
             generation_lengths=generation_lengths,
@@ -2760,7 +2782,7 @@ class AudioRewardConditionedMaskLM(Policy):
             audio_item_idxs=audio_item_idxs,
         )
 
-        lengths_mask = torch.arange(generations.size(-1), device=device) >= generation_lengths[:, None]
+        lengths_mask = torch.arange(generations.size(-1), device=generations.device) >= generation_lengths[:, None]
         ce_loss = nn.functional.cross_entropy(
             input=predictions.transpose(-1, -2),
             target=generations,
@@ -2768,8 +2790,68 @@ class AudioRewardConditionedMaskLM(Policy):
             reduction='none',
         )
         ce_loss = ce_loss.masked_fill(lengths_mask, 0)
-        ce_loss = ce_loss.sum() / ((~lengths_mask).sum())
+        return ce_loss.sum(), (~lengths_mask).sum()
 
+    def _slice_candidate_rows(self, values, start, end):
+        generations, generation_lengths, rewards, audio_features, audio_feature_lengths, audio_item_idxs = values
+        cur_audio_item_idxs = None if audio_item_idxs is None else audio_item_idxs[start:end]
+        return (
+            generations[start:end],
+            generation_lengths[start:end],
+            rewards[start:end],
+            audio_features,
+            audio_feature_lengths,
+            cur_audio_item_idxs,
+        )
+
+    def forward_pass(self, batch, device, **kwargs):
+        values = self._move_forward_batch(batch, device)
+        generations = values[0]
+        rows = generations.size(0)
+
+        if (
+                self.training
+                and torch.is_grad_enabled()
+                and self.candidate_microbatch_size is not None
+                and self.candidate_microbatch_size > 0
+                and self.candidate_microbatch_size < rows
+            ):
+            raise RuntimeError(
+                "AudioRewardConditionedMaskLM candidate microbatching requires "
+                "training.policy_training_step=true so each chunk can be backpropagated immediately."
+            )
+
+        loss_sums = []
+        token_counts = []
+        for start, end in self._candidate_slices(rows):
+            chunk_values = self._slice_candidate_rows(values, start, end)
+            loss_sum, token_count = self._loss_sum_for_rows(*chunk_values)
+            loss_sums.append(loss_sum)
+            token_counts.append(token_count)
+
+        token_count = torch.stack([count.to(device=loss_sums[0].device) for count in token_counts]).sum()
+        ce_loss = torch.stack(loss_sums).sum() / token_count.clamp_min(1)
+        return ce_loss, {'loss': ce_loss, 'total_loss': ce_loss}
+
+    def training_step(self, batch, device, optim, clip_grad_norm=1.0):
+        values = self._move_forward_batch(batch, device)
+        generations, generation_lengths = values[0], values[1]
+        rows = generations.size(0)
+        total_tokens = generation_lengths.sum().clamp_min(1).to(dtype=torch.float32)
+
+        optim.zero_grad()
+        total_loss_sum = torch.zeros((), device=device)
+        for start, end in self._candidate_slices(rows):
+            chunk_values = self._slice_candidate_rows(values, start, end)
+            loss_sum, _ = self._loss_sum_for_rows(*chunk_values)
+            (loss_sum / total_tokens).backward()
+            total_loss_sum = total_loss_sum + loss_sum.detach()
+
+        if clip_grad_norm is not None:
+            torch.nn.utils.clip_grad_norm_(self.parameters(), clip_grad_norm)
+        optim.step()
+
+        ce_loss = (total_loss_sum / total_tokens).detach()
         return ce_loss, {'loss': ce_loss, 'total_loss': ce_loss}
 
 
