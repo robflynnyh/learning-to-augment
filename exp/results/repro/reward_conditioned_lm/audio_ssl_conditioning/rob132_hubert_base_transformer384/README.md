@@ -49,3 +49,14 @@ waveform. The SSL cache builder maps TED-LIUM rollout filenames back to STM
 utterance indices, loads the corresponding raw waveform segment from
 `/store/store4/data/TEDLIUM_release-3/legacy`, extracts HuBERT features, and
 interpolates them to the saved mask-token length.
+
+## Mapping Check
+
+The rollout stem contract was checked on a random 20-file sample: 10 train
+rollouts and 10 dev rollouts. Each rollout stem was parsed as
+`<recording_id>_<utterance_idx>`, then matched against the STM-derived
+segmented TED-LIUM loader. All 20 sampled files matched the saved rollout
+spectrogram length exactly.
+
+Artifact:
+`exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/mapping_verification_sample.json`
