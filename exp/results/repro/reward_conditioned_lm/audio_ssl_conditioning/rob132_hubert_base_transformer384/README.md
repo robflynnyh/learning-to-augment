@@ -76,3 +76,14 @@ Generation sanity without a cache also passed at reward controls `0.0` and
 
 Artifact:
 `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/smoke/post_training_generation_sanity_on_the_fly.json`
+
+The requested queued GPU smoke was run through `with-gpu 1,2` on Mimas ticket
+`f102175c`; it acquired GPU 1, confirmed CUDA with torchaudio `HUBERT_BASE`,
+ran the on-the-fly SSL train/validation path, and saved the smoke checkpoint.
+The HuBERT checkpoint is stored outside the repository at:
+
+```text
+/exp/exp4/acp21rjf/rob132-audio-ssl-scratch/torch/hub/checkpoints/hubert_fairseq_base_ls960.pth
+```
+
+That checkpoint is 361M. The ignored smoke model checkpoint is 54M.
