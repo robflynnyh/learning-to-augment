@@ -10,13 +10,14 @@ summary from the dynamic ASR evaluation result tree:
 
 The committed CSV copies only the `layer_drop_lr_sweep`, `lr=9e-5` rows used by
 the figure. The regenerated plot keeps the existing bar order, labels, WER
-values, and unadapted-WER text annotation, but uses zero-based WER axes:
+values, and unadapted-WER text annotation, but uses y-axes set to plus/minus
+20% relative to the average plotted WER in each dataset panel:
 
-- Earnings22: `0%` to `20%`
-- TED-LIUM: `0%` to `7%`
+- Earnings22: `12.8%` to `19.2%`
+- TED-LIUM: `4.7%` to `7.1%`
 
-These wider axes avoid visually overstating sub-percent WER differences while
-preserving the figure intent.
+These wider axes reduce the visual amplification of sub-percent WER differences
+without flattening the comparison as much as a zero-based axis.
 
 Regeneration command:
 

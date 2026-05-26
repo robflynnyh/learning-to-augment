@@ -1,7 +1,8 @@
 # ROB-144 Outcome
 
 Regenerated `fig:selftrain:layer-drop` with the same source data and figure
-content, but with wider WER axes that start at zero.
+content, but with wider WER axes set to plus/minus 20% relative to the average
+plotted WER in each dataset panel.
 
 Artifacts:
 
@@ -18,8 +19,8 @@ The source data came from:
 
 The figure uses:
 
-- Earnings22 y-axis: `0%` to `20%`.
-- TED-LIUM y-axis: `0%` to `7%`.
+- Earnings22 y-axis: `12.8%` to `19.2%`.
+- TED-LIUM y-axis: `4.7%` to `7.1%`.
 
 Validation:
 

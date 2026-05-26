@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import math
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -87,11 +86,9 @@ def load_rows(source_csv: Path) -> list[dict[str, str]]:
     return [row for row in rows if row.get("wer") and not row.get("error")]
 
 
-def rounded_axis_top(values: list[float], dataset: str) -> float:
-    max_value = max(values + [BASELINE_WER[dataset] * 100.0])
-    if max_value <= 10.0:
-        return math.ceil(max_value * 1.05)
-    return math.ceil(max_value * 1.05 / 5.0) * 5.0
+def mean_relative_axis_limits(values: list[float]) -> tuple[float, float]:
+    mean_value = float(np.mean(values))
+    return mean_value * 0.8, mean_value * 1.2
 
 
 def render(source_csv: Path, output_pdf: Path, output_png: Path | None) -> None:
@@ -124,8 +121,8 @@ def render(source_csv: Path, output_pdf: Path, output_png: Path | None) -> None:
             label="lr=9e-5",
         )
 
-        axis_top = rounded_axis_top(values, dataset)
-        label_offset = axis_top * 0.015
+        axis_bottom, axis_top = mean_relative_axis_limits(values)
+        label_offset = (axis_top - axis_bottom) * 0.02
         for bar, value in zip(bars, values):
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
@@ -150,7 +147,7 @@ def render(source_csv: Path, output_pdf: Path, output_png: Path | None) -> None:
             bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.85, "pad": 1.5},
         )
 
-        ax.set_ylim(0.0, axis_top)
+        ax.set_ylim(axis_bottom, axis_top)
         ax.set_title(DATASET_TITLES[dataset], fontsize=10)
         ax.set_xticks(x)
         ax.set_xticklabels(
