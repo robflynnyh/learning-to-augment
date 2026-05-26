@@ -139,9 +139,14 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `/store/store4/data/l2augment_rollout_uvqmlm/`. The wrapper uses a real
   `EXIT` trap, logs store4 space before copying, and can be resumed with the
   same command if interrupted.
-
 ## 2026-05-21
 
+- ROB-108 setup: added a dedicated Mimas wrapper and summarizer for test-split
+  RFM/RMM/UFMR/UVQLM evals across TED-LIUM, Earnings22, CHiME-6, Rev16, and
+  TAL. Result root is `exp/results/repro/`, with per-policy artifacts under
+  top-level method directories such as `exp/results/repro/RFM/`;
+  ROB-108-specific README and aggregate files are kept under
+  `exp/results/repro/symphony/rob-108/`.
 - Verified ROB-109 UVQLM dev rollout provenance and reward tensor semantics in
   `exp/results/repro/unconditional_lm/ROB-109_rollout_verification/OUTCOME.md`.
   The Mimas UMLM/BVAE checkpoints are byte-identical to the Stanage checkpoint

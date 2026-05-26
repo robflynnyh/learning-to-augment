@@ -1,0 +1,1 @@
+ID: ROB-108-earnings22-test-UFMR-earnings22_epoch5_lr1e-5-repeat1 - Dataset: earnings22 - Split: test - Epochs: 5 - Original_WER: 0.23523885382840104 - Updated_WER: 0.18695749851929008

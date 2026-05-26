@@ -1,0 +1,25 @@
+checkpointing:
+  asr_model: /store/store5/data/acp21rjf_checkpoints/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt
+
+training:
+  device: 'cuda'
+  random_seed: 123456
+  batch_size: 84
+  epochs: 100
+
+evaluation:
+  id: 'ROB-108-this_american_life-test-NoAug-TAL_baseline-repeat1'
+  dataset: 'this_american_life'
+  split: 'test'
+  rollout_setting: policy
+  use_cer: false
+  epochs: 0
+  augmentation_config:
+    seed: 123456
+  optim_args:
+    lr: 0.0
+  save_path: /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-108/exp/results/repro/NoAug/TAL_baseline.txt
+
+policy:
+  lr: 1e-4
+  class: NoAugmentation
