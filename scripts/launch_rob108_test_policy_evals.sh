@@ -13,7 +13,7 @@ if [ -f /exp/exp4/acp21rjf/symphony-config/.env ]; then
 fi
 
 LINEAR_ISSUE="${LINEAR_ISSUE:-ROB-108}"
-RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/sweeps/rob108_test_policy_evals}"
+RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/rob108_test_policy_evals}"
 LOG_PATH="${LOG_PATH:-${RESULT_ROOT}/logs/rob108_test_policy_evals.log}"
 SCREEN_NAME="${SCREEN_NAME:-rob108_test_policy_evals}"
 RUNNER_LABEL="${RUNNER_LABEL:-screen:${SCREEN_NAME}}"
@@ -55,7 +55,7 @@ on_exit() {
     --branch "${GIT_BRANCH}"
     --commit "${GIT_COMMIT}"
     --target-state "${CALLBACK_TARGET_STATE:-Todo}"
-    --note "${CALLBACK_NOTE:-ROB-108 test-set policy eval wrapper exited. Inspect exp/results/repro/sweeps/rob108_test_policy_evals/OUTCOME.md after completion.}"
+    --note "${CALLBACK_NOTE:-ROB-108 test-set policy eval wrapper exited. Inspect exp/results/repro/rob108_test_policy_evals/OUTCOME.md after completion.}"
     --tail-lines "${CALLBACK_TAIL_LINES:-80}"
     --max-log-chars "${CALLBACK_MAX_LOG_CHARS:-6000}"
     --max-comment-chars "${CALLBACK_MAX_COMMENT_CHARS:-10000}"
