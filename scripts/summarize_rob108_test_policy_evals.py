@@ -257,14 +257,14 @@ def write_markdown(rows: list[dict[str, str]], path: Path, title: str, note: str
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--result-root", type=Path, default=Path("exp/results/repro/rob108_test_policy_evals"))
+    parser.add_argument("--result-root", type=Path, default=Path("exp/results/repro"))
     parser.add_argument("--datasets", default="tedlium earnings22 chime6 rev16 TAL")
     parser.add_argument("--methods", default="NoAug RFM RMM UFMR UVQLM")
     parser.add_argument("--repeats", default="1")
     parser.add_argument("--epoch1-lrs", default="1e-5 3e-5")
     parser.add_argument("--epoch5-lrs", default="1e-5")
     parser.add_argument("--csv-name", default="rob108_test_policy_evals.csv")
-    parser.add_argument("--outcome-name", default="OUTCOME.md")
+    parser.add_argument("--outcome-name", default="ROB-108_OUTCOME.md")
     parser.add_argument("--title", default="ROB-108 Test Policy Evaluations")
     parser.add_argument(
         "--note",
