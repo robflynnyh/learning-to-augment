@@ -258,6 +258,7 @@ def write_markdown(rows: list[dict[str, str]], path: Path, title: str, note: str
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--result-root", type=Path, default=Path("exp/results/repro"))
+    parser.add_argument("--output-dir", type=Path, default=Path("exp/results/repro/symphony/rob-108"))
     parser.add_argument("--datasets", default="tedlium earnings22 chime6 rev16 TAL")
     parser.add_argument("--methods", default="NoAug RFM RMM UFMR UVQLM")
     parser.add_argument("--repeats", default="1")
@@ -283,10 +284,10 @@ def main() -> None:
         epoch1_lrs=parse_strings(args.epoch1_lrs),
         epoch5_lrs=parse_strings(args.epoch5_lrs),
     )
-    write_csv(rows, args.result_root / args.csv_name)
-    write_markdown(rows, args.result_root / args.outcome_name, args.title, args.note)
-    print(f"Wrote {args.result_root / args.outcome_name}")
-    print(f"Wrote {args.result_root / args.csv_name}")
+    write_csv(rows, args.output_dir / args.csv_name)
+    write_markdown(rows, args.output_dir / args.outcome_name, args.title, args.note)
+    print(f"Wrote {args.output_dir / args.outcome_name}")
+    print(f"Wrote {args.output_dir / args.csv_name}")
 
 
 if __name__ == "__main__":

@@ -145,8 +145,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   RFM/RMM/UFMR/UVQLM evals across TED-LIUM, Earnings22, CHiME-6, Rev16, and
   TAL. Result root is `exp/results/repro/`, with per-policy artifacts under
   top-level method directories such as `exp/results/repro/RFM/`;
-  repeat-aware rows are kept in `rob108_test_policy_evals.csv` and
-  `ROB-108_OUTCOME.md`.
+  ROB-108-specific README and aggregate files are kept under
+  `exp/results/repro/symphony/rob-108/`.
 - Verified ROB-109 UVQLM dev rollout provenance and reward tensor semantics in
   `exp/results/repro/unconditional_lm/ROB-109_rollout_verification/OUTCOME.md`.
   The Mimas UMLM/BVAE checkpoints are byte-identical to the Stanage checkpoint

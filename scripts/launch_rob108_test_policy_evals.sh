@@ -14,7 +14,8 @@ fi
 
 LINEAR_ISSUE="${LINEAR_ISSUE:-ROB-108}"
 RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro}"
-LOG_PATH="${LOG_PATH:-${RESULT_ROOT}/logs/rob108_test_policy_evals.log}"
+AGGREGATE_DIR="${AGGREGATE_DIR:-${RESULT_ROOT}/symphony/rob-108}"
+LOG_PATH="${LOG_PATH:-${AGGREGATE_DIR}/logs/rob108_test_policy_evals.log}"
 SCREEN_NAME="${SCREEN_NAME:-rob108_test_policy_evals}"
 RUNNER_LABEL="${RUNNER_LABEL:-screen:${SCREEN_NAME}}"
 QUEUED_COMMAND="${QUEUED_COMMAND:-/store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob108_test_policy_evals.sh}"
@@ -48,14 +49,14 @@ on_exit() {
     --issue "${LINEAR_ISSUE}"
     --status-code "${status}"
     --log "${LOG_PATH}"
-    --results "${RESULT_ROOT}"
+    --results "${AGGREGATE_DIR}"
     --screen-name "${SCREEN_NAME}"
     --runner-label "${RUNNER_LABEL}"
     --queued-command "${QUEUED_COMMAND}"
     --branch "${GIT_BRANCH}"
     --commit "${GIT_COMMIT}"
     --target-state "${CALLBACK_TARGET_STATE:-Todo}"
-    --note "${CALLBACK_NOTE:-ROB-108 test-set policy eval wrapper exited. Inspect exp/results/repro/ROB-108_OUTCOME.md after completion.}"
+    --note "${CALLBACK_NOTE:-ROB-108 test-set policy eval wrapper exited. Inspect exp/results/repro/symphony/rob-108/ROB-108_OUTCOME.md after completion.}"
     --tail-lines "${CALLBACK_TAIL_LINES:-80}"
     --max-log-chars "${CALLBACK_MAX_LOG_CHARS:-6000}"
     --max-comment-chars "${CALLBACK_MAX_COMMENT_CHARS:-10000}"
@@ -77,12 +78,13 @@ trap on_exit EXIT
 
 set -euo pipefail
 
-mkdir -p "$(dirname "${LOG_PATH}")" "${RESULT_ROOT}"
+mkdir -p "$(dirname "${LOG_PATH}")" "${RESULT_ROOT}" "${AGGREGATE_DIR}"
 exec > >(tee -a "${LOG_PATH}") 2>&1
 
 echo "[rob108] branch=${GIT_BRANCH}"
 echo "[rob108] commit=${GIT_COMMIT}"
 echo "[rob108] result_root=${RESULT_ROOT}"
+echo "[rob108] aggregate_dir=${AGGREGATE_DIR}"
 echo "[rob108] asr_ckpt=${ASR_CKPT}"
 echo "[rob108] ufmr_ckpt=${UFMR_CKPT}"
 echo "[rob108] uvqlm_ckpt=${UVQLM_CKPT}"
@@ -256,6 +258,7 @@ PY
 
 python3 scripts/summarize_rob108_test_policy_evals.py \
   --result-root "${RESULT_ROOT}" \
+  --output-dir "${AGGREGATE_DIR}" \
   --datasets "${DATASETS}" \
   --methods "${METHODS}" \
   --repeats "${REPEATS}" \
@@ -365,6 +368,7 @@ done
 cd "${REPO_DIR}"
 python3 scripts/summarize_rob108_test_policy_evals.py \
   --result-root "${RESULT_ROOT}" \
+  --output-dir "${AGGREGATE_DIR}" \
   --datasets "${DATASETS}" \
   --methods "${METHODS}" \
   --repeats "${REPEATS}" \
