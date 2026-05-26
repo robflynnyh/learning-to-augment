@@ -165,7 +165,7 @@ def render(source_csv: Path, output_pdf: Path, output_png: Path | None) -> None:
     output_pdf.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_pdf, bbox_inches="tight")
     if output_png is not None:
-        fig.savefig(output_png, bbox_inches="tight", dpi=200)
+        fig.savefig(output_png, bbox_inches="tight", dpi=300)
     plt.close(fig)
 
 

@@ -31,4 +31,5 @@ Thesis handoff artifact:
 
 ```text
 exp/results/repro/selftrain_layer_drop_axis/layer_drop_lr_sweep_ablation_bars_larger_axis.pdf
+exp/results/repro/selftrain_layer_drop_axis/layer_drop_lr_sweep_ablation_bars_larger_axis.png
 ```

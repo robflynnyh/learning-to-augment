@@ -7,7 +7,7 @@ plotted WER in each dataset panel.
 Artifacts:
 
 - `layer_drop_lr_sweep_ablation_bars_larger_axis.pdf`: thesis handoff figure.
-- `layer_drop_lr_sweep_ablation_bars_larger_axis.png`: quick visual preview.
+- `layer_drop_lr_sweep_ablation_bars_larger_axis.png`: thesis handoff PNG and quick visual preview.
 - `layer_drop_lr_sweep_9e-5_source.csv`: copied source rows used by the figure.
 - `plot_layer_drop_larger_axis.py`: reproducible plotting script.
 
