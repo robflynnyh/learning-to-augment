@@ -368,3 +368,16 @@ reproduce results, interpret metrics, or avoid known failure modes.
   reached `0.091633` at 1 epoch and `0.088372` at 5 epochs. This is a narrow
   TED-LIUM-dev result only; broader dataset conclusions still require the
   ROB-124-style all-dataset follow-up.
+- Started the 2026-05-25 ROB-124 follow-up requested in Linear: rerun the same
+  all-dataset 384/dropout eval with reward sampled from `[0.0, 1.0]` for
+  epochs `1` and `5` on GPU pool `1,2`. The separate result root is
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling_0to1/`.
+  The launch path reuses the corrected `conditioning_reward_range` adaptation
+  code and keeps the previous `[0.5, 1.0]` artifacts intact.
+- Corrected the 2026-05-25 ROB-124 follow-up after the latest Linear comment
+  clarified that the intended scope is two separate fixed-reward sweeps, not a
+  sampled `[0.0, 1.0]` run. The sampled queue was stopped before GPU eval while
+  still waiting in `with-gpu`. The active replacement root is
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_fixed_rewards_0_and_1/`
+  with 20 cells: fixed reward `1.0` and fixed reward `0.0` across five
+  datasets and epochs `1` and `5`.

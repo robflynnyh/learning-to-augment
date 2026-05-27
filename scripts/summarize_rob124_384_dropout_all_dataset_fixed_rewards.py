@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize ROB-124 all-dataset 384/dropout sampled-reward evals."""
+"""Summarize ROB-124 all-dataset 384/dropout fixed-reward evals."""
 
 from __future__ import annotations
 
@@ -68,61 +68,78 @@ def parse_strings(raw: str) -> tuple[str, ...]:
     return tuple(raw.split())
 
 
+def reward_token(reward: str) -> str:
+    value = float(reward)
+    if value == 0.0:
+        return "0"
+    if value == 1.0:
+        return "1"
+    return reward.replace(".", "p").replace("-", "m")
+
+
+def method_for_reward(reward: str) -> str:
+    return f"RewardConditionedMaskLMReward{reward_token(reward)}"
+
+
+def condition_for_reward(reward: str) -> str:
+    return f"fixed_reward_{reward}"
+
+
+def label_for_reward(reward: str) -> str:
+    return f"fixed conditioning reward {reward}"
+
+
 def fmt(value: float | None) -> str:
     return "" if value is None else f"{value:.6f}"
 
 
 def expected_rows(
     result_root: Path,
+    rewards: tuple[str, ...],
     datasets: tuple[str, ...],
     epochs: tuple[int, ...],
     lr: str,
     repeats: tuple[int, ...],
-    method: str,
-    condition: str,
-    label: str,
-    reward_range: str,
 ) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
-    for dataset_tag in datasets:
-        dataset, split = DATASETS[dataset_tag]
-        for repeat in repeats:
-            seed = 123456 + repeat - 1
-            repeat_suffix = "" if repeat == 1 else f"_repeat{repeat}"
-            for epoch_count in epochs:
-                tag = f"{dataset_tag}_{split}_epoch{epoch_count}_lr{lr}{repeat_suffix}"
-                rows.append(
-                    {
-                        "condition": condition,
-                        "label": label,
-                        "dataset_tag": dataset_tag,
-                        "dataset": dataset,
-                        "split": split,
-                        "method": method,
-                        "reward_range": reward_range,
-                        "repeat": str(repeat),
-                        "seed": str(seed),
-                        "epochs": str(epoch_count),
-                        "lr": lr,
-                        "config_path": display_path(result_root / method / "configs" / f"{tag}.yaml"),
-                        "result_path": display_path(result_root / method / f"{tag}.txt"),
-                    }
-                )
+    for reward in rewards:
+        method = method_for_reward(reward)
+        for dataset_tag in datasets:
+            dataset, split = DATASETS[dataset_tag]
+            for repeat in repeats:
+                seed = 123456 + repeat - 1
+                repeat_suffix = "" if repeat == 1 else f"_repeat{repeat}"
+                for epoch_count in epochs:
+                    tag = f"{dataset_tag}_{split}_epoch{epoch_count}_lr{lr}{repeat_suffix}"
+                    rows.append(
+                        {
+                            "condition": condition_for_reward(reward),
+                            "label": label_for_reward(reward),
+                            "reward": reward,
+                            "dataset_tag": dataset_tag,
+                            "dataset": dataset,
+                            "split": split,
+                            "method": method,
+                            "repeat": str(repeat),
+                            "seed": str(seed),
+                            "epochs": str(epoch_count),
+                            "lr": lr,
+                            "config_path": display_path(result_root / method / "configs" / f"{tag}.yaml"),
+                            "result_path": display_path(result_root / method / f"{tag}.txt"),
+                        }
+                    )
     return rows
 
 
 def collect_rows(
     result_root: Path,
+    rewards: tuple[str, ...],
     datasets: tuple[str, ...],
     epochs: tuple[int, ...],
     lr: str,
     repeats: tuple[int, ...],
-    method: str,
-    condition: str,
-    label: str,
-    reward_range: str,
 ) -> list[dict[str, str]]:
-    rows = expected_rows(result_root, datasets, epochs, lr, repeats, method, condition, label, reward_range)
+    rows = expected_rows(result_root, rewards, datasets, epochs, lr, repeats)
     for row in rows:
         parsed = parse_result(
             Path(row["result_path"]),
@@ -154,14 +171,14 @@ def collect_rows(
 
 
 def aggregate_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
-    grouped: dict[tuple[str, str], list[dict[str, str]]] = {}
+    grouped: dict[tuple[str, str, str], list[dict[str, str]]] = {}
     for row in rows:
         if row["status"] != "complete":
             continue
-        grouped.setdefault((row["dataset_tag"], row["epochs"]), []).append(row)
+        grouped.setdefault((row["reward"], row["dataset_tag"], row["epochs"]), []).append(row)
 
     aggregate: list[dict[str, str]] = []
-    for (dataset_tag, epochs), group in sorted(grouped.items()):
+    for (reward, dataset_tag, epochs), group in sorted(grouped.items(), key=lambda item: (float(item[0][0]), item[0][1], int(item[0][2]))):
         original_values = [float(row["original_wer"]) for row in group]
         updated_values = [float(row["updated_wer"]) for row in group]
         mean_original = statistics.fmean(original_values)
@@ -169,6 +186,7 @@ def aggregate_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
         std_updated = statistics.stdev(updated_values) if len(updated_values) > 1 else 0.0
         aggregate.append(
             {
+                "reward": reward,
                 "dataset_tag": dataset_tag,
                 "epochs": epochs,
                 "n": str(len(group)),
@@ -203,7 +221,6 @@ def write_markdown(
     log_path: str,
     screen_log_path: str,
     title: str,
-    reward_control: str,
 ) -> None:
     complete = sum(row["status"] == "complete" for row in rows)
     missing = [row for row in rows if row["status"] != "complete"]
@@ -214,7 +231,7 @@ def write_markdown(
         "",
         f"- Checkpoint: `{checkpoint}`",
         "- Policy: `RewardConditionedMaskLM`, `hidden_dim=384`, `dropout=0.1`",
-        f"- Reward control: sampled uniformly from `{reward_control}` during each adaptation mask generation step",
+        "- Reward controls: fixed `conditioning_reward: 1.0` and fixed `conditioning_reward: 0.0` as separate runs",
         "- Datasets: `tedlium`, `earnings22`, `chime6`, `rev16`, `TAL`; all `test` split",
         "- Adaptation: `epochs=1` and `epochs=5`, `lr=1e-5`, multistep rollout",
         f"- Branch: `{branch}`",
@@ -227,30 +244,30 @@ def write_markdown(
         "",
         "## Aggregate",
         "",
-        "| Dataset | Epochs | N | Mean Original WER | Mean Updated WER | Updated WER Std | Mean Abs Delta | Mean Rel Delta % |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Reward | Dataset | Epochs | N | Mean Original WER | Mean Updated WER | Updated WER Std | Mean Abs Delta | Mean Rel Delta % |",
+        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in aggregate_rows(rows):
         lines.append(
-            "| {dataset_tag} | {epochs} | {n} | {original_wer_mean} | {updated_wer_mean} | "
+            "| {reward} | {dataset_tag} | {epochs} | {n} | {original_wer_mean} | {updated_wer_mean} | "
             "{updated_wer_std} | {absolute_delta_mean} | {relative_delta_pct_mean} |".format(**row)
         )
     if missing:
         lines.extend(["", "## Missing Cells", ""])
         for row in missing:
-            lines.append("- {dataset_tag} / epoch {epochs} / repeat {repeat} / lr `{lr}`".format(**row))
+            lines.append("- reward {reward} / {dataset_tag} / epoch {epochs} / repeat {repeat} / lr `{lr}`".format(**row))
     lines.extend(
         [
             "",
             "## Per Cell",
             "",
-            "| Dataset | Repeat | Seed | Epochs | LR | Original WER | Updated WER | Abs Delta | Rel Delta % | Status | Result |",
-            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
+            "| Reward | Dataset | Repeat | Seed | Epochs | LR | Original WER | Updated WER | Abs Delta | Rel Delta % | Status | Result |",
+            "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
         ]
     )
     for row in rows:
         lines.append(
-            "| {dataset_tag} | {repeat} | {seed} | {epochs} | `{lr}` | {original_wer} | "
+            "| {reward} | {dataset_tag} | {repeat} | {seed} | {epochs} | `{lr}` | {original_wer} | "
             "{updated_wer} | {wer_delta} | {relative_delta_pct} | {status} | `{result_path}` |".format(**row)
         )
     lines.extend(["", "CSV artifact:", "", f"```text\n{csv_path}\n```", ""])
@@ -262,39 +279,32 @@ def main() -> None:
     parser.add_argument(
         "--result-root",
         type=Path,
-        default=Path("exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling"),
+        default=Path("exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_fixed_rewards_0_and_1"),
     )
+    parser.add_argument("--fixed-rewards", default="1.0 0.0")
     parser.add_argument("--datasets", default="tedlium earnings22 chime6 rev16 TAL")
     parser.add_argument("--epochs", default="1 5")
     parser.add_argument("--lr", default="1e-5")
     parser.add_argument("--repeats", default="1")
-    parser.add_argument("--method", default="RewardConditionedMaskLMUniform0p5to1")
-    parser.add_argument("--condition", default="uniform_0.5_1.0")
-    parser.add_argument("--label", default="uniform sampled reward [0.5, 1.0]")
-    parser.add_argument("--reward-range", default="0.5:1.0")
-    parser.add_argument("--reward-control", default="[0.5, 1.0]")
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--command", required=True)
     parser.add_argument("--branch", required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--log-path", required=True)
     parser.add_argument("--screen-log-path", required=True)
-    parser.add_argument("--csv-name", default="rob124_384_dropout_all_dataset_reward_sampling.csv")
+    parser.add_argument("--csv-name", default="rob124_384_dropout_all_dataset_fixed_rewards_0_and_1.csv")
     parser.add_argument("--outcome-name", default="OUTCOME.md")
-    parser.add_argument("--title", default="ROB-124 384-Dropout All-Dataset Reward Sampling Eval")
+    parser.add_argument("--title", default="ROB-124 384-Dropout All-Dataset Fixed Reward 0 And 1 Eval")
     args = parser.parse_args()
 
     csv_path = args.result_root / args.csv_name
     rows = collect_rows(
         args.result_root,
+        rewards=parse_strings(args.fixed_rewards),
         datasets=parse_strings(args.datasets),
         epochs=parse_ints(args.epochs),
         lr=args.lr,
         repeats=parse_ints(args.repeats),
-        method=args.method,
-        condition=args.condition,
-        label=args.label,
-        reward_range=args.reward_range,
     )
     write_csv(rows, csv_path)
     write_markdown(
@@ -308,11 +318,10 @@ def main() -> None:
         log_path=args.log_path,
         screen_log_path=args.screen_log_path,
         title=args.title,
-        reward_control=args.reward_control,
     )
-    print(f"[rob124-alldata-summary] wrote {args.result_root / args.csv_name}")
-    print(f"[rob124-alldata-summary] wrote {args.result_root / args.outcome_name}")
-    print(f"[rob124-alldata-summary] completed {sum(row['status'] == 'complete' for row in rows)}/{len(rows)} cells")
+    print(f"[rob124-fixed-summary] wrote {args.result_root / args.csv_name}")
+    print(f"[rob124-fixed-summary] wrote {args.result_root / args.outcome_name}")
+    print(f"[rob124-fixed-summary] completed {sum(row['status'] == 'complete' for row in rows)}/{len(rows)} cells")
 
 
 if __name__ == "__main__":
