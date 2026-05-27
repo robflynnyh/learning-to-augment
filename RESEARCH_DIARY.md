@@ -360,3 +360,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   self-training spectrogram chunk. The wrapper reuses the existing
   `/exp/exp4/acp21rjf/rob132-audio-ssl-scratch` HuBERT cache to avoid a second
   SSL checkpoint download.
+- Completed the ROB-132 fixed-reward self-training eval on 2026-05-27. The
+  callback-backed Mimas retry completed all four TED-LIUM dev cells and wrote
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1/OUTCOME.md`.
+  All four cells improved over the original WER `0.100088`: reward `1.0`
+  reached `0.089532` at 1 epoch and `0.086880` at 5 epochs, while reward `0.0`
+  reached `0.091633` at 1 epoch and `0.088372` at 5 epochs. This is a narrow
+  TED-LIUM-dev result only; broader dataset conclusions still require the
+  ROB-124-style all-dataset follow-up.
