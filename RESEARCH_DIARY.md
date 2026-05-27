@@ -217,3 +217,13 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `lr=1e-5`. Checkpoint-load/generation preflight and a cropped Earnings CPU
   adaptation smoke passed; the full GPU comparison should be interpreted only
   from the wrapper-generated CSV/`OUTCOME.md`, not from the cropped smoke.
+
+## 2026-05-26
+
+- ROB-144 regenerated the thesis handoff artifact for
+  `fig:selftrain:layer-drop` under
+  `exp/results/repro/selftrain_layer_drop_axis/`. The source rows are copied
+  from the existing dynamic-ASR `ctc_self_training_extra_ablation_sweeps`
+  summary, and the new plot keeps the same bars and labels while using axes set
+  to plus/minus 20% around each dataset panel's average WER. The handoff
+  includes both PDF and PNG artifacts.
