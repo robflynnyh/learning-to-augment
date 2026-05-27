@@ -1,0 +1,1 @@
+ID: ROB-124-tedlium-test-384d-dropout0p1-reward1-epoch5-lr1e-5-repeat1 - Dataset: tedlium - Split: test - Epochs: 5 - Original_WER: 0.08534467481835903 - Updated_WER: 0.07623604465709728
