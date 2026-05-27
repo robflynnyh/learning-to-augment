@@ -139,9 +139,14 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `/store/store4/data/l2augment_rollout_uvqmlm/`. The wrapper uses a real
   `EXIT` trap, logs store4 space before copying, and can be resumed with the
   same command if interrupted.
-
 ## 2026-05-21
 
+- ROB-108 setup: added a dedicated Mimas wrapper and summarizer for test-split
+  RFM/RMM/UFMR/UVQLM evals across TED-LIUM, Earnings22, CHiME-6, Rev16, and
+  TAL. Result root is `exp/results/repro/`, with per-policy artifacts under
+  top-level method directories such as `exp/results/repro/RFM/`;
+  ROB-108-specific README and aggregate files are kept under
+  `exp/results/repro/symphony/rob-108/`.
 - Verified ROB-109 UVQLM dev rollout provenance and reward tensor semantics in
   `exp/results/repro/unconditional_lm/ROB-109_rollout_verification/OUTCOME.md`.
   The Mimas UMLM/BVAE checkpoints are byte-identical to the Stanage checkpoint
@@ -310,3 +315,25 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_fixed_rewards_0_and_1/`
   with 20 cells: fixed reward `1.0` and fixed reward `0.0` across five
   datasets and epochs `1` and `5`.
+
+## 2026-05-26
+
+- ROB-144 regenerated the thesis handoff artifact for
+  `fig:selftrain:layer-drop` under
+  `exp/results/repro/selftrain_layer_drop_axis/`. The source rows are copied
+  from the existing dynamic-ASR `ctc_self_training_extra_ablation_sweeps`
+  summary, and the new plot keeps the same bars and labels while using axes set
+  to plus/minus 20% around each dataset panel's average WER. The handoff
+  includes both PDF and PNG artifacts.
+
+## 2026-05-27
+
+- Completed the ROB-124 all-dataset fixed reward `1.0` and `0.0` follow-up.
+  The callback-backed Mimas run exited cleanly, completed all 20 cells, and
+  wrote
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_fixed_rewards_0_and_1/OUTCOME.md`.
+  Fixed reward `0.0` improved all 10 cells; fixed reward `1.0` improved 9 of
+  10, with CHiME-6 at 5 adaptation epochs collapsing from `0.843620` to
+  `1.000000` WER. Treat the 384/dropout checkpoint as usable, but prefer
+  1-epoch or dataset-specific adaptation rather than a blanket 5-epoch
+  high-reward setting.

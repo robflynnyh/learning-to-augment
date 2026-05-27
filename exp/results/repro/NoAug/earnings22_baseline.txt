@@ -1,0 +1,1 @@
+ID: ROB-108-earnings22-test-NoAug-earnings22_baseline-repeat1 - Dataset: earnings22 - Split: test - Epochs: 0 - Original_WER: 0.23519800665808877 - Updated_WER: 0.23519800665808877
