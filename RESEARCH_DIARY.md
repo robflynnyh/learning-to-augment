@@ -350,3 +350,13 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `training_step()`, a Mimas full-config prefix with 2 dev and 20 train batches
   peaking at 4.352 GB, callback check-only, and the real smoke wrapper with
   callbacks disabled.
+- Started the ROB-132 post-training fixed-reward self-training eval after the
+  full audio SSL model callback succeeded. The new result root is
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1/`
+  and contains four TED-LIUM dev cells: rewards `1.0` and `0.0` crossed with
+  adaptation epochs `1` and `5` at `lr=1e-5`. The eval path now supplies
+  frozen HuBERT features to `AudioRewardConditionedMaskLM.augment()` by
+  extracting SSL features from the raw recording segment corresponding to each
+  self-training spectrogram chunk. The wrapper reuses the existing
+  `/exp/exp4/acp21rjf/rob132-audio-ssl-scratch` HuBERT cache to avoid a second
+  SSL checkpoint download.

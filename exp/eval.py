@@ -1,9 +1,11 @@
 import argparse
 import torch
+import torchaudio
 from functools import partial
 from omegaconf.omegaconf import OmegaConf
 from lcasr.utils.audio_tools import load_tokenizer
 from lcasr.utils.audio_tools import processing_chain
+from lcasr.utils.audio_tools import total_seconds
 from lcasr.utils.general import load_model as load_asr_model, get_model_class
 # from l2augment.modelling import load_model as load_rl_models
 from l2augment.utils.helpers import load_model as load_policy, load_asr_model_fn
@@ -28,6 +30,74 @@ rollout_fns = {
     'multistep': multistep_rollout,
     'default': multistep_rollout
 }
+
+_SSL_MODEL_CACHE = {}
+
+
+def make_audio_ssl_feature_fn(config, rec_dict):
+    policy_class = config.get('policy', {}).get('class', 'default')
+    if policy_class != 'AudioRewardConditionedMaskLM':
+        return None
+
+    audio_path = rec_dict.get('audio')
+    if not isinstance(audio_path, str):
+        raise ValueError(
+            "AudioRewardConditionedMaskLM eval currently requires rec_dict['audio'] "
+            "to be a single raw audio path"
+        )
+
+    dataset_config = config.get('dataset', {})
+    bundle_name = dataset_config.get('ssl_bundle', 'HUBERT_BASE')
+    ssl_device = dataset_config.get('ssl_device', config.get('training', {}).get('device', 'cuda'))
+
+    def load_ssl_model(device):
+        target_device = str(device if ssl_device == 'same' else ssl_device)
+        cache_key = (bundle_name, target_device)
+        if cache_key not in _SSL_MODEL_CACHE:
+            try:
+                bundle = getattr(torchaudio.pipelines, bundle_name)
+            except AttributeError as exc:
+                raise ValueError(f"Unknown torchaudio SSL bundle: {bundle_name}") from exc
+            model = bundle.get_model().eval().to(target_device)
+            for param in model.parameters():
+                param.requires_grad = False
+            _SSL_MODEL_CACHE[cache_key] = (bundle, model, torch.device(target_device))
+        return _SSL_MODEL_CACHE[cache_key]
+
+    def extract_features(chunk_start_frame, audio_chunk, device):
+        bundle, model, target_device = load_ssl_model(device)
+        info = torchaudio.info(audio_path)
+        start_s = total_seconds(int(chunk_start_frame))
+        duration_s = total_seconds(int(audio_chunk.shape[-1]))
+        frame_offset = max(0, int(round(start_s * info.sample_rate)))
+        num_frames = max(1, int(round(duration_s * info.sample_rate)))
+        waveform, sample_rate = torchaudio.load(
+            audio_path,
+            frame_offset=frame_offset,
+            num_frames=num_frames,
+        )
+        if waveform.size(0) > 1:
+            waveform = waveform.mean(dim=0, keepdim=True)
+        if sample_rate != bundle.sample_rate:
+            waveform = torchaudio.functional.resample(waveform, sample_rate, bundle.sample_rate)
+        waveform = waveform.to(target_device)
+        lengths = torch.tensor([waveform.size(-1)], dtype=torch.long, device=target_device)
+        with torch.no_grad():
+            extracted = model.extract_features(waveform, lengths=lengths)
+        if isinstance(extracted, tuple):
+            features, feature_lengths = extracted
+        else:
+            features, feature_lengths = extracted, None
+        if isinstance(features, (list, tuple)):
+            features = features[-1]
+        if feature_lengths is not None:
+            feature_length = int(feature_lengths[0].item())
+            features = features[:, :feature_length]
+        else:
+            feature_length = int(features.size(1))
+        return features.squeeze(0).contiguous(), feature_length
+
+    return extract_features
 
 
 def main(config, policy_net=None):
@@ -74,6 +144,7 @@ def main(config, policy_net=None):
         cur_data = data[index]
         print('---', cur_data['id'], '---')
         audio_spec, gold_text = cur_data['process_fn'](cur_data)
+        audio_ssl_feature_fn = make_audio_ssl_feature_fn(config, cur_data)
     
     
 
@@ -82,6 +153,7 @@ def main(config, policy_net=None):
             audio = audio_spec,
             text = gold_text,
             augmentation_config = config.get('evaluation', {}).get('augmentation_config', {}),
+            audio_feature_fn = audio_ssl_feature_fn,
             epochs = epochs,
             optim_args = optim_args
         )
@@ -126,7 +198,5 @@ if __name__ == "__main__":
     config['indexes'] = args.indexes
     config['save'] = not args.dont_save
     main(config)
-
-
 
 
