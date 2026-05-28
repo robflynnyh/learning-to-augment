@@ -53,7 +53,7 @@ Removed roots:
 | All-dataset sampled `[0.5, 1.0]` | Completed `10/10` cells; `9/10` improved; the only regression is CHiME-6 at 5 epochs, `0.843620 -> 1.000000` WER. | `rob124_384_dropout_reward_conditioning/all_dataset_sampled_reward_0p5_to_1p0/OUTCOME.md` |
 | All-dataset fixed rewards `0.0` and `1.0` | Completed `20/20` cells; fixed reward `0.0` improved `10/10`, fixed reward `1.0` improved `9/10`; the only regression is again CHiME-6 at reward `1.0`, 5 epochs, `0.843620 -> 1.000000` WER. | `rob124_384_dropout_reward_conditioning/all_dataset_fixed_rewards_0_and_1/OUTCOME.md` |
 | Earnings RMM reward-1 LM rerank | Updated WER `0.202377`, better than unadapted Earnings-22 but worse than direct reward-conditioned sampling. | `rob124_384_dropout_reward_conditioning/earnings_rmm_lm_rerank/OUTCOME.md` |
-| Reward-control average masks | Averaged `10,000` sampled masks at reward `0.0` and `10,000` at reward `1.0` from the 384/dropout checkpoint without storing all masks. Average active fraction rises from `0.298180` to `0.668105`, and the reward-1-minus-reward-0 difference mean is `0.369926`. | `visualizations/reward_conditioned_average_masks_10k/metadata.json` |
+| Reward-control average masks | Averaged `10,000` sampled masks at reward `0.0` and `10,000` at reward `1.0` from the 384/dropout checkpoint without storing all masks. The decoded mask is a multiplicative keep mask: `0%` means fully suppressed/masked out and `100%` means fully retained. Average kept percentage rises from `29.82%` to `66.81%`, so the masked-out percentage falls from `70.18%` to `33.19%`; the reward-1-minus-reward-0 keep-rate change is `36.99` percentage points. | `visualizations/reward_conditioned_average_masks_10k/metadata.json` |
 
 ## Interpretation
 
@@ -68,5 +68,6 @@ dataset-sensitive and can fail badly on CHiME-6. Treat reward and epoch
 selection as downstream tuning variables rather than a universal setting.
 
 The 10k average-mask visualization gives the most direct qualitative view of
-reward conditioning: higher reward shifts the sampled masks toward retaining a
-larger fraction of the spectrogram on the ROB-124 probe utterance.
+reward conditioning: higher reward shifts the sampled multiplicative masks
+toward retaining a larger percentage of the spectrogram on the ROB-124 probe
+utterance. The inverse percentage is the amount suppressed/masked out.
