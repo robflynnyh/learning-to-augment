@@ -14,7 +14,7 @@ family introduced in ROB-114 and trained in ROB-117/ROB-124.
   surface, including the ROB-120 baseline eval and the 512/dropout capacity
   follow-up.
 - `scripts/`, `smoke/`, and `visualizations/`: reusable diagnostics and
-  historical ROB-117/ROB-114 artifacts.
+  reward-conditioned mask visualizations.
 
 ## Cleanup Notes
 
@@ -37,6 +37,8 @@ never ran GPU eval and was replaced by the completed fixed-reward `0.0` and
   `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_384d_dropout0p1_500ep_lr1e3.pt`
 - ROB-124 512/dropout checkpoint, kept as an old ablation:
   `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_512d_dropout0p1_500ep_lr1e3.pt`
+- ROB-124 reward-control average masks:
+  `visualizations/reward_conditioned_average_masks_10k/`
 
 See `OUTCOME.md` for the consolidated interpretation and the subdirectory
 OUTCOME files for detailed tables.

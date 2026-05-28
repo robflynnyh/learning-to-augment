@@ -346,3 +346,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   stale initial Earnings result root, and removed the cancelled sampled
   `[0.0, 1.0]` scaffold. The top-level `OUTCOME.md` is now the compact source
   of truth for the current interpretation.
+- Added ROB-124 reward-control average-mask visualizations under
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/reward_conditioned_average_masks_10k/`.
+  The script streams `10,000` sampled masks each for reward `0.0` and `1.0`
+  without retaining all samples. The 384/dropout checkpoint's average active
+  fraction is `0.298180` at reward `0.0` and `0.668105` at reward `1.0`.

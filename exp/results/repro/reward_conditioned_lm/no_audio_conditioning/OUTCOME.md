@@ -53,6 +53,7 @@ Removed roots:
 | All-dataset sampled `[0.5, 1.0]` | Completed `10/10` cells; `9/10` improved; the only regression is CHiME-6 at 5 epochs, `0.843620 -> 1.000000` WER. | `rob124_384_dropout_reward_conditioning/all_dataset_sampled_reward_0p5_to_1p0/OUTCOME.md` |
 | All-dataset fixed rewards `0.0` and `1.0` | Completed `20/20` cells; fixed reward `0.0` improved `10/10`, fixed reward `1.0` improved `9/10`; the only regression is again CHiME-6 at reward `1.0`, 5 epochs, `0.843620 -> 1.000000` WER. | `rob124_384_dropout_reward_conditioning/all_dataset_fixed_rewards_0_and_1/OUTCOME.md` |
 | Earnings RMM reward-1 LM rerank | Updated WER `0.202377`, better than unadapted Earnings-22 but worse than direct reward-conditioned sampling. | `rob124_384_dropout_reward_conditioning/earnings_rmm_lm_rerank/OUTCOME.md` |
+| Reward-control average masks | Averaged `10,000` sampled masks at reward `0.0` and `10,000` at reward `1.0` from the 384/dropout checkpoint without storing all masks. Average active fraction rises from `0.298180` to `0.668105`, and the reward-1-minus-reward-0 difference mean is `0.369926`. | `visualizations/reward_conditioned_average_masks_10k/metadata.json` |
 
 ## Interpretation
 
@@ -65,3 +66,7 @@ Across the all-dataset sweeps, 1-epoch adaptation is the robust default. Longer
 5-epoch adaptation can help TED-LIUM, Earnings22, Rev16, and TAL, but it is
 dataset-sensitive and can fail badly on CHiME-6. Treat reward and epoch
 selection as downstream tuning variables rather than a universal setting.
+
+The 10k average-mask visualization gives the most direct qualitative view of
+reward conditioning: higher reward shifts the sampled masks toward retaining a
+larger fraction of the spectrogram on the ROB-124 probe utterance.
