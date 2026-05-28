@@ -147,10 +147,18 @@ def as_percent(value: float) -> float:
     return float(value) * 100.0
 
 
-def save_mask(mask: np.ndarray, title: str, path_base: Path) -> None:
+def display_reward(reward: float) -> str:
+    reward_float = float(reward)
+    if reward_float.is_integer():
+        return str(int(reward_float))
+    return f"{reward_float:g}"
+
+
+def save_mask(keep_mask: np.ndarray, title: str, path_base: Path) -> None:
+    masked_mask = 1.0 - keep_mask
     fig, ax = plt.subplots(figsize=(10, 3.2), constrained_layout=True)
     im = ax.imshow(
-        mask,
+        masked_mask,
         aspect="auto",
         origin="lower",
         interpolation="nearest",
@@ -161,7 +169,7 @@ def save_mask(mask: np.ndarray, title: str, path_base: Path) -> None:
     ax.set_xlabel("time frame")
     ax.set_ylabel("mel bin")
     ax.set_title(title)
-    colorbar = fig.colorbar(im, ax=ax, label="kept / unmasked frames")
+    colorbar = fig.colorbar(im, ax=ax, label="masked")
     colorbar.ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0))
     for suffix in (".png", ".pdf"):
         fig.savefig(path_base.with_suffix(suffix), dpi=180)
@@ -183,7 +191,7 @@ def save_difference(diff: np.ndarray, title: str, path_base: Path) -> None:
     ax.set_xlabel("time frame")
     ax.set_ylabel("mel bin")
     ax.set_title(title)
-    colorbar = fig.colorbar(im, ax=ax, label="keep-rate change, reward 1.0 - 0.0")
+    colorbar = fig.colorbar(im, ax=ax, label="masked-rate change, reward 1 - 0")
     colorbar.ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0))
     for suffix in (".png", ".pdf"):
         fig.savefig(path_base.with_suffix(suffix), dpi=180)
@@ -196,7 +204,7 @@ def save_grid(averages: dict[str, np.ndarray], rewards: list[float], path_base: 
     axes = np.asarray(axes).reshape(-1)
     for ax, reward in zip(axes, rewards, strict=True):
         label = reward_label(reward)
-        mask = averages[label]
+        mask = 1.0 - averages[label]
         im = ax.imshow(
             mask,
             aspect="auto",
@@ -206,10 +214,10 @@ def save_grid(averages: dict[str, np.ndarray], rewards: list[float], path_base: 
             vmin=0,
             vmax=1,
         )
-        ax.set_title(f"reward {reward:.1f} keep %")
+        ax.set_title(f"reward {display_reward(reward)}")
         ax.set_xlabel("time")
         ax.set_ylabel("mel")
-        colorbar = fig.colorbar(im, ax=ax, label="kept / unmasked")
+        colorbar = fig.colorbar(im, ax=ax, label="masked")
         colorbar.ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0))
     for suffix in (".png", ".pdf"):
         fig.savefig(path_base.with_suffix(suffix), dpi=180)
@@ -290,25 +298,30 @@ def main() -> None:
             raise RuntimeError(f"reward={reward}: no masks were generated")
         average = running_average.numpy().astype(np.float32)
         average_keep_fraction = float(average.mean())
+        average_masked_fraction = 1.0 - average_keep_fraction
         sample_keep_fraction_mean = active_sum / args.samples_per_reward
         averages[label] = average
         path_base = args.output_dir / f"average_reward_{label}_mask"
-        save_mask(average, f"Average sampled keep mask, reward {reward:.1f}", path_base)
+        save_mask(average, f"reward {display_reward(reward)}", path_base)
         summary[label] = {
             "conditioning_reward": float(reward),
             "samples": int(args.samples_per_reward),
             "average_mask_shape": list(average.shape),
-            "mask_value_semantics": "1.0 keeps/unmasks the time-frequency bin; 0.0 suppresses/masks it out",
+            "mask_value_semantics": "decoded model output is a keep mask: 1.0 keeps/unmasks the bin; plotted values show the inverse masked percentage",
             "average_keep_fraction": average_keep_fraction,
             "average_keep_percentage": as_percent(average_keep_fraction),
-            "average_masked_out_fraction": 1.0 - average_keep_fraction,
-            "average_masked_out_percentage": as_percent(1.0 - average_keep_fraction),
+            "average_masked_fraction": average_masked_fraction,
+            "average_masked_percentage": as_percent(average_masked_fraction),
+            "average_masked_out_fraction": average_masked_fraction,
+            "average_masked_out_percentage": as_percent(average_masked_fraction),
             "sample_keep_fraction_min": active_min,
             "sample_keep_percentage_min": as_percent(active_min),
             "sample_keep_fraction_mean": sample_keep_fraction_mean,
             "sample_keep_percentage_mean": as_percent(sample_keep_fraction_mean),
             "sample_keep_fraction_max": active_max,
             "sample_keep_percentage_max": as_percent(active_max),
+            "sample_masked_fraction_mean": 1.0 - sample_keep_fraction_mean,
+            "sample_masked_percentage_mean": as_percent(1.0 - sample_keep_fraction_mean),
             "sample_masked_out_percentage_mean": as_percent(1.0 - sample_keep_fraction_mean),
             "average_active_fraction": average_keep_fraction,
             "sample_active_fraction_min": active_min,
@@ -320,19 +333,26 @@ def main() -> None:
         }
 
     if {reward_label(0.0), reward_label(1.0)}.issubset(averages):
-        diff = averages[reward_label(1.0)] - averages[reward_label(0.0)]
+        keep_diff = averages[reward_label(1.0)] - averages[reward_label(0.0)]
+        diff = (1.0 - averages[reward_label(1.0)]) - (1.0 - averages[reward_label(0.0)])
         diff_base = args.output_dir / "average_reward_1p0_minus_0p0_mask"
-        save_difference(diff, "Average keep-mask difference, reward 1.0 minus 0.0", diff_base)
+        save_difference(diff, "Masked percentage difference, reward 1 minus 0", diff_base)
         difference_artifacts = {
             "difference_png": diff_base.with_suffix(".png").name,
             "difference_pdf": diff_base.with_suffix(".pdf").name,
-            "difference_semantics": "positive values mean reward 1.0 keeps more of the bin than reward 0.0",
-            "keep_fraction_difference_mean": float(diff.mean()),
-            "keep_percentage_point_difference_mean": as_percent(float(diff.mean())),
-            "keep_fraction_difference_min": float(diff.min()),
-            "keep_percentage_point_difference_min": as_percent(float(diff.min())),
-            "keep_fraction_difference_max": float(diff.max()),
-            "keep_percentage_point_difference_max": as_percent(float(diff.max())),
+            "difference_semantics": "plotted values are masked-rate reward 1 minus reward 0; negative values mean reward 1 masks less of the bin than reward 0",
+            "masked_fraction_difference_mean": float(diff.mean()),
+            "masked_percentage_point_difference_mean": as_percent(float(diff.mean())),
+            "masked_fraction_difference_min": float(diff.min()),
+            "masked_percentage_point_difference_min": as_percent(float(diff.min())),
+            "masked_fraction_difference_max": float(diff.max()),
+            "masked_percentage_point_difference_max": as_percent(float(diff.max())),
+            "keep_fraction_difference_mean": float(keep_diff.mean()),
+            "keep_percentage_point_difference_mean": as_percent(float(keep_diff.mean())),
+            "keep_fraction_difference_min": float(keep_diff.min()),
+            "keep_percentage_point_difference_min": as_percent(float(keep_diff.min())),
+            "keep_fraction_difference_max": float(keep_diff.max()),
+            "keep_percentage_point_difference_max": as_percent(float(keep_diff.max())),
             "difference_mean": float(diff.mean()),
             "difference_min": float(diff.min()),
             "difference_max": float(diff.max()),
@@ -347,6 +367,7 @@ def main() -> None:
     np.savez_compressed(
         npz_path,
         **{f"reward_{label}": average for label, average in averages.items()},
+        **{f"reward_{label}_masked": 1.0 - average for label, average in averages.items()},
     )
 
     metadata = {
@@ -361,8 +382,9 @@ def main() -> None:
         "batch_size": int(args.batch_size),
         "target_output_length": int(audio_length),
         "target_prediction_steps": int(target_prediction_steps),
-        "mask_value_semantics": "decoded masks are multiplicative keep masks: 1.0 keeps/unmasks a bin, 0.0 suppresses/masks it out",
-        "plot_units": "percent kept / unmasked; masked-out percentage is 100 minus this value",
+        "mask_value_semantics": "decoded model outputs are multiplicative keep masks: 1.0 keeps/unmasks a bin, 0.0 suppresses/masks it out",
+        "plot_units": "percent masked; 100% means fully masked/suppressed and 0% means fully kept/unmasked",
+        "npz_units": "reward_<label> arrays store average keep-mask fractions for compatibility; reward_<label>_masked arrays store the plotted masked fractions",
         "memory_policy": "streaming average; only one generated batch and the running averages are retained",
         "grid_png": grid_base.with_suffix(".png").name,
         "grid_pdf": grid_base.with_suffix(".pdf").name,

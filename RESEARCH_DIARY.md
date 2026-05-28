@@ -350,5 +350,6 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/reward_conditioned_average_masks_10k/`.
   The script streams `10,000` sampled masks each for reward `0.0` and `1.0`
   without retaining all samples. The decoded mask is a multiplicative keep mask:
-  average kept percentage is `29.82%` at reward `0.0` and `66.81%` at reward
-  `1.0`; masked-out percentage is the inverse.
+  the figures show masked percentage, which falls from `70.18%` at reward
+  `0.0` to `33.19%` at reward `1.0`. The inverse keep percentage rises from
+  `29.82%` to `66.81%`.
