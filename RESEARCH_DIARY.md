@@ -259,5 +259,6 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `OUTCOME.md` is the compact interpretation source.
 - Added 10k-sample reward-control average-mask visualizations under
   `visualizations/reward_conditioned_average_masks_10k/`. The decoded mask is a
-  multiplicative keep mask; figures report masked percentage, falling from
-  `70.18%` at reward `0.0` to `33.19%` at reward `1.0`.
+  multiplicative keep mask; figures report masked percentage. The current grid
+  compares UC-MLM at `49.13%` masked with `RC-MLM (reward=0.0)` at `70.18%`
+  and `RC-MLM (reward=1.0)` at `33.19%`.

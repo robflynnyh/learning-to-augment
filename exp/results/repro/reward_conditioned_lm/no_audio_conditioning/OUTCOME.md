@@ -53,7 +53,7 @@ Removed roots:
 | All-dataset sampled `[0.5, 1.0]` | Completed `10/10` cells; `9/10` improved; the only regression is CHiME-6 at 5 epochs, `0.843620 -> 1.000000` WER. | `rob124_384_dropout_reward_conditioning/all_dataset_sampled_reward_0p5_to_1p0/OUTCOME.md` |
 | All-dataset fixed rewards `0.0` and `1.0` | Completed `20/20` cells; fixed reward `0.0` improved `10/10`, fixed reward `1.0` improved `9/10`; the only regression is again CHiME-6 at reward `1.0`, 5 epochs, `0.843620 -> 1.000000` WER. | `rob124_384_dropout_reward_conditioning/all_dataset_fixed_rewards_0_and_1/OUTCOME.md` |
 | Earnings RMM reward-1 LM rerank | Updated WER `0.202377`, better than unadapted Earnings-22 but worse than direct reward-conditioned sampling. | `rob124_384_dropout_reward_conditioning/earnings_rmm_lm_rerank/OUTCOME.md` |
-| Reward-control average masks | Averaged `10,000` sampled masks at reward `0.0` and `10,000` at reward `1.0` from the 384/dropout checkpoint without storing all masks. The figures now plot masked percentage: `0%` means fully retained/unmasked and `100%` means fully suppressed/masked out. Average masked percentage falls from `70.18%` at reward `0.0` to `33.19%` at reward `1.0`; equivalently, the keep percentage rises from `29.82%` to `66.81%`. | `visualizations/reward_conditioned_average_masks_10k/metadata.json` |
+| Reward-control average masks | Averaged `10,000` UC-MLM masks plus `10,000` sampled RC-MLM masks at reward `0.0` and `10,000` at reward `1.0` from the 384/dropout checkpoint without storing all masks. The figures plot masked percentage: `0%` means fully retained/unmasked and `100%` means fully suppressed/masked out. Average masked percentage is `49.13%` for UC-MLM, `70.18%` for `RC-MLM (reward=0.0)`, and `33.19%` for `RC-MLM (reward=1.0)`. | `visualizations/reward_conditioned_average_masks_10k/metadata.json` |
 
 ## Interpretation
 
@@ -68,6 +68,8 @@ dataset-sensitive and can fail badly on CHiME-6. Treat reward and epoch
 selection as downstream tuning variables rather than a universal setting.
 
 The 10k average-mask visualization gives the most direct qualitative view of
-reward conditioning: higher reward shifts the sampled multiplicative masks
-toward masking less of the spectrogram on the ROB-124 probe utterance. The
-figures show masked percentage; the inverse percentage is the amount retained.
+RC-MLM reward conditioning against the UC-MLM baseline: UC-MLM sits between
+`RC-MLM (reward=0.0)` and `RC-MLM (reward=1.0)`, while higher reward shifts the
+sampled multiplicative masks toward masking less of the spectrogram on the
+ROB-124 probe utterance. The figures show masked percentage; the inverse
+percentage is the amount retained.
