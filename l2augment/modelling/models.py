@@ -2142,6 +2142,7 @@ class RewardConditionedMaskLM(Policy):
             conditioning_reward_range=None,
             reward_encoder='timestep',
             sample_generation=True,
+            dropout=0.0,
             **kwargs
         ) -> None:
         super().__init__()
@@ -2154,6 +2155,7 @@ class RewardConditionedMaskLM(Policy):
             low, high = sorted(float(item) for item in self.conditioning_reward_range)
             self.conditioning_reward_range = (low, high)
         self.sample_generation = sample_generation
+        self.dropout = float(dropout)
 
         self.mask_enc = BinaryVariationalAutoEncoder(**mask_vae_config)
         if mask_vae_state_dict_path is not None:
@@ -2183,9 +2185,11 @@ class RewardConditionedMaskLM(Policy):
             hidden_size=hidden_dim,
             num_layers=4,
             batch_first=True,
+            dropout=self.dropout,
         )
         self.prediction = nn.Sequential(
             nn.LayerNorm(hidden_dim),
+            nn.Dropout(self.dropout),
             nn.Linear(hidden_dim, self.codebook_size + 1)
         )
 
@@ -2296,7 +2300,11 @@ class RewardConditionedMaskLM(Policy):
         downsampled_lengths = self.mask_enc.calc_downsampled_length(lengths)
         target_prediction_steps = int(downsampled_lengths[0].item())
         if conditioning_reward is None:
-            conditioning_reward = self.default_conditioning_reward
+            if self.conditioning_reward_range is None:
+                conditioning_reward = self.default_conditioning_reward
+            else:
+                low, high = self.conditioning_reward_range
+                conditioning_reward = torch.empty(1, device=audio.device).uniform_(low, high).item()
 
         mask_pred, generation = self.generate(
             conditioning_reward=conditioning_reward,
@@ -2336,6 +2344,112 @@ class RewardConditionedMaskLM(Policy):
         ce_loss = ce_loss.sum() / ((~lengths_mask).sum())
 
         return ce_loss, {'loss': ce_loss, 'total_loss': ce_loss}
+
+
+class RMMRewardConditionedMaskLMReranker(Policy):
+    def __init__(
+            self,
+            candidate_repeats=15,
+            scorer_conditioning_reward=1.0,
+            reward_lm_config:Dict={},
+            reward_lm_state_dict_path:str=None,
+            rmm_config:Dict={},
+            **kwargs
+        ) -> None:
+        super().__init__()
+        if reward_lm_state_dict_path is None:
+            raise ValueError("reward_lm_state_dict_path is required")
+
+        self.candidate_repeats = int(candidate_repeats)
+        self.scorer_conditioning_reward = float(scorer_conditioning_reward)
+        self.rmm = MixedMaskingRanker(**rmm_config)
+        self.reward_lm = RewardConditionedMaskLM(**reward_lm_config)
+
+        checkpoint = torch.load(reward_lm_state_dict_path, map_location='cpu', weights_only=False)
+        self.reward_lm.load_state_dict(checkpoint['model_state_dict'])
+        print(f'Loaded reward-conditioned mask LM state dict from {reward_lm_state_dict_path}')
+        self.reward_lm.eval()
+        for param in self.reward_lm.parameters():
+            param.requires_grad = False
+
+    def total_parameters(self):
+        return self.reward_lm.total_parameters()
+
+    def _encode_candidate_masks(self, masks, lengths):
+        mask_enc = self.reward_lm.mask_enc
+        masks = masks.to(dtype=torch.float32)
+        in_length = masks.size(-1)
+        x = mask_enc.encoder(masks)
+        downsampled_lengths = (lengths * x.size(-1) + in_length - 1) // in_length
+        x = mask_enc.rnn_in(x, downsampled_lengths) + x
+        z = mask_enc.mu(x)
+        vq_input = z.transpose(-1, -2)
+        vq_kwargs = {}
+        vq_params = inspect.signature(mask_enc.VQ.forward).parameters
+        if 'lens' in vq_params:
+            vq_kwargs['lens'] = downsampled_lengths
+        elif 'mask' in vq_params:
+            vq_kwargs['mask'] = torch.arange(vq_input.size(1), device=vq_input.device) < downsampled_lengths[:, None]
+        _, mask_idx, _ = mask_enc.VQ(vq_input, **vq_kwargs)
+        mask_idx[mask_idx == -1] = self.reward_lm.codebook_size
+        return mask_idx.to(dtype=torch.long), downsampled_lengths
+
+    def _score_generations(self, generations, generation_lengths):
+        rewards = torch.full(
+            (generations.size(0),),
+            self.scorer_conditioning_reward,
+            dtype=torch.float32,
+            device=generations.device,
+        )
+        predictions, generation_lengths, _ = self.reward_lm(generations, generation_lengths, rewards)
+        lengths_mask = torch.arange(generations.size(-1), device=generations.device) >= generation_lengths[:, None]
+        ce_loss = nn.functional.cross_entropy(
+            input=predictions.transpose(-1, -2),
+            target=generations,
+            ignore_index=-100,
+            reduction='none',
+        )
+        ce_loss = ce_loss.masked_fill(lengths_mask, 0)
+        return ce_loss.sum(dim=-1) / ((~lengths_mask).sum(dim=-1).clamp_min(1))
+
+    @torch.no_grad()
+    def augment(self, audio, *args, **kwargs):
+        assert audio.dim() == 3, 'audio must be 3D tensor'
+        assert audio.size(0) == 1, 'only batch size 1 is supported atm'
+
+        mode = self.training
+        self.eval()
+        self.reward_lm.eval()
+
+        candidate_masks = torch.cat(
+            [self.rmm.get_mask(audio).to(audio.device) for _ in range(self.candidate_repeats)],
+            dim=0,
+        )
+        lengths = torch.full(
+            (candidate_masks.size(0),),
+            audio.size(-1),
+            dtype=torch.long,
+            device=audio.device,
+        )
+        generations, generation_lengths = self._encode_candidate_masks(candidate_masks, lengths)
+        generation_lengths = generation_lengths.to(audio.device)
+        losses = self._score_generations(generations, generation_lengths)
+        best_idx = int(torch.argmin(losses).item())
+
+        best_mask = candidate_masks[best_idx:best_idx + 1]
+        augmented_audio = self.rmm.apply_mask(audio, best_mask)
+
+        if mode:
+            self.train()
+            self.reward_lm.eval()
+
+        return augmented_audio, best_mask, {
+            'generation': generations[best_idx].detach().cpu(),
+            'candidate_losses': losses.detach().cpu(),
+            'selected_candidate': best_idx,
+            'conditioning_reward': self.scorer_conditioning_reward,
+            'candidate_repeats': self.candidate_repeats,
+        }
 
 
 
@@ -2432,6 +2546,7 @@ policy_dict['MultiStepMaskRanker'] = MultiStepMaskRanker
 
 policy_dict['UnconditionalMaskGenerator'] = UnconditionalMaskGenerator
 policy_dict['RewardConditionedMaskLM'] = RewardConditionedMaskLM
+policy_dict['RMMRewardConditionedMaskLMReranker'] = RMMRewardConditionedMaskLMReranker
 policy_dict['ConditionalMaskGenerator'] = ConditionalMaskGenerator
 policy_dict['ConditionalMultiStepMaskGenerator'] = ConditionalMultiStepMaskGenerator
 

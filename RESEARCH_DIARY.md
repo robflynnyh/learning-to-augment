@@ -208,15 +208,30 @@ reproduce results, interpret metrics, or avoid known failure modes.
   adaptation-WER check. The 10-mask sample now has committed PDF/PNG
   visualizations under
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/`.
-- Set up ROB-120 Earnings-22 reward-control evaluation for the ROB-117
-  `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt` checkpoint. The
-  result root is
-  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob120_earnings_reward_controls/`;
-  the wrapper generates fixed `0.0`, fixed `1.0`, uniform `[0.0, 1.0]`, and
-  uniform `[0.5, 1.0]` configs, then evaluates Earnings test adaptation at
-  `lr=1e-5`. Checkpoint-load/generation preflight and a cropped Earnings CPU
-  adaptation smoke passed; the full GPU comparison should be interpreted only
-  from the wrapper-generated CSV/`OUTCOME.md`, not from the cropped smoke.
+- ROB-124 trained the controlled 384-dim/dropout no-audio reward-conditioned
+  mask LM. Checkpoint:
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_384d_dropout0p1_500ep_lr1e3.pt`;
+  best logged dev loss `2.624727`, slightly better than the ROB-117 resumed
+  baseline estimate `2.653739`.
+- The 512-dim/dropout ablation is kept under
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/old_ablations/rob124_512_dropout/`.
+  It was usable but slightly worse than 384d on dev loss (`2.625860`), so 384d
+  remains the preferred capacity point.
+- ROB-124 downstream reward-conditioning artifacts now live under
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/`.
+  The corrected Earnings matched rerun found true sampled `[0.5, 1.0]` best at
+  WER `0.194433`; the RMM reward-1 LM reranker improved over unadapted
+  Earnings-22 but remained worse than direct reward-conditioned sampling.
+- Important caveat: `RewardConditionedMaskLM.augment` had to be fixed so
+  adaptation-time calls honor `conditioning_reward_range`. Earlier sampled-range
+  labels should not be trusted unless they come from the corrected result roots.
+- The all-dataset sampled `[0.5, 1.0]` sweep improved 9/10 cells, with CHiME-6
+  at 5 adaptation epochs collapsing to `1.000000` WER. Use 1-epoch adaptation
+  or dataset-specific reward/epoch choices rather than a blanket 5-epoch
+  setting.
+- A later sampled `[0.0, 1.0]` queue was cancelled before GPU evaluation after
+  clarification that the intended comparison was two separate fixed-reward
+  sweeps. The cancelled scaffold was removed during result-folder cleanup.
 
 ## 2026-05-26
 
@@ -227,3 +242,22 @@ reproduce results, interpret metrics, or avoid known failure modes.
   summary, and the new plot keeps the same bars and labels while using axes set
   to plus/minus 20% around each dataset panel's average WER. The handoff
   includes both PDF and PNG artifacts.
+
+## 2026-05-27
+
+- Completed the ROB-124 fixed reward `1.0`/`0.0` all-dataset follow-up. The
+  durable summary is
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/all_dataset_fixed_rewards_0_and_1/OUTCOME.md`;
+  fixed reward `0.0` improved 10/10 cells and fixed reward `1.0` improved 9/10,
+  with the same CHiME-6 5-epoch collapse noted above.
+
+## 2026-05-28
+
+- Cleaned the ROB-124 result tree: current 384/dropout downstream evals are
+  grouped under `rob124_384_dropout_reward_conditioning/`, old ablations under
+  `old_ablations/`, and stale/cancelled roots were removed. The top-level
+  `OUTCOME.md` is the compact interpretation source.
+- Added 10k-sample reward-control average-mask visualizations under
+  `visualizations/reward_conditioned_average_masks_10k/`. The decoded mask is a
+  multiplicative keep mask; figures report masked percentage, falling from
+  `70.18%` at reward `0.0` to `33.19%` at reward `1.0`.

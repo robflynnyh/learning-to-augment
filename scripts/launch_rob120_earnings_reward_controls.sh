@@ -13,7 +13,7 @@ if [ -f /exp/exp4/acp21rjf/symphony-config/.env ]; then
 fi
 
 LINEAR_ISSUE="${LINEAR_ISSUE:-ROB-120}"
-RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob120_earnings_reward_controls}"
+RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/old_ablations/rob120_earnings_reward_controls}"
 LOG_PATH="${LOG_PATH:-${RESULT_ROOT}/logs/rob120_earnings_reward_controls.log}"
 SCREEN_LOG_PATH="${SCREEN_LOG_PATH:-${RESULT_ROOT}/logs/rob120_earnings_reward_controls.screen.log}"
 SCREEN_NAME="${SCREEN_NAME:-rob120-earnings-reward-controls}"
