@@ -208,112 +208,30 @@ reproduce results, interpret metrics, or avoid known failure modes.
   adaptation-WER check. The 10-mask sample now has committed PDF/PNG
   visualizations under
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/`.
-- Started ROB-124 as the controlled ROB-117 capacity/dropout follow-up. The new
-  config trains the same no-audio reward-conditioned mask LM with
-  `hidden_dim: 384` and `dropout: 0.1`, using the same UVQLM rollout data,
-  reward normalization, Mimas callback wrapper discipline, and a separate
-  result root under
-  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout/`.
-- Completed the ROB-124 384-dim/dropout training run. The callback-backed Mimas
-  run wrote
+- ROB-124 trained the controlled 384-dim/dropout no-audio reward-conditioned
+  mask LM. Checkpoint:
   `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_384d_dropout0p1_500ep_lr1e3.pt`;
-  post-training fixed-length reward `0.0`/`1.0` sanity passed, and the best
-  logged dev loss `2.624727` modestly improved over the ROB-117 resumed
+  best logged dev loss `2.624727`, slightly better than the ROB-117 resumed
   baseline estimate `2.653739`.
-- Set up ROB-120 Earnings-22 reward-control evaluation for the ROB-117
-  `no_audio_tedlium_per_utterance_resume100_500ep_lr1e3.pt` checkpoint. The
-  result root is
-  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/old_ablations/rob120_earnings_reward_controls/`;
-  the wrapper generates fixed `0.0`, fixed `1.0`, uniform `[0.0, 1.0]`, and
-  uniform `[0.5, 1.0]` configs, then evaluates Earnings test adaptation at
-  `lr=1e-5`. Checkpoint-load/generation preflight and a cropped Earnings CPU
-  adaptation smoke passed; the full GPU comparison should be interpreted only
-  from the wrapper-generated CSV/`OUTCOME.md`, not from the cropped smoke.
-- Started the ROB-124 follow-up Earnings-22 reward-control evaluation for the
-  384-dim/dropout checkpoint. The wrapper mirrors ROB-120's four reward-control
-  conditions but uses
-  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_384d_dropout0p1_500ep_lr1e3.pt`
-  with `hidden_dim: 384` and `dropout: 0.1`; the result root is
-  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/earnings_reward_controls/`.
-- Added the ROB-124 512-dim/dropout follow-up scaffold after the latest Linear
-  comment requested another capacity comparison. It keeps the completed
-  384/dropout contract but sets `hidden_dim: 512`, writes to
-  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/old_ablations/rob124_512_dropout/`,
-  and uses checkpoint path
-  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_512d_dropout0p1_500ep_lr1e3.pt`.
-  The one-file smoke passed under the bashrc Python 3.10/Torch 2.6 path with
-  CUDA hidden because all Mimas GPUs were busy; the full run should use the
-  validated `with-gpu 1,2` callback wrapper. The full run was queued on
-  2026-05-23 as screen `rob124-reward-conditioned-mask-lm-512d-dropout0p1`,
-  ticket `32c3350a`, from commit `c36c89ee6ea5ef5be0433cd8c404026fc3009c0f`.
-- Completed the ROB-124 512-dim/dropout follow-up. The callback-backed Mimas
-  run wrote
-  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_512d_dropout0p1_500ep_lr1e3.pt`;
-  post-training fixed-length reward `0.0`/`1.0` sanity passed with `29/29`
-  reward-control token mismatches. Its best logged dev loss `2.625860` still
-  improves over the ROB-117 resumed baseline `2.653739`, but is slightly worse
-  than the ROB-124 384/dropout checkpoint's `2.624727`, so the 384/dropout
-  model remains the better current capacity point.
-- Started the ROB-124 RMM proposal plus reward-1 LM-rerank eval requested after
-  the 384/dropout checkpoint was confirmed as the preferred model. The new
-  policy generates 15 RMM candidate masks at each adaptation step, encodes each
-  mask with the mask BVAE, scores the VQ tokens with the 384/dropout
-  reward-conditioned mask LM at fixed reward `1.0`, then uses the lowest-CE
-  mask. The result root is
-  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/earnings_rmm_lm_rerank/`.
-  Prequeue checks included config generation, callback check-only, a synthetic
-  15-candidate policy augment smoke, and a cropped CPU Earnings multistep
-  rollout smoke under bashrc Python 3.10 / Torch 2.6.
-- Completed the ROB-124 RMM proposal plus reward-1 LM-rerank eval. The
-  callback-backed Mimas run exited with status `0` and wrote
-  `rob124_384_dropout_rmm_lm_rerank.csv` plus `OUTCOME.md`; updated WER was
-  `0.202377` from original WER `0.235239`. This is better than unadapted
-  Earnings-22 but worse than the previous ROB-124 fixed reward `1.0` condition
-  (`+0.006923` absolute WER) and worse than the best prior ROB-124 condition
-  (`+0.007434`), so direct reward-conditioned sampling remains the stronger
-  use of the 384/dropout checkpoint for this matched eval.
-- Started the 2026-05-24 ROB-124 all-dataset follow-up requested after ROB-108:
-  evaluate the preferred 384/dropout checkpoint with reward sampled from
-  `[0.5, 1.0]` on TED-LIUM, Earnings22, CHiME-6, Rev16, and TAL test splits for
-  1 and 5 adaptation epochs at `lr=1e-5`. The result root is
-  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/all_dataset_sampled_reward_0p5_to_1p0/`.
-  This setup also fixes `RewardConditionedMaskLM.augment` so adaptation-time
-  calls honor `conditioning_reward_range`; without that fix, the new sampled
-  reward eval would use the default fixed reward instead.
-- Paused that all-dataset follow-up before it started after the later Linear
-  comments asked whether previous sampled-reward comparisons were wrong and
-  suggested redoing the matched comparison first. The queued all-dataset ticket
-  was cancelled, and a corrected Earnings-22 rerun root was added at
-  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/earnings_reward_controls/`.
-  The corrected wrapper reuses the original ROB-124 Earnings reward-control
-  launcher but writes to a separate root and uses the fixed reward-range
-  sampling path.
-- Completed the corrected ROB-124 Earnings-22 matched reward-control rerun on
-  2026-05-24. All four cells completed; true uniform `[0.5, 1.0]` was best at
-  updated WER `0.194433`, beating the matched ROB-120 row by `0.002001`
-  absolute WER. This supports resuming the paused all-dataset `[0.5, 1.0]`
-  sampled-reward eval for the 384/dropout checkpoint.
-- Completed the ROB-124 all-dataset `[0.5, 1.0]` sampled-reward follow-up on
-  2026-05-25. The callback-backed Mimas run exited with status `0`, completed
-  all 10 cells, and wrote
-  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/all_dataset_sampled_reward_0p5_to_1p0/OUTCOME.md`.
-  Nine of ten cells improved WER versus the unadapted original WER; the only
-  regression was CHiME-6 at 5 adaptation epochs, which moved from `0.843620` to
-  `1.000000`. The result supports the 384/dropout checkpoint and sampled
-  reward `[0.5, 1.0]`, especially at 1 adaptation epoch, but longer adaptation
-  should be treated as dataset-sensitive.
-- Started the 2026-05-25 ROB-124 follow-up as a sampled `[0.0, 1.0]`
-  all-dataset run, then stopped it before GPU eval after the next Linear
-  clarification said the intended scope was separate fixed reward `1.0` and
-  fixed reward `0.0` sweeps. The cancelled scaffold was later removed during
-  result-folder cleanup.
-- Corrected the 2026-05-25 ROB-124 follow-up after the latest Linear comment
-  clarified that the intended scope is two separate fixed-reward sweeps, not a
-  sampled `[0.0, 1.0]` run. The sampled queue was stopped before GPU eval while
-  still waiting in `with-gpu`. The active replacement root is
-  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/all_dataset_fixed_rewards_0_and_1/`
-  with 20 cells: fixed reward `1.0` and fixed reward `0.0` across five
-  datasets and epochs `1` and `5`.
+- The 512-dim/dropout ablation is kept under
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/old_ablations/rob124_512_dropout/`.
+  It was usable but slightly worse than 384d on dev loss (`2.625860`), so 384d
+  remains the preferred capacity point.
+- ROB-124 downstream reward-conditioning artifacts now live under
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/`.
+  The corrected Earnings matched rerun found true sampled `[0.5, 1.0]` best at
+  WER `0.194433`; the RMM reward-1 LM reranker improved over unadapted
+  Earnings-22 but remained worse than direct reward-conditioned sampling.
+- Important caveat: `RewardConditionedMaskLM.augment` had to be fixed so
+  adaptation-time calls honor `conditioning_reward_range`. Earlier sampled-range
+  labels should not be trusted unless they come from the corrected result roots.
+- The all-dataset sampled `[0.5, 1.0]` sweep improved 9/10 cells, with CHiME-6
+  at 5 adaptation epochs collapsing to `1.000000` WER. Use 1-epoch adaptation
+  or dataset-specific reward/epoch choices rather than a blanket 5-epoch
+  setting.
+- A later sampled `[0.0, 1.0]` queue was cancelled before GPU evaluation after
+  clarification that the intended comparison was two separate fixed-reward
+  sweeps. The cancelled scaffold was removed during result-folder cleanup.
 
 ## 2026-05-26
 
@@ -327,29 +245,19 @@ reproduce results, interpret metrics, or avoid known failure modes.
 
 ## 2026-05-27
 
-- Completed the ROB-124 all-dataset fixed reward `1.0` and `0.0` follow-up.
-  The callback-backed Mimas run exited cleanly, completed all 20 cells, and
-  wrote
-  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/all_dataset_fixed_rewards_0_and_1/OUTCOME.md`.
-  Fixed reward `0.0` improved all 10 cells; fixed reward `1.0` improved 9 of
-  10, with CHiME-6 at 5 adaptation epochs collapsing from `0.843620` to
-  `1.000000` WER. Treat the 384/dropout checkpoint as usable, but prefer
-  1-epoch or dataset-specific adaptation rather than a blanket 5-epoch
-  high-reward setting.
+- Completed the ROB-124 fixed reward `1.0`/`0.0` all-dataset follow-up. The
+  durable summary is
+  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/all_dataset_fixed_rewards_0_and_1/OUTCOME.md`;
+  fixed reward `0.0` improved 10/10 cells and fixed reward `1.0` improved 9/10,
+  with the same CHiME-6 5-epoch collapse noted above.
 
 ## 2026-05-28
 
-- Cleaned the ROB-124 no-audio reward-conditioned LM result tree after the
-  latest Linear review comment. Moved `rob120_earnings_reward_controls/` and
-  `rob124_512_dropout/` under `old_ablations/`, grouped the useful 384/dropout
-  downstream evals under `rob124_384_dropout_reward_conditioning/`, removed the
-  stale initial Earnings result root, and removed the cancelled sampled
-  `[0.0, 1.0]` scaffold. The top-level `OUTCOME.md` is now the compact source
-  of truth for the current interpretation.
-- Added ROB-124 reward-control average-mask visualizations under
-  `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/visualizations/reward_conditioned_average_masks_10k/`.
-  The script streams `10,000` sampled masks each for reward `0.0` and `1.0`
-  without retaining all samples. The decoded mask is a multiplicative keep mask:
-  the figures show masked percentage, which falls from `70.18%` at reward
-  `0.0` to `33.19%` at reward `1.0`. The inverse keep percentage rises from
-  `29.82%` to `66.81%`.
+- Cleaned the ROB-124 result tree: current 384/dropout downstream evals are
+  grouped under `rob124_384_dropout_reward_conditioning/`, old ablations under
+  `old_ablations/`, and stale/cancelled roots were removed. The top-level
+  `OUTCOME.md` is the compact interpretation source.
+- Added 10k-sample reward-control average-mask visualizations under
+  `visualizations/reward_conditioned_average_masks_10k/`. The decoded mask is a
+  multiplicative keep mask; figures report masked percentage, falling from
+  `70.18%` at reward `0.0` to `33.19%` at reward `1.0`.
