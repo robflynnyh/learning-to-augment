@@ -25,7 +25,7 @@ evaluation:
     sample: true
   optim_args:
     lr: 1e-5
-  save_path: exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_512_dropout/tedlium_dev_eval_512d_dropout0p1_500ep_lr1e3.txt
+  save_path: exp/results/repro/reward_conditioned_lm/no_audio_conditioning/old_ablations/rob124_512_dropout/tedlium_dev_eval_512d_dropout0p1_500ep_lr1e3.txt
 
 collate_function: RewardConditionedMaskLM
 dataset_class: RewardConditionedMaskLMDataset

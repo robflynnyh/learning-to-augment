@@ -279,7 +279,7 @@ def main() -> None:
     parser.add_argument(
         "--result-root",
         type=Path,
-        default=Path("exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_fixed_rewards_0_and_1"),
+        default=Path("exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/all_dataset_fixed_rewards_0_and_1"),
     )
     parser.add_argument("--fixed-rewards", default="1.0 0.0")
     parser.add_argument("--datasets", default="tedlium earnings22 chime6 rev16 TAL")

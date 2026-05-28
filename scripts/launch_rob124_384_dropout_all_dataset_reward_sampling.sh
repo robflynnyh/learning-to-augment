@@ -13,7 +13,7 @@ if [ -f /exp/exp4/acp21rjf/symphony-config/.env ]; then
 fi
 
 LINEAR_ISSUE="${LINEAR_ISSUE:-ROB-124}"
-RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_reward_sampling}"
+RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/all_dataset_sampled_reward_0p5_to_1p0}"
 LOG_PATH="${LOG_PATH:-${RESULT_ROOT}/logs/rob124_384_dropout_all_dataset_reward_sampling.log}"
 SCREEN_LOG_PATH="${SCREEN_LOG_PATH:-${RESULT_ROOT}/logs/rob124_384_dropout_all_dataset_reward_sampling.screen.log}"
 SCREEN_NAME="${SCREEN_NAME:-rob124-384-dropout-all-dataset-sampling}"
