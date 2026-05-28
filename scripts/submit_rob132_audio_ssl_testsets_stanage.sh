@@ -11,14 +11,15 @@ ASR_CKPT="${ASR_CKPT:-/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_
 MASK_VAE_CKPT="${MASK_VAE_CKPT:-/mnt/parscratch/users/acp21rjf/l2augment_model/bvae/bvae_USINGTHISFORNOW_2048gpu.pt}"
 CELL_SCRIPT="${CELL_SCRIPT:-scripts/slurm_rob132_audio_ssl_testset_cell.sbatch}"
 FINALIZER_SCRIPT="${FINALIZER_SCRIPT:-scripts/slurm_rob132_audio_ssl_testset_finalizer.sbatch}"
+FINALIZER_PARTITION="${FINALIZER_PARTITION:-sheffield}"
 
 cd "${REPO_DIR}"
 
 cells=(
   "earnings22 1.0 5 gpu-h100-nvl"
-  "tedlium 0.0 1 hp-a100"
+  "tedlium 0.0 1 gpu-h100"
   "tedlium 0.0 5 gpu-h100"
-  "earnings22 0.0 1 hp-h100"
+  "earnings22 0.0 1 gpu-h100-nvl"
   "earnings22 0.0 5 gpu"
 )
 
@@ -42,6 +43,7 @@ done
 dependency="$(IFS=:; echo "${job_ids[*]}")"
 finalizer_id="$(
   sbatch --parsable \
+    --partition="${FINALIZER_PARTITION}" \
     --dependency="afterany:${dependency}" \
     --export=ALL,REPO_DIR="${REPO_DIR}",RESULT_ROOT="${RESULT_ROOT}",CHECKPOINT_PATH="${CHECKPOINT_PATH}",QUEUED_COMMAND="scripts/submit_rob132_audio_ssl_testsets_stanage.sh" \
     "${FINALIZER_SCRIPT}"
