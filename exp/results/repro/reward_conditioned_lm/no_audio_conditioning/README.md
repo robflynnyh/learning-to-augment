@@ -37,11 +37,14 @@ never ran GPU eval and was replaced by the completed fixed-reward `0.0` and
   `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_384d_dropout0p1_500ep_lr1e3.pt`
 - ROB-124 512/dropout checkpoint, kept as an old ablation:
   `/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_512d_dropout0p1_500ep_lr1e3.pt`
+- UVQLM comparison checkpoint used in the average-mask grid:
+  `/store/store5/data/acp21rjf_checkpoints/l2augment/models/UMLM/modelgpu.pt`
 - ROB-124 reward-control average masks:
   `visualizations/reward_conditioned_average_masks_10k/`
-  These plots use masked-percentage units: `0%` means fully retained/unmasked,
-  `100%` means fully suppressed/masked out, and the decoded model keep-mask
-  percentage is `100% - masked percentage`.
+  These plots compare UVQLM, reward `0.0`, and reward `1.0` in
+  masked-percentage units: `0%` means fully retained/unmasked, `100%` means
+  fully suppressed/masked out, and the decoded model keep-mask percentage is
+  `100% - masked percentage`.
 
 See `OUTCOME.md` for the consolidated interpretation and the subdirectory
 OUTCOME files for detailed tables.
