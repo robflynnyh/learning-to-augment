@@ -36,6 +36,7 @@ DEFAULT_OUTPUT_DIR = Path(
     "exp/results/repro/reward_conditioned_lm/no_audio_conditioning/"
     "visualizations/reward_conditioned_average_masks_10k"
 )
+UC_MLM_TITLE = "UC-MLM"
 
 
 def parse_args() -> argparse.Namespace:
@@ -68,6 +69,12 @@ def parse_args() -> argparse.Namespace:
         default=Path("/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt"),
     )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument(
+        "--render-from-npz",
+        type=Path,
+        default=None,
+        help="Re-render figures and metadata labels from an existing average-mask NPZ.",
+    )
     parser.add_argument("--samples-per-reward", type=int, default=10_000)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--reward", action="append", type=float, default=[0.0, 1.0])
@@ -221,15 +228,16 @@ def as_percent(value: float) -> float:
     return float(value) * 100.0
 
 
-def display_reward(reward: float) -> str:
-    reward_float = float(reward)
-    if reward_float.is_integer():
-        return str(int(reward_float))
-    return f"{reward_float:g}"
+def rc_mlm_title(reward: float) -> str:
+    return f"RC-MLM (reward={float(reward):.1f})"
 
 
 def npz_key(label: str) -> str:
     return "uvqlm" if label == "uvqlm" else f"reward_{label}"
+
+
+def masked_percentage(keep_mask: np.ndarray) -> float:
+    return as_percent(1.0 - float(keep_mask.mean()))
 
 
 def save_mask(keep_mask: np.ndarray, title: str, path_base: Path) -> None:
@@ -301,8 +309,89 @@ def save_grid(averages: dict[str, np.ndarray], settings: list[tuple[str, str]], 
     plt.close(fig)
 
 
+def render_from_existing_npz(args: argparse.Namespace) -> None:
+    npz_path = args.render_from_npz
+    if npz_path is None:
+        raise ValueError("--render-from-npz is required")
+    if not npz_path.exists():
+        raise FileNotFoundError(npz_path)
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    loaded = np.load(npz_path)
+    averages: dict[str, np.ndarray] = {}
+    grid_settings: list[tuple[str, str]] = []
+
+    if not args.no_uvqlm and "uvqlm" in loaded:
+        averages["uvqlm"] = loaded["uvqlm"].astype(np.float32)
+        grid_settings.append(("uvqlm", UC_MLM_TITLE))
+        save_mask(averages["uvqlm"], UC_MLM_TITLE, args.output_dir / "average_uvqlm_mask")
+
+    for reward in args.reward:
+        label = reward_label(reward)
+        key = npz_key(label)
+        if key not in loaded:
+            raise KeyError(f"{key} not found in {npz_path}")
+        averages[label] = loaded[key].astype(np.float32)
+        title = rc_mlm_title(reward)
+        grid_settings.append((label, title))
+        save_mask(averages[label], title, args.output_dir / f"average_reward_{label}_mask")
+
+    if {reward_label(0.0), reward_label(1.0)}.issubset(averages):
+        diff = (1.0 - averages[reward_label(1.0)]) - (1.0 - averages[reward_label(0.0)])
+        save_difference(
+            diff,
+            "Masked percentage difference, RC-MLM reward 1.0 minus 0.0",
+            args.output_dir / "average_reward_1p0_minus_0p0_mask",
+        )
+
+    grid_base = args.output_dir / "average_reward_0p0_vs_1p0_grid"
+    save_grid(averages, grid_settings, grid_base)
+
+    metadata_path = args.output_dir / "metadata.json"
+    if metadata_path.exists():
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    else:
+        metadata = {}
+    metadata["grid_png"] = grid_base.with_suffix(".png").name
+    metadata["grid_pdf"] = grid_base.with_suffix(".pdf").name
+    metadata["grid_settings"] = [
+        {"label": label, "title": title, "average_masked_percentage": masked_percentage(averages[label])}
+        for label, title in grid_settings
+    ]
+    metadata["plot_title_names"] = {
+        "uvqlm": UC_MLM_TITLE,
+        "reward_0p0": rc_mlm_title(0.0),
+        "reward_1p0": rc_mlm_title(1.0),
+    }
+    if isinstance(metadata.get("difference"), dict):
+        metadata["difference"]["difference_title"] = (
+            "Masked percentage difference, RC-MLM reward 1.0 minus 0.0"
+        )
+        metadata["difference"]["difference_semantics"] = (
+            "plotted values are masked-rate RC-MLM reward 1.0 minus reward 0.0; "
+            "negative values mean reward 1.0 masks less of the bin than reward 0.0"
+        )
+
+    rewards = metadata.get("rewards")
+    if isinstance(rewards, dict):
+        if "uvqlm" in rewards:
+            rewards["uvqlm"]["setting"] = UC_MLM_TITLE
+            rewards["uvqlm"]["source_name"] = "UVQLM"
+            rewards["uvqlm"]["display_title"] = UC_MLM_TITLE
+        for reward in args.reward:
+            label = reward_label(reward)
+            if label in rewards:
+                rewards[label]["display_title"] = rc_mlm_title(reward)
+
+    metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(metadata, indent=2))
+
+
 def main() -> None:
     args = parse_args()
+    if args.render_from_npz is not None:
+        render_from_existing_npz(args)
+        return
     if args.samples_per_reward < 1:
         raise ValueError("--samples-per-reward must be positive")
     if args.batch_size < 1:
@@ -384,11 +473,13 @@ def main() -> None:
         average_masked_fraction = 1.0 - average_keep_fraction
         sample_keep_fraction_mean = active_sum / args.samples_per_reward
         averages["uvqlm"] = average
-        grid_settings.append(("uvqlm", "UVQLM"))
+        grid_settings.append(("uvqlm", UC_MLM_TITLE))
         path_base = args.output_dir / "average_uvqlm_mask"
-        save_mask(average, "UVQLM", path_base)
+        save_mask(average, UC_MLM_TITLE, path_base)
         summary["uvqlm"] = {
-            "setting": "UVQLM",
+            "setting": UC_MLM_TITLE,
+            "source_name": "UVQLM",
+            "display_title": UC_MLM_TITLE,
             "config": str(args.uvqlm_config),
             "checkpoint": str(args.uvqlm_checkpoint),
             "mask_vae_checkpoint": str(args.uvqlm_mask_vae_checkpoint),
@@ -468,11 +559,13 @@ def main() -> None:
         average_masked_fraction = 1.0 - average_keep_fraction
         sample_keep_fraction_mean = active_sum / args.samples_per_reward
         averages[label] = average
-        grid_settings.append((label, f"reward {display_reward(reward)}"))
+        title = rc_mlm_title(reward)
+        grid_settings.append((label, title))
         path_base = args.output_dir / f"average_reward_{label}_mask"
-        save_mask(average, f"reward {display_reward(reward)}", path_base)
+        save_mask(average, title, path_base)
         summary[label] = {
             "conditioning_reward": float(reward),
+            "display_title": title,
             "samples": int(args.samples_per_reward),
             "average_mask_shape": list(average.shape),
             "mask_value_semantics": "decoded model output is a keep mask: 1.0 keeps/unmasks the bin; plotted values show the inverse masked percentage",
@@ -504,11 +597,15 @@ def main() -> None:
         keep_diff = averages[reward_label(1.0)] - averages[reward_label(0.0)]
         diff = (1.0 - averages[reward_label(1.0)]) - (1.0 - averages[reward_label(0.0)])
         diff_base = args.output_dir / "average_reward_1p0_minus_0p0_mask"
-        save_difference(diff, "Masked percentage difference, reward 1 minus 0", diff_base)
+        save_difference(diff, "Masked percentage difference, RC-MLM reward 1.0 minus 0.0", diff_base)
         difference_artifacts = {
             "difference_png": diff_base.with_suffix(".png").name,
             "difference_pdf": diff_base.with_suffix(".pdf").name,
-            "difference_semantics": "plotted values are masked-rate reward 1 minus reward 0; negative values mean reward 1 masks less of the bin than reward 0",
+            "difference_title": "Masked percentage difference, RC-MLM reward 1.0 minus 0.0",
+            "difference_semantics": (
+                "plotted values are masked-rate RC-MLM reward 1.0 minus reward 0.0; "
+                "negative values mean reward 1.0 masks less of the bin than reward 0.0"
+            ),
             "masked_fraction_difference_mean": float(diff.mean()),
             "masked_percentage_point_difference_mean": as_percent(float(diff.mean())),
             "masked_fraction_difference_min": float(diff.min()),

@@ -41,10 +41,10 @@ never ran GPU eval and was replaced by the completed fixed-reward `0.0` and
   `/store/store5/data/acp21rjf_checkpoints/l2augment/models/UMLM/modelgpu.pt`
 - ROB-124 reward-control average masks:
   `visualizations/reward_conditioned_average_masks_10k/`
-  These plots compare UVQLM, reward `0.0`, and reward `1.0` in
-  masked-percentage units: `0%` means fully retained/unmasked, `100%` means
-  fully suppressed/masked out, and the decoded model keep-mask percentage is
-  `100% - masked percentage`.
+  These plots compare `UC-MLM`, `RC-MLM (reward=0.0)`, and
+  `RC-MLM (reward=1.0)` in masked-percentage units: `0%` means fully
+  retained/unmasked, `100%` means fully suppressed/masked out, and the decoded
+  model keep-mask percentage is `100% - masked percentage`.
 
 See `OUTCOME.md` for the consolidated interpretation and the subdirectory
 OUTCOME files for detailed tables.
