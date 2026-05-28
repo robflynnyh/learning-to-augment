@@ -1,0 +1,29 @@
+checkpointing:
+  asr_model: /store/store5/data/acp21rjf_checkpoints/SAP_LCASR/n_seq_sched_2048_rp_1/step_105360.pt
+
+training:
+  device: 'cuda'
+  random_seed: 123456
+  batch_size: 84
+  epochs: 100
+  model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/ufmr/test_wer/model.pt
+  tmp_model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/ufmr/test_wer/model.pt
+
+evaluation:
+  id: 'ROB-158-chime6-test-UFMR-chime6_epoch1_lr3e-5-repeat1'
+  dataset: 'chime6'
+  split: 'test'
+  rollout_setting: policy
+  use_cer: false
+  epochs: 1
+  augmentation_config:
+    repeats: 15
+    seed: 123456
+    use_random: false
+  optim_args:
+    lr: 3e-5
+  save_path: /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-158/exp/results/repro/symphony/rob-158/large_asr_2048_90m/results/UFMR/chime6_epoch1_lr3e-5.txt
+
+policy:
+  lr: 1e-4
+  class: UnconditionalFrequencyMaskingRanker

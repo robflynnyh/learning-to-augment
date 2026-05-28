@@ -262,3 +262,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   multiplicative keep mask; figures report masked percentage. The current grid
   compares UC-MLM at `49.13%` masked with `RC-MLM (reward=0.0)` at `70.18%`
   and `RC-MLM (reward=1.0)` at `33.19%`.
+- Added the ROB-158 UFMR large-ASR eval scaffold. It reuses the ROB-108 UFMR
+  policy matrix but swaps only the ASR checkpoint to the SAP-style
+  `/store/store5/data/acp21rjf_checkpoints/SAP_LCASR/n_seq_sched_2048_rp_1/step_105360.pt`
+  2048-seq-len, approximately 90M-parameter checkpoint. Launcher:
+  `scripts/launch_rob158_ufmr_large_asr_eval.sh`; result root:
+  `exp/results/repro/symphony/rob-158/large_asr_2048_90m/`.
