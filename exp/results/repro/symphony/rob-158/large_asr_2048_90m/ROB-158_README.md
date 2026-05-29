@@ -1,7 +1,8 @@
 # ROB-158 UFMR Large-ASR Evaluation
 
 This directory holds the ROB-158-specific aggregate artifacts for testing
-whether the learned UFMR augmentation pattern transfers to a larger ASR model.
+whether the learned UFMR augmentation pattern transfers to a larger ASR model,
+plus the follow-up RFM comparison on that same larger ASR model.
 
 The launch wrapper is `scripts/launch_rob158_ufmr_large_asr_eval.sh`. It
 generates per-cell configs under `results/UFMR/configs/`, writes per-cell
@@ -28,3 +29,23 @@ The comparison target is the existing ROB-108 UFMR repro output under
 `exp/results/repro/symphony/rob-108/`. The intended variable is the ASR model
 size; policy, datasets, repeat, candidate count, and LR/epoch cells are kept the
 same.
+
+## RFM Follow-Up
+
+The follow-up launcher is `scripts/launch_rob158_rfm_large_asr_eval.sh`. It
+uses the same ASR checkpoint, datasets, split, repeat, and result root, but
+generates configs under `results/RFM/configs/` and writes per-cell files under
+`results/RFM/`.
+
+RFM follows the latest Linear clarification:
+
+- Policy: `FrequencyMaskingRanker`
+- One-epoch LRs: `1e-5`
+- Five-epoch LRs: `1e-5`
+- Dropped cells: `3e-5` RFM trials
+
+The comparison helper is `scripts/compare_rob158_large_asr_policy_evals.py`.
+After RFM results are available, it writes:
+
+- `rob158_vs_rob108_rfm_comparison.csv`
+- `rob158_large_asr_ufmr_vs_rfm_comparison.csv`

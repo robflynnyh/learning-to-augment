@@ -277,3 +277,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `tedlium`, `earnings22`, and `chime6` but degraded `rev16` and `TAL`, so the
   large-model handoff supports UFMR transfer most clearly for one-epoch
   adaptation rather than the full ROB-108 recipe.
+- Added the ROB-158 RFM large-ASR follow-up scaffold after the UFMR handoff.
+  It uses the same 2048-seq-len 90M ASR checkpoint and test datasets but only
+  runs RFM at `1e-5` for 1 and 5 adaptation epochs, matching the latest Linear
+  clarification to drop `3e-5` RFM trials.

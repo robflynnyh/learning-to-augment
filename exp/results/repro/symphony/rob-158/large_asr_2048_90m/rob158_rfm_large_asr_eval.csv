@@ -1,0 +1,11 @@
+dataset_tag,dataset,split,method,repeat,seed,epochs,lr,result_path,status,original_wer,updated_wer,absolute_delta,relative_delta_pct
+tedlium,tedlium,test,RFM,1,123456,1,1e-5,exp/results/repro/symphony/rob-158/large_asr_2048_90m/results/RFM/tedlium_epoch1_lr1e-5.txt,missing,,,,
+tedlium,tedlium,test,RFM,1,123456,5,1e-5,exp/results/repro/symphony/rob-158/large_asr_2048_90m/results/RFM/tedlium_epoch5_lr1e-5.txt,missing,,,,
+earnings22,earnings22,test,RFM,1,123456,1,1e-5,exp/results/repro/symphony/rob-158/large_asr_2048_90m/results/RFM/earnings22_epoch1_lr1e-5.txt,missing,,,,
+earnings22,earnings22,test,RFM,1,123456,5,1e-5,exp/results/repro/symphony/rob-158/large_asr_2048_90m/results/RFM/earnings22_epoch5_lr1e-5.txt,missing,,,,
+chime6,chime6,test,RFM,1,123456,1,1e-5,exp/results/repro/symphony/rob-158/large_asr_2048_90m/results/RFM/chime6_epoch1_lr1e-5.txt,missing,,,,
+chime6,chime6,test,RFM,1,123456,5,1e-5,exp/results/repro/symphony/rob-158/large_asr_2048_90m/results/RFM/chime6_epoch5_lr1e-5.txt,missing,,,,
+rev16,rev16,test,RFM,1,123456,1,1e-5,exp/results/repro/symphony/rob-158/large_asr_2048_90m/results/RFM/rev16_epoch1_lr1e-5.txt,missing,,,,
+rev16,rev16,test,RFM,1,123456,5,1e-5,exp/results/repro/symphony/rob-158/large_asr_2048_90m/results/RFM/rev16_epoch5_lr1e-5.txt,missing,,,,
+TAL,this_american_life,test,RFM,1,123456,1,1e-5,exp/results/repro/symphony/rob-158/large_asr_2048_90m/results/RFM/TAL_epoch1_lr1e-5.txt,missing,,,,
+TAL,this_american_life,test,RFM,1,123456,5,1e-5,exp/results/repro/symphony/rob-158/large_asr_2048_90m/results/RFM/TAL_epoch5_lr1e-5.txt,missing,,,,
