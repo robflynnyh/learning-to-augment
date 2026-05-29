@@ -268,3 +268,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
   2048-seq-len, approximately 90M-parameter checkpoint. Launcher:
   `scripts/launch_rob158_ufmr_large_asr_eval.sh`; result root:
   `exp/results/repro/symphony/rob-158/large_asr_2048_90m/`.
+
+## 2026-05-29
+
+- ROB-158 completed all 15 UFMR large-ASR cells. One-epoch adaptation improved
+  all five datasets for both tested LRs and was usually stronger than the
+  ROB-108 small-ASR UFMR relative deltas. The five-epoch `1e-5` setting improved
+  `tedlium`, `earnings22`, and `chime6` but degraded `rev16` and `TAL`, so the
+  large-model handoff supports UFMR transfer most clearly for one-epoch
+  adaptation rather than the full ROB-108 recipe.
