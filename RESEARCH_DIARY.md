@@ -265,9 +265,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
 
 ## 2026-05-30
 
-- ROB-177 adds an Earnings22-only UFMR ablation over `candidate_repeats`
-  `2 5 10 20 40 100 200 1000`, with three seed trials per setting. Here
-  `candidate_repeats` is the UFMR `evaluation.augmentation_config.repeats`
-  mask-candidate count, not a seed repeat. Use
-  `scripts/launch_rob177_ufmr_repeat_ablation.sh`; the issue-specific aggregate
-  artifacts live under `exp/results/repro/symphony/rob-177/`.
+- ROB-177 adds a UFMR ablation over `candidate_repeats`
+  `1 2 5 10 15 20 40 100 200 1000` on Earnings22 and TED-LIUM test, with
+  three seed trials per setting. Here `candidate_repeats` is the UFMR
+  `evaluation.augmentation_config.repeats` mask-candidate count, not a seed
+  repeat. Use `scripts/launch_rob177_ufmr_repeat_ablation.sh`; the
+  issue-specific aggregate artifacts live under
+  `exp/results/repro/symphony/rob-177/`.
