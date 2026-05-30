@@ -262,3 +262,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   multiplicative keep mask; figures report masked percentage. The current grid
   compares UC-MLM at `49.13%` masked with `RC-MLM (reward=0.0)` at `70.18%`
   and `RC-MLM (reward=1.0)` at `33.19%`.
+
+## 2026-05-30
+
+- ROB-177 adds an Earnings22-only UFMR ablation over `candidate_repeats`
+  `2 5 10 20 40 100 200`, where `candidate_repeats` is the UFMR
+  `evaluation.augmentation_config.repeats` mask-candidate count, not a seed
+  repeat. Use `scripts/launch_rob177_ufmr_repeat_ablation.sh`; the issue-specific
+  aggregate artifacts live under `exp/results/repro/symphony/rob-177/`.

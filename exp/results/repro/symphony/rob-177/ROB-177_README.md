@@ -1,0 +1,22 @@
+# ROB-177 UFMR Candidate-Repeat Ablation
+
+This directory holds the issue-specific ROB-177 launcher outputs and aggregate
+artifacts for the Earnings22-only UFMR candidate-repeat ablation.
+
+The launch wrapper is `scripts/launch_rob177_ufmr_repeat_ablation.sh`. It
+generates per-cell configs under `results/UFMR/configs/`, writes per-cell result
+logs under `results/UFMR/`, and refreshes `ROB-177_OUTCOME.md` plus
+`rob177_ufmr_repeat_ablation.csv` in this directory.
+
+Scope:
+
+- Dataset/split: `earnings22` / `test`
+- Method: `UFMR`
+- ASR context: 2048 sequence-length checkpoint
+- Adaptation: epoch `1`, LR `1e-5`
+- Candidate repeats: `2 5 10 20 40 100 200`
+- Default reference: existing repeat-15 ROB-108 UFMR Earnings22 epoch-1 LR-1e-5 result when present
+
+`candidate_repeats` means the number of candidate frequency masks UFMR samples
+and scores inside `evaluation.augmentation_config.repeats`; it is not the
+experiment seed-repeat dimension used by some older sweep tables.

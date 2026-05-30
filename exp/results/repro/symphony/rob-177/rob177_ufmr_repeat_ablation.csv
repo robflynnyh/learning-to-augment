@@ -1,0 +1,9 @@
+dataset_tag,dataset,split,method,candidate_repeats,source,epochs,lr,result_path,status,original_wer,updated_wer,absolute_delta,relative_delta_pct
+earnings22,earnings22,test,UFMR,2,ROB-177 ablation,1,1e-5,exp/results/repro/symphony/rob-177/results/UFMR/earnings22_test_candidate_repeats2_epoch1_lr1e-5.txt,missing,,,,
+earnings22,earnings22,test,UFMR,5,ROB-177 ablation,1,1e-5,exp/results/repro/symphony/rob-177/results/UFMR/earnings22_test_candidate_repeats5_epoch1_lr1e-5.txt,missing,,,,
+earnings22,earnings22,test,UFMR,10,ROB-177 ablation,1,1e-5,exp/results/repro/symphony/rob-177/results/UFMR/earnings22_test_candidate_repeats10_epoch1_lr1e-5.txt,missing,,,,
+earnings22,earnings22,test,UFMR,15,ROB-108 default reference,1,1e-5,exp/results/repro/UFMR/earnings22_epoch1_lr1e-5.txt,complete,0.235198,0.185589,-0.049609,-21.09
+earnings22,earnings22,test,UFMR,20,ROB-177 ablation,1,1e-5,exp/results/repro/symphony/rob-177/results/UFMR/earnings22_test_candidate_repeats20_epoch1_lr1e-5.txt,missing,,,,
+earnings22,earnings22,test,UFMR,40,ROB-177 ablation,1,1e-5,exp/results/repro/symphony/rob-177/results/UFMR/earnings22_test_candidate_repeats40_epoch1_lr1e-5.txt,missing,,,,
+earnings22,earnings22,test,UFMR,100,ROB-177 ablation,1,1e-5,exp/results/repro/symphony/rob-177/results/UFMR/earnings22_test_candidate_repeats100_epoch1_lr1e-5.txt,missing,,,,
+earnings22,earnings22,test,UFMR,200,ROB-177 ablation,1,1e-5,exp/results/repro/symphony/rob-177/results/UFMR/earnings22_test_candidate_repeats200_epoch1_lr1e-5.txt,missing,,,,
