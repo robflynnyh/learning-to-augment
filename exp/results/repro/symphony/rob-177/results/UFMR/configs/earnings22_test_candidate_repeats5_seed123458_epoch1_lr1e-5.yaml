@@ -3,26 +3,26 @@ checkpointing:
 
 training:
   device: 'cuda'
-  random_seed: 123456
+  random_seed: 123458
   batch_size: 84
   epochs: 100
   model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/ufmr/test_wer/model.pt
   tmp_model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/ufmr/test_wer/model.pt
 
 evaluation:
-  id: 'ROB-177-earnings22-test-UFMR-candidate-repeats40-trial1-seed123456-epoch1-lr1e-5'
+  id: 'ROB-177-earnings22-test-UFMR-candidate-repeats5-trial3-seed123458-epoch1-lr1e-5'
   dataset: 'earnings22'
   split: 'test'
   rollout_setting: policy
   use_cer: false
   epochs: 1
   augmentation_config:
-    repeats: 40
-    seed: 123456
+    repeats: 5
+    seed: 123458
     use_random: false
   optim_args:
     lr: 1e-5
-  save_path: /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-177/exp/results/repro/symphony/rob-177/results/UFMR/earnings22_test_candidate_repeats40_epoch1_lr1e-5.txt
+  save_path: /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-177/exp/results/repro/symphony/rob-177/results/UFMR/earnings22_test_candidate_repeats5_seed123458_epoch1_lr1e-5.txt
 
 policy:
   lr: 1e-4

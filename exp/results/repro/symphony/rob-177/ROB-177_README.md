@@ -14,9 +14,14 @@ Scope:
 - Method: `UFMR`
 - ASR context: 2048 sequence-length checkpoint
 - Adaptation: epoch `1`, LR `1e-5`
-- Candidate repeats: `2 5 10 20 40 100 200`
+- Candidate repeats: `2 5 10 20 40 100 200 1000`
+- Seed trials per candidate-repeat setting: `123456 123457 123458`
 - Default reference: existing repeat-15 ROB-108 UFMR Earnings22 epoch-1 LR-1e-5 result when present
 
 `candidate_repeats` means the number of candidate frequency masks UFMR samples
 and scores inside `evaluation.augmentation_config.repeats`; it is not the
 experiment seed-repeat dimension used by some older sweep tables.
+
+For `candidate_repeats` values completed before the three-trial follow-up, the
+legacy no-seed filename is reused as the `123456` trial to avoid rerunning an
+already completed matching cell.

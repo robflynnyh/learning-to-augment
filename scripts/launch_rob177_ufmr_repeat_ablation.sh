@@ -31,8 +31,10 @@ DATASET="${ROB177_DATASET:-earnings22}"
 SPLIT="${ROB177_SPLIT:-test}"
 EPOCHS="${ROB177_EPOCHS:-1}"
 ADAPT_LR="${ROB177_LR:-1e-5}"
-CANDIDATE_REPEATS="${ROB177_CANDIDATE_REPEATS:-2 5 10 20 40 100 200}"
+CANDIDATE_REPEATS="${ROB177_CANDIDATE_REPEATS:-2 5 10 20 40 100 200 1000}"
+SEEDS="${ROB177_SEEDS:-123456 123457 123458}"
 REFERENCE_RESULT="${ROB177_REFERENCE_RESULT:-${REPO_DIR}/exp/results/repro/UFMR/earnings22_epoch1_lr1e-5.txt}"
+LEGACY_FIRST_SEED="${ROB177_LEGACY_FIRST_SEED:-1}"
 
 on_exit() {
   status=$?
@@ -91,6 +93,7 @@ echo "[rob177] split=${SPLIT}"
 echo "[rob177] epochs=${EPOCHS}"
 echo "[rob177] lr=${ADAPT_LR}"
 echo "[rob177] candidate_repeats=${CANDIDATE_REPEATS}"
+echo "[rob177] seeds=${SEEDS}"
 echo "[rob177] reference_result=${REFERENCE_RESULT}"
 echo "[rob177] cuda_visible_devices=${CUDA_VISIBLE_DEVICES:-unset}"
 
@@ -120,7 +123,7 @@ if [ ! -d "${L2A_EARNINGS22_DIR}" ]; then
   exit 1
 fi
 
-python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${UFMR_CKPT}" "${DATASET_TAG}" "${DATASET}" "${SPLIT}" "${EPOCHS}" "${ADAPT_LR}" "${CANDIDATE_REPEATS}" <<'PY'
+python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${UFMR_CKPT}" "${DATASET_TAG}" "${DATASET}" "${SPLIT}" "${EPOCHS}" "${ADAPT_LR}" "${CANDIDATE_REPEATS}" "${SEEDS}" "${LEGACY_FIRST_SEED}" <<'PY'
 import sys
 from pathlib import Path
 
@@ -133,28 +136,35 @@ split = sys.argv[6]
 epochs = int(sys.argv[7])
 lr = sys.argv[8]
 candidate_repeats = tuple(int(item) for item in sys.argv[9].split())
+seeds = tuple(int(item) for item in sys.argv[10].split())
+legacy_first_seed = sys.argv[11] == "1"
+first_seed = seeds[0] if seeds else None
 
 method_root = root / "UFMR"
 (method_root / "configs").mkdir(parents=True, exist_ok=True)
 
 for repeat_count in candidate_repeats:
-    tag = f"{dataset_tag}_{split}_candidate_repeats{repeat_count}_epoch{epochs}_lr{lr}"
-    save_path = method_root / f"{tag}.txt"
-    config_path = method_root / "configs" / f"{tag}.yaml"
-    config_path.write_text(
-        f"""checkpointing:
+    for trial_index, seed in enumerate(seeds, start=1):
+        if legacy_first_seed and seed == first_seed and repeat_count != 1000:
+            tag = f"{dataset_tag}_{split}_candidate_repeats{repeat_count}_epoch{epochs}_lr{lr}"
+        else:
+            tag = f"{dataset_tag}_{split}_candidate_repeats{repeat_count}_seed{seed}_epoch{epochs}_lr{lr}"
+        save_path = method_root / f"{tag}.txt"
+        config_path = method_root / "configs" / f"{tag}.yaml"
+        config_path.write_text(
+            f"""checkpointing:
   asr_model: {asr_ckpt}
 
 training:
   device: 'cuda'
-  random_seed: 123456
+  random_seed: {seed}
   batch_size: 84
   epochs: 100
   model_save_path: {ufmr_ckpt}
   tmp_model_save_path: {ufmr_ckpt}
 
 evaluation:
-  id: 'ROB-177-{dataset}-{split}-UFMR-candidate-repeats{repeat_count}-epoch{epochs}-lr{lr}'
+  id: 'ROB-177-{dataset}-{split}-UFMR-candidate-repeats{repeat_count}-trial{trial_index}-seed{seed}-epoch{epochs}-lr{lr}'
   dataset: '{dataset}'
   split: '{split}'
   rollout_setting: policy
@@ -162,7 +172,7 @@ evaluation:
   epochs: {epochs}
   augmentation_config:
     repeats: {repeat_count}
-    seed: 123456
+    seed: {seed}
     use_random: false
   optim_args:
     lr: {lr}
@@ -172,21 +182,23 @@ policy:
   lr: 1e-4
   class: UnconditionalFrequencyMaskingRanker
 """,
-        encoding="utf-8",
-    )
-    print(f"[rob177] wrote config {config_path}")
+            encoding="utf-8",
+        )
+        print(f"[rob177] wrote config {config_path}")
 PY
 
 python3 scripts/summarize_rob177_ufmr_repeat_ablation.py \
   --result-root "${RESULT_ROOT}" \
   --output-dir "${AGGREGATE_DIR}" \
   --candidate-repeats "${CANDIDATE_REPEATS}" \
+  --seeds "${SEEDS}" \
   --dataset-tag "${DATASET_TAG}" \
   --dataset "${DATASET}" \
   --split "${SPLIT}" \
   --epochs "${EPOCHS}" \
   --lr "${ADAPT_LR}" \
-  --reference-result "${REFERENCE_RESULT}"
+  --reference-result "${REFERENCE_RESULT}" \
+  --legacy-first-seed "${LEGACY_FIRST_SEED}"
 
 if [ "${ROB177_CONFIG_ONLY:-0}" = "1" ]; then
   echo "[rob177] config-only smoke path requested; exiting before eval."
@@ -199,40 +211,49 @@ conda activate /store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2
 export PYTHONPATH="${REPO_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 
 RUN_CANDIDATE_REPEATS="${ROB177_RUN_CANDIDATE_REPEATS:-${CANDIDATE_REPEATS}}"
+RUN_SEEDS="${ROB177_RUN_SEEDS:-${SEEDS}}"
+FIRST_SEED="${SEEDS%% *}"
 EVAL_SCRIPT="${ROB177_EVAL_SCRIPT:-eval.py}"
 
 if [ "${ROB177_SMOKE:-0}" = "1" ]; then
   RUN_CANDIDATE_REPEATS="${ROB177_SMOKE_CANDIDATE_REPEATS:-2}"
+  RUN_SEEDS="${ROB177_SMOKE_SEEDS:-123457}"
   ROB177_INDEXES="${ROB177_INDEXES:-0}"
   ROB177_DONT_SAVE="${ROB177_DONT_SAVE:-1}"
-  echo "[rob177] smoke mode: candidate_repeats=${RUN_CANDIDATE_REPEATS}; indexes=${ROB177_INDEXES}; dont_save=${ROB177_DONT_SAVE}"
+  echo "[rob177] smoke mode: candidate_repeats=${RUN_CANDIDATE_REPEATS}; seeds=${RUN_SEEDS}; indexes=${ROB177_INDEXES}; dont_save=${ROB177_DONT_SAVE}"
 fi
 
 cd "${REPO_DIR}/exp"
 for repeat_count in ${RUN_CANDIDATE_REPEATS}; do
-  tag="${DATASET_TAG}_${SPLIT}_candidate_repeats${repeat_count}_epoch${EPOCHS}_lr${ADAPT_LR}"
-  config="${RESULT_ROOT}/UFMR/configs/${tag}.yaml"
-  save_path="${RESULT_ROOT}/UFMR/${tag}.txt"
-  if [ ! -f "${config}" ]; then
-    echo "Missing generated config: ${config}" >&2
-    exit 1
-  fi
-  if [ "${FORCE_RERUN:-0}" != "1" ] && [ -f "${save_path}" ] && grep -q "Updated_WER:" "${save_path}"; then
-    echo "[rob177] skipping completed UFMR/${tag}: ${save_path}"
-    continue
-  fi
-  if [ "${FORCE_RERUN:-0}" = "1" ]; then
-    rm -f "${save_path}"
-  fi
-  args=(python "${EVAL_SCRIPT}" --config "${config}")
-  if [ -n "${ROB177_INDEXES:-}" ]; then
-    args+=(--indexes ${ROB177_INDEXES})
-  fi
-  if [ "${ROB177_DONT_SAVE:-0}" = "1" ]; then
-    args+=(--dont_save)
-  fi
-  echo "[rob177] running UFMR/${tag}: ${args[*]}"
-  "${args[@]}"
+  for seed in ${RUN_SEEDS}; do
+    if [ "${LEGACY_FIRST_SEED}" = "1" ] && [ "${seed}" = "${FIRST_SEED}" ] && [ "${repeat_count}" != "1000" ]; then
+      tag="${DATASET_TAG}_${SPLIT}_candidate_repeats${repeat_count}_epoch${EPOCHS}_lr${ADAPT_LR}"
+    else
+      tag="${DATASET_TAG}_${SPLIT}_candidate_repeats${repeat_count}_seed${seed}_epoch${EPOCHS}_lr${ADAPT_LR}"
+    fi
+    config="${RESULT_ROOT}/UFMR/configs/${tag}.yaml"
+    save_path="${RESULT_ROOT}/UFMR/${tag}.txt"
+    if [ ! -f "${config}" ]; then
+      echo "Missing generated config: ${config}" >&2
+      exit 1
+    fi
+    if [ "${FORCE_RERUN:-0}" != "1" ] && [ -f "${save_path}" ] && grep -q "Updated_WER:" "${save_path}"; then
+      echo "[rob177] skipping completed UFMR/${tag}: ${save_path}"
+      continue
+    fi
+    if [ "${FORCE_RERUN:-0}" = "1" ]; then
+      rm -f "${save_path}"
+    fi
+    args=(python "${EVAL_SCRIPT}" --config "${config}")
+    if [ -n "${ROB177_INDEXES:-}" ]; then
+      args+=(--indexes ${ROB177_INDEXES})
+    fi
+    if [ "${ROB177_DONT_SAVE:-0}" = "1" ]; then
+      args+=(--dont_save)
+    fi
+    echo "[rob177] running UFMR/${tag}: ${args[*]}"
+    "${args[@]}"
+  done
 done
 
 cd "${REPO_DIR}"
@@ -240,10 +261,12 @@ python3 scripts/summarize_rob177_ufmr_repeat_ablation.py \
   --result-root "${RESULT_ROOT}" \
   --output-dir "${AGGREGATE_DIR}" \
   --candidate-repeats "${CANDIDATE_REPEATS}" \
+  --seeds "${SEEDS}" \
   --dataset-tag "${DATASET_TAG}" \
   --dataset "${DATASET}" \
   --split "${SPLIT}" \
   --epochs "${EPOCHS}" \
   --lr "${ADAPT_LR}" \
-  --reference-result "${REFERENCE_RESULT}"
+  --reference-result "${REFERENCE_RESULT}" \
+  --legacy-first-seed "${LEGACY_FIRST_SEED}"
 echo "[rob177] finished"

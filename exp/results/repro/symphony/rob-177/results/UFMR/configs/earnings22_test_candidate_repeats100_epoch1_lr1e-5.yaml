@@ -10,7 +10,7 @@ training:
   tmp_model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/ufmr/test_wer/model.pt
 
 evaluation:
-  id: 'ROB-177-earnings22-test-UFMR-candidate-repeats100-epoch1-lr1e-5'
+  id: 'ROB-177-earnings22-test-UFMR-candidate-repeats100-trial1-seed123456-epoch1-lr1e-5'
   dataset: 'earnings22'
   split: 'test'
   rollout_setting: policy

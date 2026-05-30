@@ -22,6 +22,10 @@ def parse_candidate_repeats(raw: str) -> tuple[int, ...]:
     return tuple(int(item) for item in raw.split())
 
 
+def parse_seeds(raw: str) -> tuple[int, ...]:
+    return tuple(int(item) for item in raw.split())
+
+
 def display_path(path: Path) -> str:
     try:
         return str(path.relative_to(Path.cwd()))
@@ -54,6 +58,8 @@ def parse_result(
 def result_row(
     *,
     candidate_repeats: int,
+    trial: int | None,
+    seed: int | None,
     source: str,
     result_path: Path,
     dataset_tag: str,
@@ -68,6 +74,8 @@ def result_row(
         "split": split,
         "method": "UFMR",
         "candidate_repeats": str(candidate_repeats),
+        "trial": "" if trial is None else str(trial),
+        "seed": "" if seed is None else str(seed),
         "source": source,
         "epochs": str(epochs),
         "lr": lr,
@@ -102,33 +110,44 @@ def result_row(
 def collect_rows(
     result_root: Path,
     candidate_repeats: tuple[int, ...],
+    seeds: tuple[int, ...],
     dataset_tag: str,
     dataset: str,
     split: str,
     epochs: int,
     lr: str,
     reference_result: Path | None,
+    legacy_first_seed: bool,
 ) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
+    first_seed = seeds[0] if seeds else None
     for repeat_count in candidate_repeats:
-        tag = f"{dataset_tag}_{split}_candidate_repeats{repeat_count}_epoch{epochs}_lr{lr}"
-        rows.append(
-            result_row(
-                candidate_repeats=repeat_count,
-                source="ROB-177 ablation",
-                result_path=result_root / "UFMR" / f"{tag}.txt",
-                dataset_tag=dataset_tag,
-                dataset=dataset,
-                split=split,
-                epochs=epochs,
-                lr=lr,
+        for trial_index, seed in enumerate(seeds, start=1):
+            if legacy_first_seed and seed == first_seed and repeat_count != 1000:
+                tag = f"{dataset_tag}_{split}_candidate_repeats{repeat_count}_epoch{epochs}_lr{lr}"
+            else:
+                tag = f"{dataset_tag}_{split}_candidate_repeats{repeat_count}_seed{seed}_epoch{epochs}_lr{lr}"
+            rows.append(
+                result_row(
+                    candidate_repeats=repeat_count,
+                    trial=trial_index,
+                    seed=seed,
+                    source="ROB-177 ablation",
+                    result_path=result_root / "UFMR" / f"{tag}.txt",
+                    dataset_tag=dataset_tag,
+                    dataset=dataset,
+                    split=split,
+                    epochs=epochs,
+                    lr=lr,
+                )
             )
-        )
 
     if reference_result is not None:
         rows.append(
             result_row(
                 candidate_repeats=15,
+                trial=None,
+                seed=None,
                 source="ROB-108 default reference",
                 result_path=reference_result,
                 dataset_tag=dataset_tag,
@@ -138,7 +157,7 @@ def collect_rows(
                 lr=lr,
             )
         )
-    return sorted(rows, key=lambda row: (int(row["candidate_repeats"]), row["source"]))
+    return sorted(rows, key=lambda row: (int(row["candidate_repeats"]), row["source"], row["trial"]))
 
 
 def write_csv(rows: list[dict[str, str]], path: Path) -> None:
@@ -153,6 +172,7 @@ def write_markdown(rows: list[dict[str, str]], path: Path) -> None:
     complete = sum(row["status"] == "complete" for row in rows)
     ablation_rows = [row for row in rows if row["source"] == "ROB-177 ablation"]
     missing = [row for row in ablation_rows if row["status"] != "complete"]
+    complete_ablation = [row for row in ablation_rows if row["status"] == "complete"]
     lines = [
         "# ROB-177 UFMR Candidate-Repeat Ablation",
         "",
@@ -160,23 +180,42 @@ def write_markdown(rows: list[dict[str, str]], path: Path) -> None:
         "",
         "All ROB-177 ablation rows use UFMR, epoch `1`, adaptation LR `1e-5`, the 2048-sequence ASR checkpoint, and `use_random: false`.",
         "The `candidate_repeats` column is the UFMR mask-candidate count in `evaluation.augmentation_config.repeats`; it is not a seed repeat.",
+        "Each ROB-177 candidate-repeat setting has three seed trials when complete.",
         "",
         f"Completed rows: {complete}/{len(rows)}",
         f"Completed ROB-177 ablation rows: {len(ablation_rows) - len(missing)}/{len(ablation_rows)}",
         "",
-        "| Candidate Repeats | Source | Original WER | Updated WER | Abs Delta | Rel Delta % | Status | Result |",
-        "| ---: | --- | ---: | ---: | ---: | ---: | --- | --- |",
+        "## Per-Trial Results",
+        "",
+        "| Candidate Repeats | Trial | Seed | Source | Original WER | Updated WER | Abs Delta | Rel Delta % | Status | Result |",
+        "| ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- | --- |",
     ]
     for row in rows:
         lines.append(
-            "| {candidate_repeats} | {source} | {original_wer} | {updated_wer} | "
+            "| {candidate_repeats} | {trial} | {seed} | {source} | {original_wer} | {updated_wer} | "
             "{absolute_delta} | {relative_delta_pct} | {status} | `{result_path}` |".format(**row)
         )
+
+    if complete_ablation:
+        lines.extend(["", "## Candidate-Repeat Summary", ""])
+        lines.append("| Candidate Repeats | Complete Trials | Mean Updated WER | Std Updated WER | Best Updated WER | Worst Updated WER |")
+        lines.append("| ---: | ---: | ---: | ---: | ---: | ---: |")
+        by_repeat: dict[str, list[float]] = {}
+        for row in complete_ablation:
+            by_repeat.setdefault(row["candidate_repeats"], []).append(float(row["updated_wer"]))
+        for repeat_count in sorted(by_repeat, key=int):
+            values = by_repeat[repeat_count]
+            mean = sum(values) / len(values)
+            variance = sum((value - mean) ** 2 for value in values) / len(values)
+            std = variance ** 0.5
+            lines.append(
+                f"| {repeat_count} | {len(values)} | {mean:.6f} | {std:.6f} | {min(values):.6f} | {max(values):.6f} |"
+            )
 
     if missing:
         lines.extend(["", "## Missing ROB-177 Cells", ""])
         for row in missing:
-            lines.append("- candidate repeats `{candidate_repeats}`".format(**row))
+            lines.append("- candidate repeats `{candidate_repeats}`, trial `{trial}`, seed `{seed}`".format(**row))
 
     lines.append("")
     path.write_text("\n".join(lines), encoding="utf-8")
@@ -186,13 +225,15 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--result-root", type=Path, default=Path("exp/results/repro/symphony/rob-177/results"))
     parser.add_argument("--output-dir", type=Path, default=Path("exp/results/repro/symphony/rob-177"))
-    parser.add_argument("--candidate-repeats", default="2 5 10 20 40 100 200")
+    parser.add_argument("--candidate-repeats", default="2 5 10 20 40 100 200 1000")
+    parser.add_argument("--seeds", default="123456 123457 123458")
     parser.add_argument("--dataset-tag", default="earnings22")
     parser.add_argument("--dataset", default="earnings22")
     parser.add_argument("--split", default="test")
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--lr", default="1e-5")
     parser.add_argument("--reference-result", type=Path, default=Path("exp/results/repro/UFMR/earnings22_epoch1_lr1e-5.txt"))
+    parser.add_argument("--legacy-first-seed", default="1", choices=("0", "1"))
     parser.add_argument("--csv-name", default="rob177_ufmr_repeat_ablation.csv")
     parser.add_argument("--outcome-name", default="ROB-177_OUTCOME.md")
     args = parser.parse_args()
@@ -200,12 +241,14 @@ def main() -> None:
     rows = collect_rows(
         args.result_root,
         candidate_repeats=parse_candidate_repeats(args.candidate_repeats),
+        seeds=parse_seeds(args.seeds),
         dataset_tag=args.dataset_tag,
         dataset=args.dataset,
         split=args.split,
         epochs=args.epochs,
         lr=args.lr,
         reference_result=args.reference_result,
+        legacy_first_seed=args.legacy_first_seed == "1",
     )
     write_csv(rows, args.output_dir / args.csv_name)
     write_markdown(rows, args.output_dir / args.outcome_name)
