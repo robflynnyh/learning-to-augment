@@ -262,3 +262,16 @@ reproduce results, interpret metrics, or avoid known failure modes.
   multiplicative keep mask; figures report masked percentage. The current grid
   compares UC-MLM at `49.13%` masked with `RC-MLM (reward=0.0)` at `70.18%`
   and `RC-MLM (reward=1.0)` at `33.19%`.
+
+## 2026-05-30
+
+- Completed the ROB-132 audio+reward-conditioned test-set follow-up after
+  splitting the slow remaining cells onto Stanage. The result root
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1_test_tedlium_earnings22/`
+  now has all 8 fixed-reward TED-LIUM/Earnings22 test cells complete, and every
+  cell improved WER versus its unadapted original row.
+- Started the ROB-132 remaining-dataset extension for Rev16, TAL, and CHiME-6.
+  The new result root is
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1_test_remaining_datasets/`.
+  CHiME uses multi-channel raw audio paths, so `exp/eval.py` now extracts SSL
+  from the aligned raw channel slice before averaging channels.

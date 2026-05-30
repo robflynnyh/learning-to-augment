@@ -1,0 +1,1 @@
+ID: ROB-132-tedlium-test-audio-ssl-transformer384-reward0p0-epoch5-lr1e-5 - Dataset: tedlium - Split: test - Epochs: 5 - Original_WER: 0.08534467481835903 - Updated_WER: 0.07478291688818005

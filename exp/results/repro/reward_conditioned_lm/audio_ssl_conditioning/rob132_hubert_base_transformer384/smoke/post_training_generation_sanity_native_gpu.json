@@ -1,0 +1,82 @@
+[
+  {
+    "rollout": "/store/store4/data/l2augment_rollout_uvqmlm/train/911Mothers_2010W_0.pt",
+    "feature_source": "on_the_fly",
+    "rewards": {
+      "0.0": {
+        "ok": true,
+        "tokens": 2,
+        "mask_shape": [
+          1,
+          80,
+          157
+        ],
+        "token_prefix": [
+          1668,
+          961
+        ]
+      },
+      "1.0": {
+        "ok": true,
+        "tokens": 2,
+        "mask_shape": [
+          1,
+          80,
+          157
+        ],
+        "token_prefix": [
+          1668,
+          961
+        ]
+      }
+    }
+  },
+  {
+    "rollout": "/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt",
+    "feature_source": "on_the_fly",
+    "rewards": {
+      "0.0": {
+        "ok": true,
+        "tokens": 29,
+        "mask_shape": [
+          1,
+          80,
+          1021
+        ],
+        "token_prefix": [
+          1668,
+          961,
+          1674,
+          860,
+          1673,
+          637,
+          1159,
+          2000,
+          1094,
+          564
+        ]
+      },
+      "1.0": {
+        "ok": true,
+        "tokens": 29,
+        "mask_shape": [
+          1,
+          80,
+          1021
+        ],
+        "token_prefix": [
+          1668,
+          961,
+          1019,
+          60,
+          1277,
+          1237,
+          795,
+          1839,
+          1383,
+          398
+        ]
+      }
+    }
+  }
+]

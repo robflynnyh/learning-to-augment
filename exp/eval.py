@@ -1,9 +1,11 @@
 import argparse
 import torch
+import torchaudio
 from functools import partial
 from omegaconf.omegaconf import OmegaConf
 from lcasr.utils.audio_tools import load_tokenizer
 from lcasr.utils.audio_tools import processing_chain
+from lcasr.utils.audio_tools import total_seconds
 from lcasr.utils.general import load_model as load_asr_model, get_model_class
 # from l2augment.modelling import load_model as load_rl_models
 from l2augment.utils.helpers import load_model as load_policy, load_asr_model_fn
@@ -28,6 +30,103 @@ rollout_fns = {
     'multistep': multistep_rollout,
     'default': multistep_rollout
 }
+
+_SSL_MODEL_CACHE = {}
+
+
+def make_audio_ssl_feature_fn(config, rec_dict):
+    policy_class = config.get('policy', {}).get('class', 'default')
+    if policy_class != 'AudioRewardConditionedMaskLM':
+        return None
+
+    audio_path = rec_dict.get('audio')
+    if not isinstance(audio_path, (str, list, tuple)):
+        raise ValueError(
+            "AudioRewardConditionedMaskLM eval currently requires rec_dict['audio'] "
+            "to be a raw audio path or a list of aligned channel paths"
+        )
+
+    dataset_config = config.get('dataset', {})
+    bundle_name = dataset_config.get('ssl_bundle', 'HUBERT_BASE')
+    ssl_device = dataset_config.get('ssl_device', config.get('training', {}).get('device', 'cuda'))
+
+    def load_ssl_model(device):
+        target_device = str(device if ssl_device == 'same' else ssl_device)
+        cache_key = (bundle_name, target_device)
+        if cache_key not in _SSL_MODEL_CACHE:
+            try:
+                bundle = getattr(torchaudio.pipelines, bundle_name)
+            except AttributeError as exc:
+                raise ValueError(f"Unknown torchaudio SSL bundle: {bundle_name}") from exc
+            model = bundle.get_model().eval().to(target_device)
+            for param in model.parameters():
+                param.requires_grad = False
+            _SSL_MODEL_CACHE[cache_key] = (bundle, model, torch.device(target_device))
+        return _SSL_MODEL_CACHE[cache_key]
+
+    def load_waveform_segment(audio_source, frame_offset, num_frames):
+        if isinstance(audio_source, str):
+            waveform, sample_rate = torchaudio.load(
+                audio_source,
+                frame_offset=frame_offset,
+                num_frames=num_frames,
+            )
+            if waveform.size(0) > 1:
+                waveform = waveform.mean(dim=0, keepdim=True)
+            return waveform, sample_rate
+
+        waveforms = []
+        sample_rate = None
+        for path in audio_source:
+            waveform, cur_sample_rate = torchaudio.load(
+                path,
+                frame_offset=frame_offset,
+                num_frames=num_frames,
+            )
+            if waveform.size(0) > 1:
+                waveform = waveform.mean(dim=0, keepdim=True)
+            if sample_rate is None:
+                sample_rate = cur_sample_rate
+            elif cur_sample_rate != sample_rate:
+                waveform = torchaudio.functional.resample(waveform, cur_sample_rate, sample_rate)
+            waveforms.append(waveform)
+        max_length = max(waveform.size(-1) for waveform in waveforms)
+        waveforms = [
+            torch.nn.functional.pad(waveform, (0, max_length - waveform.size(-1)))
+            for waveform in waveforms
+        ]
+        return torch.stack(waveforms, dim=0).mean(dim=0), sample_rate
+
+    def extract_features(chunk_start_frame, audio_chunk, device):
+        bundle, model, target_device = load_ssl_model(device)
+        first_audio_path = audio_path if isinstance(audio_path, str) else audio_path[0]
+        info = torchaudio.info(first_audio_path)
+        recording_offset_s = float(rec_dict.get('stimes', 0.0))
+        start_s = recording_offset_s + total_seconds(int(chunk_start_frame))
+        duration_s = total_seconds(int(audio_chunk.shape[-1]))
+        frame_offset = max(0, int(round(start_s * info.sample_rate)))
+        num_frames = max(1, int(round(duration_s * info.sample_rate)))
+        waveform, sample_rate = load_waveform_segment(audio_path, frame_offset, num_frames)
+        if sample_rate != bundle.sample_rate:
+            waveform = torchaudio.functional.resample(waveform, sample_rate, bundle.sample_rate)
+        waveform = waveform.to(target_device)
+        lengths = torch.tensor([waveform.size(-1)], dtype=torch.long, device=target_device)
+        with torch.no_grad():
+            extracted = model.extract_features(waveform, lengths=lengths)
+        if isinstance(extracted, tuple):
+            features, feature_lengths = extracted
+        else:
+            features, feature_lengths = extracted, None
+        if isinstance(features, (list, tuple)):
+            features = features[-1]
+        if feature_lengths is not None:
+            feature_length = int(feature_lengths[0].item())
+            features = features[:, :feature_length]
+        else:
+            feature_length = int(features.size(1))
+        return features.squeeze(0).contiguous(), feature_length
+
+    return extract_features
 
 
 def main(config, policy_net=None):
@@ -74,6 +173,7 @@ def main(config, policy_net=None):
         cur_data = data[index]
         print('---', cur_data['id'], '---')
         audio_spec, gold_text = cur_data['process_fn'](cur_data)
+        audio_ssl_feature_fn = make_audio_ssl_feature_fn(config, cur_data)
     
     
 
@@ -82,8 +182,10 @@ def main(config, policy_net=None):
             audio = audio_spec,
             text = gold_text,
             augmentation_config = config.get('evaluation', {}).get('augmentation_config', {}),
+            audio_feature_fn = audio_ssl_feature_fn,
             epochs = epochs,
-            optim_args = optim_args
+            optim_args = optim_args,
+            max_steps = config.get('evaluation', {}).get('max_steps', None),
         )
 
         print(rollout_output['original_cer'], rollout_output['updated_cer'])
@@ -120,13 +222,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", "-config", type=str, required=True, help="Path to YAML config file")
     parser.add_argument('--indexes', '-indexes', type=int, nargs='+', help='Indexes of the data to evaluate', default=[-1]) # -1 means all
+    parser.add_argument('--max_steps', '-max_steps', type=int, help='Maximum adaptation chunks per recording', default=None)
     parser.add_argument('--dont_save', '-dont_save', action='store_true', help='Do not save the results')
     args = parser.parse_args()
     config = OmegaConf.load(args.config)
     config['indexes'] = args.indexes
+    if args.max_steps is not None:
+        if 'evaluation' not in config:
+            config['evaluation'] = {}
+        config['evaluation']['max_steps'] = args.max_steps
     config['save'] = not args.dont_save
     main(config)
-
-
-
-
