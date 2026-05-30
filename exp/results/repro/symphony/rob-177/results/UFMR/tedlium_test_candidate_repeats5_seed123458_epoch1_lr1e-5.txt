@@ -1,0 +1,1 @@
+ID: ROB-177-tedlium-test-UFMR-candidate-repeats5-trial3-seed123458-epoch1-lr1e-5 - Dataset: tedlium - Split: test - Epochs: 1 - Original_WER: 0.08534467481835903 - Updated_WER: 0.07690944533049796
