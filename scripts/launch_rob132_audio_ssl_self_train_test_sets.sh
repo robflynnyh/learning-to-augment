@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Callback-backed ROB-132 audio SSL fixed-reward eval on TED-LIUM and Earnings22 test.
+# Callback-backed ROB-132 audio SSL fixed-reward eval on selected test sets.
 
 set -uo pipefail
 
@@ -52,7 +52,7 @@ on_exit() {
     --branch "${GIT_BRANCH}"
     --commit "${GIT_COMMIT}"
     --target-state "${CALLBACK_TARGET_STATE:-Todo}"
-    --note "${CALLBACK_NOTE:-ROB-132 audio SSL TED-LIUM/Earnings22 test fixed-reward self-training eval wrapper exited. Inspect OUTCOME.md under ${RESULT_ROOT}, then post the 8-cell result summary.}"
+    --note "${CALLBACK_NOTE:-ROB-132 audio SSL test fixed-reward self-training eval wrapper exited. Inspect OUTCOME.md under ${RESULT_ROOT}, then post the result summary.}"
     --tail-lines "${CALLBACK_TAIL_LINES:-80}"
     --max-log-chars "${CALLBACK_MAX_LOG_CHARS:-6000}"
     --max-comment-chars "${CALLBACK_MAX_COMMENT_CHARS:-10000}"
@@ -135,6 +135,9 @@ done
 
 export L2A_TEDLIUM3_LEGACY_DIR="${L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TEDLIUM_release-3/legacy/}"
 export L2A_EARNINGS22_DIR="${L2A_EARNINGS22_DIR:-/store/store4/data/earnings-22}"
+export L2A_REV16_DIR="${L2A_REV16_DIR:-/mnt/parscratch/users/acp21rjf/rev_benchmark}"
+export L2A_TAL_DIR="${L2A_TAL_DIR:-/store/store5/data/this_american_life}"
+export L2A_CHIME6_DIR="${L2A_CHIME6_DIR:-/mnt/parscratch/users/acp21rjf/chime6}"
 
 for dataset_tag in ${DATASETS}; do
   case "${dataset_tag}" in
@@ -143,6 +146,15 @@ for dataset_tag in ${DATASETS}; do
       ;;
     earnings22)
       required_dir="${L2A_EARNINGS22_DIR}"
+      ;;
+    rev16)
+      required_dir="${L2A_REV16_DIR}"
+      ;;
+    TAL|tal|this_american_life)
+      required_dir="${L2A_TAL_DIR}"
+      ;;
+    chime6)
+      required_dir="${L2A_CHIME6_DIR}"
       ;;
     *)
       echo "Unknown ROB-132 test-set dataset tag: ${dataset_tag}" >&2
@@ -172,6 +184,11 @@ lr = sys.argv[9]
 datasets = {
     "tedlium": ("tedlium", "test"),
     "earnings22": ("earnings22", "test"),
+    "rev16": ("rev16", "test"),
+    "TAL": ("this_american_life", "test"),
+    "tal": ("this_american_life", "test"),
+    "this_american_life": ("this_american_life", "test"),
+    "chime6": ("chime6", "test"),
 }
 
 

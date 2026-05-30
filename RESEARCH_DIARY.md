@@ -270,3 +270,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1_test_tedlium_earnings22/`
   now has all 8 fixed-reward TED-LIUM/Earnings22 test cells complete, and every
   cell improved WER versus its unadapted original row.
+- Started the ROB-132 remaining-dataset extension for Rev16, TAL, and CHiME-6.
+  The new result root is
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1_test_remaining_datasets/`.
+  CHiME uses multi-channel raw audio paths, so `exp/eval.py` now extracts SSL
+  from the aligned raw channel slice before averaging channels.

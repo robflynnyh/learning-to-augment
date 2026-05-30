@@ -19,6 +19,11 @@ RESULT_RE = re.compile(
 DATASETS = {
     "tedlium": ("tedlium", "test"),
     "earnings22": ("earnings22", "test"),
+    "rev16": ("rev16", "test"),
+    "TAL": ("this_american_life", "test"),
+    "tal": ("this_american_life", "test"),
+    "this_american_life": ("this_american_life", "test"),
+    "chime6": ("chime6", "test"),
 }
 
 
@@ -206,7 +211,9 @@ def write_markdown(
         f"- Checkpoint: `{checkpoint}`",
         "- Policy: `AudioRewardConditionedMaskLM`, HuBERT SSL conditioning, transformer decoder",
         "- Reward controls: fixed `conditioning_reward: 1.0` and fixed `conditioning_reward: 0.0` as separate runs",
-        "- Datasets: `tedlium` and `earnings22`; both `test` split",
+        "- Datasets: "
+        + ", ".join(f"`{dataset}`" for dataset in dict.fromkeys(row["dataset_tag"] for row in rows))
+        + "; all `test` split",
         "- Adaptation: `epochs=1` and `epochs=5`, `lr=1e-5`, multistep rollout",
         f"- Branch: `{branch}`",
         f"- Commit: `{commit}`",

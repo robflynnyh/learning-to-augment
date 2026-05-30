@@ -40,10 +40,10 @@ def make_audio_ssl_feature_fn(config, rec_dict):
         return None
 
     audio_path = rec_dict.get('audio')
-    if not isinstance(audio_path, str):
+    if not isinstance(audio_path, (str, list, tuple)):
         raise ValueError(
             "AudioRewardConditionedMaskLM eval currently requires rec_dict['audio'] "
-            "to be a single raw audio path"
+            "to be a raw audio path or a list of aligned channel paths"
         )
 
     dataset_config = config.get('dataset', {})
@@ -64,20 +64,49 @@ def make_audio_ssl_feature_fn(config, rec_dict):
             _SSL_MODEL_CACHE[cache_key] = (bundle, model, torch.device(target_device))
         return _SSL_MODEL_CACHE[cache_key]
 
+    def load_waveform_segment(audio_source, frame_offset, num_frames):
+        if isinstance(audio_source, str):
+            waveform, sample_rate = torchaudio.load(
+                audio_source,
+                frame_offset=frame_offset,
+                num_frames=num_frames,
+            )
+            if waveform.size(0) > 1:
+                waveform = waveform.mean(dim=0, keepdim=True)
+            return waveform, sample_rate
+
+        waveforms = []
+        sample_rate = None
+        for path in audio_source:
+            waveform, cur_sample_rate = torchaudio.load(
+                path,
+                frame_offset=frame_offset,
+                num_frames=num_frames,
+            )
+            if waveform.size(0) > 1:
+                waveform = waveform.mean(dim=0, keepdim=True)
+            if sample_rate is None:
+                sample_rate = cur_sample_rate
+            elif cur_sample_rate != sample_rate:
+                waveform = torchaudio.functional.resample(waveform, cur_sample_rate, sample_rate)
+            waveforms.append(waveform)
+        max_length = max(waveform.size(-1) for waveform in waveforms)
+        waveforms = [
+            torch.nn.functional.pad(waveform, (0, max_length - waveform.size(-1)))
+            for waveform in waveforms
+        ]
+        return torch.stack(waveforms, dim=0).mean(dim=0), sample_rate
+
     def extract_features(chunk_start_frame, audio_chunk, device):
         bundle, model, target_device = load_ssl_model(device)
-        info = torchaudio.info(audio_path)
-        start_s = total_seconds(int(chunk_start_frame))
+        first_audio_path = audio_path if isinstance(audio_path, str) else audio_path[0]
+        info = torchaudio.info(first_audio_path)
+        recording_offset_s = float(rec_dict.get('stimes', 0.0))
+        start_s = recording_offset_s + total_seconds(int(chunk_start_frame))
         duration_s = total_seconds(int(audio_chunk.shape[-1]))
         frame_offset = max(0, int(round(start_s * info.sample_rate)))
         num_frames = max(1, int(round(duration_s * info.sample_rate)))
-        waveform, sample_rate = torchaudio.load(
-            audio_path,
-            frame_offset=frame_offset,
-            num_frames=num_frames,
-        )
-        if waveform.size(0) > 1:
-            waveform = waveform.mean(dim=0, keepdim=True)
+        waveform, sample_rate = load_waveform_segment(audio_path, frame_offset, num_frames)
         if sample_rate != bundle.sample_rate:
             waveform = torchaudio.functional.resample(waveform, sample_rate, bundle.sample_rate)
         waveform = waveform.to(target_device)
@@ -198,5 +227,4 @@ if __name__ == "__main__":
     config['indexes'] = args.indexes
     config['save'] = not args.dont_save
     main(config)
-
 
