@@ -1,0 +1,1 @@
+ID: ROB-158-tedlium-test-RFM-tedlium_epoch5_lr1e-5-repeat1 - Dataset: tedlium - Split: test - Epochs: 5 - Original_WER: 0.06542619174198122 - Updated_WER: 0.059401027822080454

@@ -14,6 +14,14 @@ Compared with the ROB-108 small-ASR UFMR rows, the one-epoch large-ASR setting s
 
 The detailed cross-model comparison is recorded in `rob158_vs_rob108_ufmr_comparison.csv`. Overall, these results support UFMR transfer to the larger 2048-context 90M ASR model for one-epoch adaptation, but they do not support treating the ROB-108 five-epoch recipe as model-size invariant without additional tuning or stability checks.
 
+A follow-up RFM comparison on the same large-ASR checkpoint is recorded in
+`ROB-158_RFM_OUTCOME.md`, `rob158_vs_rob108_rfm_comparison.csv`, and
+`rob158_large_asr_ufmr_vs_rfm_comparison.csv`. RFM improved all 10 overlapping
+large-ASR cells, while UFMR remained stronger in all five one-epoch `1e-5`
+matched cells. At five epochs, RFM avoided the large UFMR regressions on
+`rev16` and `TAL`, making it the safer five-epoch large-ASR baseline in this
+single-repeat comparison.
+
 ## Aggregate
 
 | Dataset | Method | Epochs | LR | N | Mean Original WER | Mean Updated WER | Updated WER Std | Mean Abs Delta | Mean Rel Delta % |

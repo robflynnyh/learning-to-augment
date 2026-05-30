@@ -281,3 +281,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
   It uses the same 2048-seq-len 90M ASR checkpoint and test datasets but only
   runs RFM at `1e-5` for 1 and 5 adaptation epochs, matching the latest Linear
   clarification to drop `3e-5` RFM trials.
+
+## 2026-05-30
+
+- ROB-158 completed the RFM large-ASR follow-up. RFM improved all 10 requested
+  `1e-5` cells and beat the ROB-108 small-ASR RFM relative delta in 8/10 cells.
+  On the large-ASR matched cells, UFMR was stronger for all five one-epoch
+  comparisons, while RFM was safer at five epochs because it avoided the UFMR
+  `rev16` and `TAL` regressions. Final artifacts are under
+  `exp/results/repro/symphony/rob-158/large_asr_2048_90m/`.

@@ -49,3 +49,6 @@ After RFM results are available, it writes:
 
 - `rob158_vs_rob108_rfm_comparison.csv`
 - `rob158_large_asr_ufmr_vs_rfm_comparison.csv`
+
+Final interpretation lives in `ROB-158_OUTCOME.md` for UFMR and
+`ROB-158_RFM_OUTCOME.md` for the RFM follow-up plus UFMR-vs-RFM comparison.
