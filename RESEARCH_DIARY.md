@@ -381,3 +381,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_all_dataset_fixed_rewards_0_and_1/`
   with 20 cells: fixed reward `1.0` and fixed reward `0.0` across five
   datasets and epochs `1` and `5`.
+- Completed the ROB-132 audio+reward-conditioned test-set follow-up after
+  splitting the slow remaining cells onto Stanage. The result root
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1_test_tedlium_earnings22/`
+  now has all 8 fixed-reward TED-LIUM/Earnings22 test cells complete, and every
+  cell improved WER versus its unadapted original row.
