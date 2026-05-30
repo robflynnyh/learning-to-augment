@@ -105,6 +105,9 @@ if [ -n "${ROB132_INDEXES:-}" ]; then
   read -r -a indexes <<< "${ROB132_INDEXES}"
   args+=(--indexes "${indexes[@]}")
 fi
+if [ -n "${ROB132_MAX_STEPS:-}" ]; then
+  args+=(--max_steps "${ROB132_MAX_STEPS}")
+fi
 if [ "${ROB132_DONT_SAVE:-0}" = "1" ]; then
   args+=(--dont_save)
 fi

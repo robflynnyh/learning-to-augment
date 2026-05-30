@@ -184,7 +184,8 @@ def main(config, policy_net=None):
             augmentation_config = config.get('evaluation', {}).get('augmentation_config', {}),
             audio_feature_fn = audio_ssl_feature_fn,
             epochs = epochs,
-            optim_args = optim_args
+            optim_args = optim_args,
+            max_steps = config.get('evaluation', {}).get('max_steps', None),
         )
 
         print(rollout_output['original_cer'], rollout_output['updated_cer'])
@@ -221,10 +222,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", "-config", type=str, required=True, help="Path to YAML config file")
     parser.add_argument('--indexes', '-indexes', type=int, nargs='+', help='Indexes of the data to evaluate', default=[-1]) # -1 means all
+    parser.add_argument('--max_steps', '-max_steps', type=int, help='Maximum adaptation chunks per recording', default=None)
     parser.add_argument('--dont_save', '-dont_save', action='store_true', help='Do not save the results')
     args = parser.parse_args()
     config = OmegaConf.load(args.config)
     config['indexes'] = args.indexes
+    if args.max_steps is not None:
+        if 'evaluation' not in config:
+            config['evaluation'] = {}
+        config['evaluation']['max_steps'] = args.max_steps
     config['save'] = not args.dont_save
     main(config)
-

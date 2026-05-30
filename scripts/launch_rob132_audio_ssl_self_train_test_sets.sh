@@ -327,6 +327,9 @@ for reward in ${RUN_REWARDS}; do
           read -r -a indexes <<< "$ROB132_TESTSETS_INDEXES"
           args+=(--indexes "${indexes[@]}")
         fi
+        if [ -n "${ROB132_TESTSETS_MAX_STEPS:-}" ]; then
+          args+=(--max_steps "$ROB132_TESTSETS_MAX_STEPS")
+        fi
         if [ "${ROB132_TESTSETS_DONT_SAVE:-0}" = "1" ]; then
           args+=(--dont_save)
         fi
