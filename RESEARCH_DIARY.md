@@ -290,3 +290,6 @@ reproduce results, interpret metrics, or avoid known failure modes.
   comparisons, while RFM was safer at five epochs because it avoided the UFMR
   `rev16` and `TAL` regressions. Final artifacts are under
   `exp/results/repro/symphony/rob-158/large_asr_2048_90m/`.
+- Consolidated the ROB-158 primary outcome so `ROB-158_OUTCOME.md` contains
+  both UFMR and RFM aggregate/per-repeat results plus the direct shared-cell
+  large-ASR comparison.
