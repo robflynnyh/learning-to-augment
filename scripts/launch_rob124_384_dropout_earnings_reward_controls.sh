@@ -13,7 +13,7 @@ if [ -f /exp/exp4/acp21rjf/symphony-config/.env ]; then
 fi
 
 LINEAR_ISSUE="${LINEAR_ISSUE:-ROB-124}"
-RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_earnings_reward_controls}"
+RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/earnings_reward_controls}"
 LOG_PATH="${LOG_PATH:-${RESULT_ROOT}/logs/rob124_384_dropout_earnings_reward_controls.log}"
 SCREEN_LOG_PATH="${SCREEN_LOG_PATH:-${RESULT_ROOT}/logs/rob124_384_dropout_earnings_reward_controls.screen.log}"
 SCREEN_NAME="${SCREEN_NAME:-rob124-384-dropout-earnings-reward-controls}"
@@ -21,7 +21,7 @@ RUNNER_LABEL="${RUNNER_LABEL:-screen:${SCREEN_NAME}}"
 CHECKPOINT_PATH="${CHECKPOINT_PATH:-/store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/no_audio_tedlium_per_utterance_384d_dropout0p1_500ep_lr1e3.pt}"
 ASR_CKPT="${ASR_CKPT:-/store/store5/data/acp21rjf_checkpoints/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt}"
 MASK_VAE_CKPT="${MASK_VAE_CKPT:-/store/store5/data/acp21rjf_checkpoints/l2augment/models/bvae/bvae_USINGTHISFORNOW_2048gpu.pt}"
-BASELINE_CSV="${BASELINE_CSV:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob120_earnings_reward_controls/rob120_earnings_reward_controls.csv}"
+BASELINE_CSV="${BASELINE_CSV:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/old_ablations/rob120_earnings_reward_controls/rob120_earnings_reward_controls.csv}"
 SCRATCH_ROOT="${SCRATCH_ROOT:-/exp/exp4/acp21rjf/rob124-eval-scratch}"
 QUEUED_COMMAND="${QUEUED_COMMAND:-screen -L -Logfile ${SCREEN_LOG_PATH} -dmS ${SCREEN_NAME} bash -lc 'cd ${REPO_DIR} && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob124_384_dropout_earnings_reward_controls.sh'}"
 GIT_BRANCH="${GIT_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || printf 'unknown')}"

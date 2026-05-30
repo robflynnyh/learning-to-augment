@@ -12,8 +12,8 @@ training:
   prefetch_factor: 2
   wandb_project: l2augment
   wandb_mode: disabled
-  model_save_path: exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_512_dropout/smoke/no_audio_reward_conditioned_mask_lm_512d_dropout0p1_smoke.pt
-  tmp_model_save_path: exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_512_dropout/smoke/no_audio_reward_conditioned_mask_lm_512d_dropout0p1_smoke_tmp.pt
+  model_save_path: exp/results/repro/reward_conditioned_lm/no_audio_conditioning/old_ablations/rob124_512_dropout/smoke/no_audio_reward_conditioned_mask_lm_512d_dropout0p1_smoke.pt
+  tmp_model_save_path: exp/results/repro/reward_conditioned_lm/no_audio_conditioning/old_ablations/rob124_512_dropout/smoke/no_audio_reward_conditioned_mask_lm_512d_dropout0p1_smoke_tmp.pt
 
 evaluation:
   id: ROB-124-reward-conditioned-mask-lm-tedlium-dev-512d-dropout0p1-smoke
@@ -27,7 +27,7 @@ evaluation:
     sample: true
   optim_args:
     lr: 1e-5
-  save_path: exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_512_dropout/tedlium_dev_eval_512d_dropout0p1_smoke.txt
+  save_path: exp/results/repro/reward_conditioned_lm/no_audio_conditioning/old_ablations/rob124_512_dropout/tedlium_dev_eval_512d_dropout0p1_smoke.txt
 
 collate_function: RewardConditionedMaskLM
 dataset_class: RewardConditionedMaskLMDataset

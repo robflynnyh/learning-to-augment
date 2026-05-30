@@ -4,7 +4,7 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RESULT_ROOT="${REPO_DIR}/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_earnings_reward_controls_corrected_sampling"
+RESULT_ROOT="${REPO_DIR}/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/earnings_reward_controls"
 SCREEN_NAME="rob124-384-dropout-earnings-corrected-sampling"
 SCREEN_LOG_PATH="${RESULT_ROOT}/logs/rob124_384_dropout_earnings_reward_controls_corrected_sampling.screen.log"
 

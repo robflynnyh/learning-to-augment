@@ -1,0 +1,1 @@
+ID: ROB-108-rev16-test-NoAug-rev16_baseline-repeat1 - Dataset: rev16 - Split: test - Epochs: 0 - Original_WER: 0.1725143361946148 - Updated_WER: 0.1725143361946148
