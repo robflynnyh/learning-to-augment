@@ -1,0 +1,1 @@
+ID: ROB-158-this_american_life-test-RFM-TAL_epoch5_lr1e-5-repeat1 - Dataset: this_american_life - Split: test - Epochs: 5 - Original_WER: 0.1397553878945766 - Updated_WER: 0.1322839485288313

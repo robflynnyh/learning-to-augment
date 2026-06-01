@@ -1,0 +1,11 @@
+dataset_tag,method,epochs,lr,repeat,small_asr_original_wer,small_asr_updated_wer,small_asr_absolute_delta,small_asr_relative_delta_pct,large_asr_original_wer,large_asr_updated_wer,large_asr_absolute_delta,large_asr_relative_delta_pct,large_minus_small_rel_delta_pct,large_minus_small_updated_wer,large_improves,large_rel_delta_stronger_than_small
+TAL,RFM,1,1e-5,1,0.165697,0.161865,-0.003832,-2.31,0.139755,0.132645,-0.007111,-5.09,-2.78,-0.029220,True,True
+TAL,RFM,5,1e-5,1,0.165697,0.161172,-0.004525,-2.73,0.139755,0.132284,-0.007471,-5.35,-2.62,-0.028888,True,True
+chime6,RFM,1,1e-5,1,0.843585,0.666937,-0.176648,-20.94,0.852697,0.607067,-0.245629,-28.81,-7.87,-0.059870,True,True
+chime6,RFM,5,1e-5,1,0.843620,0.655252,-0.188368,-22.33,0.852697,0.590694,-0.262002,-30.73,-8.40,-0.064558,True,True
+earnings22,RFM,1,1e-5,1,0.235239,0.195535,-0.039703,-16.88,0.195495,0.155954,-0.039540,-20.23,-3.35,-0.039581,True,True
+earnings22,RFM,5,1e-5,1,0.235218,0.183179,-0.052039,-22.12,0.195495,0.150481,-0.045014,-23.03,-0.91,-0.032698,True,True
+rev16,RFM,1,1e-5,1,0.172509,0.165059,-0.007450,-4.32,0.152681,0.142269,-0.010412,-6.82,-2.50,-0.022790,True,True
+rev16,RFM,5,1e-5,1,0.172509,0.164022,-0.008487,-4.92,0.152681,0.142565,-0.010116,-6.63,-1.71,-0.021457,True,True
+tedlium,RFM,1,1e-5,1,0.085345,0.078292,-0.007053,-8.26,0.065426,0.060677,-0.004749,-7.26,1.00,-0.017615,True,False
+tedlium,RFM,5,1e-5,1,0.085345,0.075917,-0.009428,-11.05,0.065426,0.059401,-0.006025,-9.21,1.84,-0.016516,True,False
