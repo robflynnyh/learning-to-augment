@@ -270,5 +270,5 @@ reproduce results, interpret metrics, or avoid known failure modes.
   three seed trials per setting. Here `candidate_repeats` is the UFMR
   `evaluation.augmentation_config.repeats` mask-candidate count, not a seed
   repeat. Use `scripts/launch_rob177_ufmr_repeat_ablation.sh`; the
-  issue-specific aggregate artifacts live under
-  `exp/results/repro/symphony/rob-177/`.
+  UFMR candidate-repeat investigation artifacts live under
+  `exp/results/repro/UFMR/candidate_repeat_investigation/`.

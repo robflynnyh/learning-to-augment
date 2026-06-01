@@ -13,7 +13,7 @@ if [ -f /exp/exp4/acp21rjf/symphony-config/.env ]; then
 fi
 
 LINEAR_ISSUE="${LINEAR_ISSUE:-ROB-177}"
-AGGREGATE_DIR="${AGGREGATE_DIR:-${REPO_DIR}/exp/results/repro/symphony/rob-177}"
+AGGREGATE_DIR="${AGGREGATE_DIR:-${REPO_DIR}/exp/results/repro/UFMR/candidate_repeat_investigation}"
 RESULT_ROOT="${RESULT_ROOT:-${AGGREGATE_DIR}/results}"
 LOG_PATH="${LOG_PATH:-${AGGREGATE_DIR}/logs/rob177_ufmr_repeat_ablation.log}"
 SCREEN_NAME="${SCREEN_NAME:-rob177_ufmr_repeat_ablation}"
@@ -56,7 +56,7 @@ on_exit() {
     --branch "${GIT_BRANCH}"
     --commit "${GIT_COMMIT}"
     --target-state "${CALLBACK_TARGET_STATE:-Todo}"
-    --note "${CALLBACK_NOTE:-ROB-177 UFMR candidate-repeat ablation wrapper exited. Inspect exp/results/repro/symphony/rob-177/ROB-177_OUTCOME.md after completion.}"
+    --note "${CALLBACK_NOTE:-ROB-177 UFMR candidate-repeat ablation wrapper exited. Inspect exp/results/repro/UFMR/candidate_repeat_investigation/ROB-177_OUTCOME.md after completion.}"
     --tail-lines "${CALLBACK_TAIL_LINES:-80}"
     --max-log-chars "${CALLBACK_MAX_LOG_CHARS:-6000}"
     --max-comment-chars "${CALLBACK_MAX_COMMENT_CHARS:-10000}"

@@ -298,8 +298,12 @@ def write_markdown(rows: list[dict[str, str]], path: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--result-root", type=Path, default=Path("exp/results/repro/symphony/rob-177/results"))
-    parser.add_argument("--output-dir", type=Path, default=Path("exp/results/repro/symphony/rob-177"))
+    parser.add_argument(
+        "--result-root",
+        type=Path,
+        default=Path("exp/results/repro/UFMR/candidate_repeat_investigation/results"),
+    )
+    parser.add_argument("--output-dir", type=Path, default=Path("exp/results/repro/UFMR/candidate_repeat_investigation"))
     parser.add_argument("--candidate-repeats", default="1 2 5 10 15 20 40 100 200 1000")
     parser.add_argument("--seeds", default="123456 123457 123458")
     parser.add_argument("--datasets", default=None)

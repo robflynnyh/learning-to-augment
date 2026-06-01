@@ -1,7 +1,7 @@
 # ROB-177 UFMR Candidate-Repeat Ablation
 
-This directory holds the issue-specific ROB-177 launcher outputs and aggregate
-artifacts for the UFMR candidate-repeat ablation on Earnings22 and TED-LIUM.
+This directory holds the ROB-177 launcher outputs and aggregate artifacts for
+the UFMR candidate-repeat ablation on Earnings22 and TED-LIUM.
 
 The launch wrapper is `scripts/launch_rob177_ufmr_repeat_ablation.sh`. It
 generates per-cell configs under `results/UFMR/configs/`, writes per-cell result
