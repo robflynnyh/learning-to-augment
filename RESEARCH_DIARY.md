@@ -262,3 +262,42 @@ reproduce results, interpret metrics, or avoid known failure modes.
   multiplicative keep mask; figures report masked percentage. The current grid
   compares UC-MLM at `49.13%` masked with `RC-MLM (reward=0.0)` at `70.18%`
   and `RC-MLM (reward=1.0)` at `33.19%`.
+- Added the ROB-158 UFMR large-ASR eval scaffold. It reuses the ROB-108 UFMR
+  policy matrix but swaps only the ASR checkpoint to the SAP-style
+  `/store/store5/data/acp21rjf_checkpoints/SAP_LCASR/n_seq_sched_2048_rp_1/step_105360.pt`
+  2048-seq-len, approximately 90M-parameter checkpoint. Launcher:
+  `scripts/launch_rob158_ufmr_large_asr_eval.sh`; result root:
+  `exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/`.
+
+## 2026-05-29
+
+- ROB-158 completed all 15 UFMR large-ASR cells. One-epoch adaptation improved
+  all five datasets for both tested LRs and was usually stronger than the
+  ROB-108 small-ASR UFMR relative deltas. The five-epoch `1e-5` setting improved
+  `tedlium`, `earnings22`, and `chime6` but degraded `rev16` and `TAL`, so the
+  large-model handoff supports UFMR transfer most clearly for one-epoch
+  adaptation rather than the full ROB-108 recipe.
+- Added the ROB-158 RFM large-ASR follow-up scaffold after the UFMR handoff.
+  It uses the same 2048-seq-len 90M ASR checkpoint and test datasets but only
+  runs RFM at `1e-5` for 1 and 5 adaptation epochs, matching the latest Linear
+  clarification to drop `3e-5` RFM trials.
+
+## 2026-05-30
+
+- ROB-158 completed the RFM large-ASR follow-up. RFM improved all 10 requested
+  `1e-5` cells and beat the ROB-108 small-ASR RFM relative delta in 8/10 cells.
+  On the large-ASR matched cells, UFMR was stronger for all five one-epoch
+  comparisons, while RFM was safer at five epochs because it avoided the UFMR
+  `rev16` and `TAL` regressions. Final artifacts are under
+  `exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/`.
+- Consolidated the ROB-158 primary outcome so `OUTCOME.md` contains
+  both UFMR and RFM aggregate/per-repeat results plus the direct shared-cell
+  large-ASR comparison.
+
+## 2026-06-01
+
+- Moved the ROB-158 large-ASR transfer artifacts out of the Symphony issue
+  staging path into
+  `exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/`. The combined
+  result summary is `OUTCOME.md`; method-specific launcher summaries are
+  `UFMR_OUTCOME.md` and `RFM_OUTCOME.md`.
