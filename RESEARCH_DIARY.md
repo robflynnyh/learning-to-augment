@@ -293,9 +293,20 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Consolidated the ROB-158 primary outcome so `OUTCOME.md` contains
   both UFMR and RFM aggregate/per-repeat results plus the direct shared-cell
   large-ASR comparison.
+- ROB-177 adds a UFMR ablation over `candidate_repeats`
+  `1 2 5 10 15 20 40 100 200 1000` on Earnings22 and TED-LIUM test, with
+  three seed trials per setting. Here `candidate_repeats` is the UFMR
+  `evaluation.augmentation_config.repeats` mask-candidate count, not a seed
+  repeat. Use `scripts/launch_rob177_ufmr_repeat_ablation.sh`; the
+  UFMR candidate-repeat investigation artifacts live under
+  `exp/results/repro/UFMR/candidate_repeat_investigation/`.
 
 ## 2026-06-01
 
+- Flattened the ROB-177 UFMR candidate-repeat investigation result layout so
+  committed per-trial files and generated configs live directly under
+  `exp/results/repro/UFMR/candidate_repeat_investigation/results/` rather than
+  a redundant nested method directory.
 - Moved the ROB-158 large-ASR transfer artifacts out of the Symphony issue
   staging path into
   `exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/`. The combined
