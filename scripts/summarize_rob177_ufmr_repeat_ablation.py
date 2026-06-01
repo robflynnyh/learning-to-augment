@@ -188,7 +188,7 @@ def collect_rows(
                         trial=trial_index,
                         seed=seed,
                         source="ROB-177 ablation",
-                        result_path=result_root / "UFMR" / f"{tag}.txt",
+                        result_path=result_root / f"{tag}.txt",
                         dataset_tag=dataset_tag,
                         dataset=dataset,
                         split=active_split,

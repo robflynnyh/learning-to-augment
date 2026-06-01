@@ -147,8 +147,8 @@ datasets = {
     "tedlium": ("tedlium", "test"),
 }
 
-method_root = root / "UFMR"
-(method_root / "configs").mkdir(parents=True, exist_ok=True)
+root.mkdir(parents=True, exist_ok=True)
+(root / "configs").mkdir(parents=True, exist_ok=True)
 
 for dataset_tag in dataset_tags:
     if dataset_tag not in datasets:
@@ -166,8 +166,8 @@ for dataset_tag in dataset_tags:
                 tag = f"{dataset_tag}_{active_split}_candidate_repeats{repeat_count}_epoch{epochs}_lr{lr}"
             else:
                 tag = f"{dataset_tag}_{active_split}_candidate_repeats{repeat_count}_seed{seed}_epoch{epochs}_lr{lr}"
-            save_path = method_root / f"{tag}.txt"
-            config_path = method_root / "configs" / f"{tag}.yaml"
+            save_path = root / f"{tag}.txt"
+            config_path = root / "configs" / f"{tag}.yaml"
             config_path.write_text(
                 f"""checkpointing:
   asr_model: {asr_ckpt}
@@ -259,14 +259,14 @@ for dataset_tag in ${RUN_DATASETS}; do
       else
         tag="${dataset_tag}_${SPLIT}_candidate_repeats${repeat_count}_seed${seed}_epoch${EPOCHS}_lr${ADAPT_LR}"
       fi
-      config="${RESULT_ROOT}/UFMR/configs/${tag}.yaml"
-      save_path="${RESULT_ROOT}/UFMR/${tag}.txt"
+      config="${RESULT_ROOT}/configs/${tag}.yaml"
+      save_path="${RESULT_ROOT}/${tag}.txt"
       if [ ! -f "${config}" ]; then
         echo "Missing generated config: ${config}" >&2
         exit 1
       fi
       if [ "${FORCE_RERUN:-0}" != "1" ] && [ -f "${save_path}" ] && grep -q "Updated_WER:" "${save_path}"; then
-        echo "[rob177] skipping completed UFMR/${tag}: ${save_path}"
+        echo "[rob177] skipping completed ${tag}: ${save_path}"
         continue
       fi
       if [ "${FORCE_RERUN:-0}" = "1" ]; then
@@ -279,7 +279,7 @@ for dataset_tag in ${RUN_DATASETS}; do
       if [ "${ROB177_DONT_SAVE:-0}" = "1" ]; then
         args+=(--dont_save)
       fi
-      echo "[rob177] running UFMR/${tag}: ${args[*]}"
+      echo "[rob177] running ${tag}: ${args[*]}"
       "${args[@]}"
     done
   done

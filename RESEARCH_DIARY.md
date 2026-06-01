@@ -303,6 +303,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
 
 ## 2026-06-01
 
+- Flattened the ROB-177 UFMR candidate-repeat investigation result layout so
+  committed per-trial files and generated configs live directly under
+  `exp/results/repro/UFMR/candidate_repeat_investigation/results/` rather than
+  a redundant nested method directory.
 - Moved the ROB-158 large-ASR transfer artifacts out of the Symphony issue
   staging path into
   `exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/`. The combined

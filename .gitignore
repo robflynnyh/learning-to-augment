@@ -14,7 +14,7 @@ exp/results/repro/sweeps/no_audio_cmultistep_vqlm/logs/
 exp/results/repro/sweeps/no_audio_cmultistep_vqlm/rob106_low_reward_conditioning/logs/
 exp/results/repro/sweeps/audio_cmultistep_vqlm/logs/
 exp/results/repro/sweeps/uvqlm/logs/
-exp/results/repro/UFMR/candidate_repeat_investigation/results/UFMR/configs/
+exp/results/repro/UFMR/candidate_repeat_investigation/results/configs/
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/logs/
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/scratch/
 exp/results/repro/reward_conditioned_lm/no_audio_conditioning/wandb/
