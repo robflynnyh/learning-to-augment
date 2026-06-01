@@ -13,7 +13,7 @@ if [ -f /exp/exp4/acp21rjf/symphony-config/.env ]; then
 fi
 
 LINEAR_ISSUE="${LINEAR_ISSUE:-ROB-158}"
-AGGREGATE_DIR="${AGGREGATE_DIR:-${REPO_DIR}/exp/results/repro/symphony/rob-158/large_asr_2048_90m}"
+AGGREGATE_DIR="${AGGREGATE_DIR:-${REPO_DIR}/exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048}"
 RESULT_ROOT="${RESULT_ROOT:-${AGGREGATE_DIR}/results}"
 LOG_PATH="${LOG_PATH:-${AGGREGATE_DIR}/logs/rob158_ufmr_large_asr_eval.log}"
 SCREEN_NAME="${SCREEN_NAME:-rob158_ufmr_large_asr_eval}"
@@ -54,7 +54,7 @@ on_exit() {
     --branch "${GIT_BRANCH}"
     --commit "${GIT_COMMIT}"
     --target-state "${CALLBACK_TARGET_STATE:-Todo}"
-    --note "${CALLBACK_NOTE:-ROB-158 UFMR large-ASR eval wrapper exited. Inspect ${AGGREGATE_DIR}/ROB-158_OUTCOME.md and compare with the ROB-108 small-ASR UFMR rows before final handoff.}"
+    --note "${CALLBACK_NOTE:-ROB-158 UFMR large-ASR eval wrapper exited. Inspect ${AGGREGATE_DIR}/UFMR_OUTCOME.md and compare with the ROB-108 small-ASR UFMR rows before final handoff.}"
     --tail-lines "${CALLBACK_TAIL_LINES:-80}"
     --max-log-chars "${CALLBACK_MAX_LOG_CHARS:-6000}"
     --max-comment-chars "${CALLBACK_MAX_COMMENT_CHARS:-10000}"
@@ -203,7 +203,7 @@ python3 scripts/summarize_rob108_test_policy_evals.py \
   --epoch1-lrs "${EPOCH1_LRS}" \
   --epoch5-lrs "${EPOCH5_LRS}" \
   --csv-name rob158_ufmr_large_asr_eval.csv \
-  --outcome-name ROB-158_OUTCOME.md \
+  --outcome-name UFMR_OUTCOME.md \
   --title "ROB-158 UFMR Large-ASR Evaluation" \
   --note "UFMR test-split evals using the SAP-style 2048-seq-len 90M ASR checkpoint. The UFMR policy, datasets, repeats, candidate count, and LR/epoch cells match the ROB-108 UFMR repro setup so the intended variable is ASR model size."
 
@@ -290,7 +290,7 @@ python3 scripts/summarize_rob108_test_policy_evals.py \
   --epoch1-lrs "${EPOCH1_LRS}" \
   --epoch5-lrs "${EPOCH5_LRS}" \
   --csv-name rob158_ufmr_large_asr_eval.csv \
-  --outcome-name ROB-158_OUTCOME.md \
+  --outcome-name UFMR_OUTCOME.md \
   --title "ROB-158 UFMR Large-ASR Evaluation" \
   --note "UFMR test-split evals using the SAP-style 2048-seq-len 90M ASR checkpoint. The UFMR policy, datasets, repeats, candidate count, and LR/epoch cells match the ROB-108 UFMR repro setup so the intended variable is ASR model size."
 echo "[rob158] finished"

@@ -13,7 +13,7 @@ if [ -f /exp/exp4/acp21rjf/symphony-config/.env ]; then
 fi
 
 LINEAR_ISSUE="${LINEAR_ISSUE:-ROB-158}"
-AGGREGATE_DIR="${AGGREGATE_DIR:-${REPO_DIR}/exp/results/repro/symphony/rob-158/large_asr_2048_90m}"
+AGGREGATE_DIR="${AGGREGATE_DIR:-${REPO_DIR}/exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048}"
 LOG_PATH="${LOG_PATH:-${AGGREGATE_DIR}/logs/rob158_rfm_smoke_then_eval.log}"
 SCREEN_NAME="${SCREEN_NAME:-rob158_rfm_smoke_then_eval}"
 FULL_SCREEN_NAME="${FULL_SCREEN_NAME:-rob158_rfm_large_asr_eval}"

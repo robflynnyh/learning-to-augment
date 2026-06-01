@@ -267,7 +267,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `/store/store5/data/acp21rjf_checkpoints/SAP_LCASR/n_seq_sched_2048_rp_1/step_105360.pt`
   2048-seq-len, approximately 90M-parameter checkpoint. Launcher:
   `scripts/launch_rob158_ufmr_large_asr_eval.sh`; result root:
-  `exp/results/repro/symphony/rob-158/large_asr_2048_90m/`.
+  `exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/`.
 
 ## 2026-05-29
 
@@ -289,7 +289,15 @@ reproduce results, interpret metrics, or avoid known failure modes.
   On the large-ASR matched cells, UFMR was stronger for all five one-epoch
   comparisons, while RFM was safer at five epochs because it avoided the UFMR
   `rev16` and `TAL` regressions. Final artifacts are under
-  `exp/results/repro/symphony/rob-158/large_asr_2048_90m/`.
-- Consolidated the ROB-158 primary outcome so `ROB-158_OUTCOME.md` contains
+  `exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/`.
+- Consolidated the ROB-158 primary outcome so `OUTCOME.md` contains
   both UFMR and RFM aggregate/per-repeat results plus the direct shared-cell
   large-ASR comparison.
+
+## 2026-06-01
+
+- Moved the ROB-158 large-ASR transfer artifacts out of the Symphony issue
+  staging path into
+  `exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/`. The combined
+  result summary is `OUTCOME.md`; method-specific launcher summaries are
+  `UFMR_OUTCOME.md` and `RFM_OUTCOME.md`.

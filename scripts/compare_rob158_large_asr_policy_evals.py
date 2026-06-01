@@ -116,9 +116,9 @@ def same_model_rows(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rob108-csv", type=Path, default=Path("exp/results/repro/symphony/rob-108/rob108_test_policy_evals.csv"))
-    parser.add_argument("--rob158-rfm-csv", type=Path, default=Path("exp/results/repro/symphony/rob-158/large_asr_2048_90m/rob158_rfm_large_asr_eval.csv"))
-    parser.add_argument("--rob158-ufmr-csv", type=Path, default=Path("exp/results/repro/symphony/rob-158/large_asr_2048_90m/rob158_ufmr_large_asr_eval.csv"))
-    parser.add_argument("--output-dir", type=Path, default=Path("exp/results/repro/symphony/rob-158/large_asr_2048_90m"))
+    parser.add_argument("--rob158-rfm-csv", type=Path, default=Path("exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/rob158_rfm_large_asr_eval.csv"))
+    parser.add_argument("--rob158-ufmr-csv", type=Path, default=Path("exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/rob158_ufmr_large_asr_eval.csv"))
+    parser.add_argument("--output-dir", type=Path, default=Path("exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048"))
     args = parser.parse_args()
 
     rob108_rfm = read_complete_rows(args.rob108_csv, "RFM")

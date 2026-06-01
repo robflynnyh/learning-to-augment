@@ -13,7 +13,7 @@ if [ -f /exp/exp4/acp21rjf/symphony-config/.env ]; then
 fi
 
 LINEAR_ISSUE="${LINEAR_ISSUE:-ROB-158}"
-AGGREGATE_DIR="${AGGREGATE_DIR:-${REPO_DIR}/exp/results/repro/symphony/rob-158/large_asr_2048_90m}"
+AGGREGATE_DIR="${AGGREGATE_DIR:-${REPO_DIR}/exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048}"
 RESULT_ROOT="${RESULT_ROOT:-${AGGREGATE_DIR}/results}"
 LOG_PATH="${LOG_PATH:-${AGGREGATE_DIR}/logs/rob158_rfm_large_asr_eval.log}"
 SCREEN_NAME="${SCREEN_NAME:-rob158_rfm_large_asr_eval}"
@@ -51,7 +51,7 @@ on_exit() {
     --branch "${GIT_BRANCH}"
     --commit "${GIT_COMMIT}"
     --target-state "${CALLBACK_TARGET_STATE:-Todo}"
-    --note "${CALLBACK_NOTE:-ROB-158 RFM large-ASR eval wrapper exited. Inspect ${AGGREGATE_DIR}/ROB-158_RFM_OUTCOME.md and compare with UFMR plus the ROB-108 small-ASR RFM rows before final handoff.}"
+    --note "${CALLBACK_NOTE:-ROB-158 RFM large-ASR eval wrapper exited. Inspect ${AGGREGATE_DIR}/RFM_OUTCOME.md and compare with UFMR plus the ROB-108 small-ASR RFM rows before final handoff.}"
     --tail-lines "${CALLBACK_TAIL_LINES:-80}"
     --max-log-chars "${CALLBACK_MAX_LOG_CHARS:-6000}"
     --max-comment-chars "${CALLBACK_MAX_COMMENT_CHARS:-10000}"
@@ -184,7 +184,7 @@ python3 scripts/summarize_rob108_test_policy_evals.py \
   --epoch1-lrs "${EPOCH1_LRS}" \
   --epoch5-lrs "${EPOCH5_LRS}" \
   --csv-name rob158_rfm_large_asr_eval.csv \
-  --outcome-name ROB-158_RFM_OUTCOME.md \
+  --outcome-name RFM_OUTCOME.md \
   --title "ROB-158 RFM Large-ASR Evaluation" \
   --note "RFM test-split evals using the same SAP-style 2048-seq-len 90M ASR checkpoint as the ROB-158 UFMR run. Per the follow-up request, RFM is evaluated only at LR 1e-5 for 1 and 5 adaptation epochs."
 
@@ -271,7 +271,7 @@ python3 scripts/summarize_rob108_test_policy_evals.py \
   --epoch1-lrs "${EPOCH1_LRS}" \
   --epoch5-lrs "${EPOCH5_LRS}" \
   --csv-name rob158_rfm_large_asr_eval.csv \
-  --outcome-name ROB-158_RFM_OUTCOME.md \
+  --outcome-name RFM_OUTCOME.md \
   --title "ROB-158 RFM Large-ASR Evaluation" \
   --note "RFM test-split evals using the same SAP-style 2048-seq-len 90M ASR checkpoint as the ROB-158 UFMR run. Per the follow-up request, RFM is evaluated only at LR 1e-5 for 1 and 5 adaptation epochs."
 echo "[rob158-rfm] finished"

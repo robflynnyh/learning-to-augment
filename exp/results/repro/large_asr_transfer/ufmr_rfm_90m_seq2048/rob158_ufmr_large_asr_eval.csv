@@ -1,0 +1,16 @@
+dataset_tag,dataset,split,method,repeat,seed,epochs,lr,result_path,status,original_wer,updated_wer,absolute_delta,relative_delta_pct
+tedlium,tedlium,test,UFMR,1,123456,1,1e-5,exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results/UFMR/tedlium_epoch1_lr1e-5.txt,complete,0.065426,0.059862,-0.005564,-8.50
+tedlium,tedlium,test,UFMR,1,123456,1,3e-5,exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results/UFMR/tedlium_epoch1_lr3e-5.txt,complete,0.065426,0.059755,-0.005671,-8.67
+tedlium,tedlium,test,UFMR,1,123456,5,1e-5,exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results/UFMR/tedlium_epoch5_lr1e-5.txt,complete,0.065426,0.059968,-0.005458,-8.34
+earnings22,earnings22,test,UFMR,1,123456,1,1e-5,exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results/UFMR/earnings22_epoch1_lr1e-5.txt,complete,0.195495,0.149256,-0.046239,-23.65
+earnings22,earnings22,test,UFMR,1,123456,1,3e-5,exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results/UFMR/earnings22_epoch1_lr3e-5.txt,complete,0.195495,0.148091,-0.047403,-24.25
+earnings22,earnings22,test,UFMR,1,123456,5,1e-5,exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results/UFMR/earnings22_epoch5_lr1e-5.txt,complete,0.195495,0.150685,-0.044809,-22.92
+chime6,chime6,test,UFMR,1,123456,1,1e-5,exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results/UFMR/chime6_epoch1_lr1e-5.txt,complete,0.852697,0.591558,-0.261139,-30.63
+chime6,chime6,test,UFMR,1,123456,1,3e-5,exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results/UFMR/chime6_epoch1_lr3e-5.txt,complete,0.852697,0.595788,-0.256909,-30.13
+chime6,chime6,test,UFMR,1,123456,5,1e-5,exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results/UFMR/chime6_epoch5_lr1e-5.txt,complete,0.852697,0.570074,-0.282622,-33.14
+rev16,rev16,test,UFMR,1,123456,1,1e-5,exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results/UFMR/rev16_epoch1_lr1e-5.txt,complete,0.152681,0.140875,-0.011806,-7.73
+rev16,rev16,test,UFMR,1,123456,1,3e-5,exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results/UFMR/rev16_epoch1_lr3e-5.txt,complete,0.152681,0.143847,-0.008834,-5.79
+rev16,rev16,test,UFMR,1,123456,5,1e-5,exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results/UFMR/rev16_epoch5_lr1e-5.txt,complete,0.152681,0.490438,0.337757,221.22
+TAL,this_american_life,test,UFMR,1,123456,1,1e-5,exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results/UFMR/TAL_epoch1_lr1e-5.txt,complete,0.139755,0.131779,-0.007976,-5.71
+TAL,this_american_life,test,UFMR,1,123456,1,3e-5,exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results/UFMR/TAL_epoch1_lr3e-5.txt,complete,0.139755,0.134390,-0.005365,-3.84
+TAL,this_american_life,test,UFMR,1,123456,5,1e-5,exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results/UFMR/TAL_epoch5_lr1e-5.txt,complete,0.139755,0.184432,0.044676,31.97
