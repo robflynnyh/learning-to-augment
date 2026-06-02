@@ -36,18 +36,20 @@ features.
 The queue-safe Mimas launcher is:
 
 ```bash
-/store/store5/software/simple-gpu-schedule/with-gpu 1,2 --num 1 -- \
+/store/store5/software/simple-gpu-schedule/with-gpu 1,2 --num 2 -- \
   bash scripts/launch_rob186_plasticity_eggroll_gpu.sh
 ```
 
-The current default uses one allocated GPU with logical `cuda:0`. Earlier
-two-device rollout support remains in the script for debugging, but it is not
-the default run path because the secondary CUDA shard stalled inside the LCASR
-rollout stack during N=32 follow-up debugging. If a deliberate two-device
-ablation is needed, override `rollout.devices` and request both GPUs explicitly:
+The current default uses two allocated GPUs with logical `cuda:0` and `cuda:1`.
+The optimizer and EGGROLL centre update remain on `training.device`; rollout
+workers shard the candidate axis across the configured devices and explicitly
+bind each worker thread to its CUDA device before running LCASR.
+
+For a single-device debug run, override `rollout.devices` and request one GPU:
 
 ```bash
-/store/store5/software/simple-gpu-schedule/with-gpu 1,2 --num 2 -- \
+ROB186_EXTRA_OVERRIDES='rollout.devices=[cuda:0]' \
+  /store/store5/software/simple-gpu-schedule/with-gpu 1,2 --num 1 -- \
   bash scripts/launch_rob186_plasticity_eggroll_gpu.sh
 ```
 
@@ -96,9 +98,10 @@ Each training-step log includes `chunks_per_recording_mean`,
 number of causal update chunks and adapted modules.
 
 The default real run uses `rollout.batch_size_recordings: 2` with 32 EGGROLL
-candidates, giving `rollout_streams = 64` on one logical CUDA device. The
-training dtype is `bfloat16`, and the startup event logs the resolved dtype so
-W&B and local logs can verify the run did not fall back to `float32`.
+candidates, giving `rollout_streams = 64` split into 32 streams per logical
+CUDA device. The training dtype is `bfloat16`, and the startup event logs the
+resolved dtype so W&B and local logs can verify the run did not fall back to
+`float32`.
 
 The default config also sets:
 
@@ -106,17 +109,15 @@ The default config also sets:
 rollout:
   devices:
     - cuda:0
+    - cuda:1
 training:
   dtype: bfloat16
 ```
 
-This is not distributed training: the optimizer and EGGROLL centre update stay
-on `training.device`. When multiple rollout devices are deliberately configured,
-rollout workers shard the candidate axis across the listed devices. Each shard
-returns WERs for its candidate subset, then the trainer recombines `WER[B, N]`
-and runs candidate group-normalisation over the full `N` axis on the primary
-device. Step logs include `rollout_num_devices` and per-device stream counts in
-that multi-device mode.
+This is not distributed training. Each shard returns WERs for its candidate
+subset, then the trainer recombines `WER[B, N]` and runs candidate
+group-normalisation over the full `N` axis on the primary device. Step logs
+include `rollout_num_devices` and per-device stream counts.
 
 `reward_std` is the standard deviation of `reward_per_candidate`. With
 `B = 1`, group-normalising over candidates makes this metric close to 1 when

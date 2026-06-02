@@ -1,4 +1,5 @@
 import argparse
+from contextlib import nullcontext
 import copy
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -267,6 +268,8 @@ class MultiDeviceRolloutRunner:
         self.asr_models = []
         self.updaters = []
         for idx, device in enumerate(self.devices):
+            if device.type == "cuda":
+                torch.cuda.set_device(device)
             if idx == 0:
                 model = asr_model
                 worker_updater = updater
@@ -329,30 +332,33 @@ class MultiDeviceRolloutRunner:
 
         def run_shard(shard_idx: int):
             device = self.devices[shard_idx]
+            if device.type == "cuda":
+                torch.cuda.set_device(device)
             indexes = candidate_splits[shard_idx]
-            _, info = rollout_recordings_with_plasticity_candidates(
-                asr_model=self.asr_models[shard_idx],
-                updater=self.updaters[shard_idx],
-                recording_audio_batch=recording_audio_batch.to(device),
-                recording_lengths=None if recording_lengths is None else recording_lengths.to(device),
-                reference_text_batch=reference_text_batch,
-                tokenizer=tokenizer,
-                candidate_perturbations=subset_eggroll_perturbations(
-                    candidate_perturbations,
-                    indexes,
-                    device,
-                ),
-                config=self.config,
-                module_specs=self.module_specs,
-                wer_fn=wer_fn,
-                progress_log_fn=progress_log_fn,
-                progress_context={
-                    **(progress_context or {}),
-                    "shard_index": shard_idx,
-                    "candidate_start": int(indexes[0]),
-                    "candidate_stop": int(indexes[-1]) + 1,
-                },
-            )
+            with torch.cuda.device(device) if device.type == "cuda" else nullcontext():
+                _, info = rollout_recordings_with_plasticity_candidates(
+                    asr_model=self.asr_models[shard_idx],
+                    updater=self.updaters[shard_idx],
+                    recording_audio_batch=recording_audio_batch.to(device),
+                    recording_lengths=None if recording_lengths is None else recording_lengths.to(device),
+                    reference_text_batch=reference_text_batch,
+                    tokenizer=tokenizer,
+                    candidate_perturbations=subset_eggroll_perturbations(
+                        candidate_perturbations,
+                        indexes,
+                        device,
+                    ),
+                    config=self.config,
+                    module_specs=self.module_specs,
+                    wer_fn=wer_fn,
+                    progress_log_fn=progress_log_fn,
+                    progress_context={
+                        **(progress_context or {}),
+                        "shard_index": shard_idx,
+                        "candidate_start": int(indexes[0]),
+                        "candidate_stop": int(indexes[-1]) + 1,
+                    },
+                )
             return info
 
         with ThreadPoolExecutor(max_workers=len(candidate_splits)) as executor:

@@ -381,3 +381,6 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - ROB-186 bf16 update follow-up fixes the EGGROLL centre-update estimator to
   accumulate reward-weighted rank-1 perturbation deltas in float32 before
   casting gradients back to the updater weight dtype.
+- ROB-186 multi-GPU follow-up restores the default rollout devices to
+  `cuda:0,cuda:1` and explicitly binds each rollout worker thread to its CUDA
+  device before running LCASR, targeting the earlier secondary-device stall.

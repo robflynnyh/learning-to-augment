@@ -38,11 +38,10 @@ rollout:
   reward_eps: 1.0e-8
   progress_log_every_chunks: 10
   microbatch_candidates: null
-  # Keep the default run on one allocated GPU. The threaded secondary-CUDA
-  # shard path is currently pathological in the LCASR rollout stack; the
-  # primary-device N=32/B=2 path keeps the validated 64-stream workload.
+  # Shard EGGROLL candidates across the two GPUs allocated by the launcher.
   devices:
     - cuda:0
+    - cuda:1
 
 training:
   dataset: tedlium
