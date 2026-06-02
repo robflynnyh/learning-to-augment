@@ -21,7 +21,7 @@ eggroll:
   weight_decay: 0.0
 
 rollout:
-  batch_size_recordings: 1
+  batch_size_recordings: 8
   chunk_size_frames: 2048
   chunk_overlap_frames: 0
   decode_mode: causal_chunk

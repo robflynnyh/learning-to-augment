@@ -76,6 +76,10 @@ Each training-step log includes `chunks_per_recording_mean`,
 `chunk_length_frames_mean`, and `rollout_chunk_steps` so long-form recordings
 can be checked for the expected number of causal update chunks.
 
+The default real run uses `rollout.batch_size_recordings: 8` with eight
+EGGROLL candidates, giving `rollout_streams = 64`. This was smoke-tested on the
+Mimas 2048-context checkpoint before restarting the long run.
+
 `reward_std` is the standard deviation of `reward_per_candidate`. With
 `B = 1`, group-normalising over candidates makes this metric close to 1 when
 candidate qualities differ and 0 when all candidates tie. The script also logs

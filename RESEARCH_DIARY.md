@@ -341,3 +341,6 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `rollout_streams`) and logs the EGGROLL `lr/sigma` scale after checking the
   paper convention where `1/sigma` is absorbed into the learning rate. The
   default updater optimizer is now AdamW with zero weight decay.
+- ROB-186 batch-size follow-up increases the real plasticity rollout batch to
+  8 recordings. A one-step Mimas smoke with `B=8`, `N=8` succeeded and logged
+  `rollout_streams=64` with chunk-count metrics before the long run restart.
