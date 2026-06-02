@@ -258,6 +258,7 @@ class MultiDeviceRolloutRunner:
         config,
         module_specs,
         devices: Sequence[torch.device],
+        secondary_asr_factory=None,
     ) -> None:
         self.devices = list(devices)
         self.config = config
@@ -269,7 +270,10 @@ class MultiDeviceRolloutRunner:
                 model = asr_model
                 worker_updater = updater
             else:
-                model = copy.deepcopy(asr_model).to(device)
+                if secondary_asr_factory is None:
+                    model = copy.deepcopy(asr_model).to(device)
+                else:
+                    model = secondary_asr_factory(device)
                 worker_updater = copy.deepcopy(updater).to(device)
             model.eval()
             worker_updater.eval()
@@ -601,12 +605,19 @@ def main(config):
 
     optimizer = build_optimizer(updater.parameters(), config)
     rollout_devices = parse_rollout_devices(config, device)
+
+    def load_secondary_asr_worker(worker_device):
+        worker_model = load_asr_from_config(config, tokenizer, worker_device, dtype)
+        wrap_linear_modules(worker_model, target_modules)
+        return worker_model
+
     rollout_runner = MultiDeviceRolloutRunner(
         asr_model=asr_model,
         updater=updater,
         config=config,
         module_specs=module_specs,
         devices=rollout_devices,
+        secondary_asr_factory=load_secondary_asr_worker,
     )
     resume_path = _resolve_resume_path(config)
     start_step = 0
