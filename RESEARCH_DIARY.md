@@ -360,3 +360,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   training batch so chunk metrics and rollout work exclude padded tails. A
   two-GPU one-step `B=8`, `N=8` train smoke succeeded under
   `exp/results/plasticity_eggroll/smoke_decode_lengths_20260602T163955Z/`.
+- ROB-186 rollout-count follow-up changes the real EGGROLL population from
+  `N=8` to `N=32` candidates for the two-GPU B=8 restart requested on
+  2026-06-02. The candidate-sharded rollout path should split this as 16
+  candidates per allocated GPU under `with-gpu 1,2 --num 2`.

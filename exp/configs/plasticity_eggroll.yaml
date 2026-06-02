@@ -20,7 +20,7 @@ plasticity:
   max_fast_norm_ratio: 1.0e-3
 
 eggroll:
-  num_candidates: 8
+  num_candidates: 32
   sigma: 1.0e-3
   antithetic: true
   optimizer: adamw
