@@ -151,8 +151,7 @@ def _select_fast_state_recordings(fast_state: FastWeightState, indexes: Tensor) 
     return FastWeightState(
         {
             name: type(factors)(
-                A=factors.A.index_select(0, indexes),
-                B=factors.B.index_select(0, indexes),
+                F=factors.F.index_select(0, indexes),
                 base_weight_norm=factors.base_weight_norm,
             )
             for name, factors in fast_state.items()
@@ -168,31 +167,48 @@ def _scatter_fast_state_recordings(
     next_factors = {}
     for name, factors in fast_state.items():
         updated = updated_subset[name]
-        target_rank = max(factors.A.shape[-1], updated.A.shape[-1])
-        if target_rank == factors.A.shape[-1]:
-            A = factors.A.clone()
-            Bf = factors.B.clone()
-        else:
-            A = factors.A.new_zeros(*factors.A.shape[:-1], target_rank)
-            Bf = factors.B.new_zeros(*factors.B.shape[:-1], target_rank)
-            A[..., : factors.A.shape[-1]] = factors.A
-            Bf[..., : factors.B.shape[-1]] = factors.B
-        if updated.A.shape[-1] != target_rank:
-            A_update = updated.A.new_zeros(*updated.A.shape[:-1], target_rank)
-            B_update = updated.B.new_zeros(*updated.B.shape[:-1], target_rank)
-            A_update[..., : updated.A.shape[-1]] = updated.A
-            B_update[..., : updated.B.shape[-1]] = updated.B
-        else:
-            A_update = updated.A
-            B_update = updated.B
-        A.index_copy_(0, indexes, A_update)
-        Bf.index_copy_(0, indexes, B_update)
+        F = factors.F.clone()
+        F.index_copy_(0, indexes, updated.F)
         next_factors[name] = type(factors)(
-            A=A,
-            B=Bf,
+            F=F,
             base_weight_norm=factors.base_weight_norm,
         )
     return FastWeightState(next_factors)
+
+
+def _empty_fast_metrics(device: torch.device) -> Dict[str, Tensor]:
+    return {
+        "fast_state_norm_ratio_mean": torch.tensor(0.0, device=device),
+        "fast_state_norm_ratio_max": torch.tensor(0.0, device=device),
+        "fast_weight_clipped_fraction": torch.tensor(0.0, device=device),
+        "fast_update_norm_ratio_mean": torch.tensor(0.0, device=device),
+        "fast_update_norm_ratio_max": torch.tensor(0.0, device=device),
+        "_fast_metric_count": torch.tensor(0.0, device=device),
+    }
+
+
+def _accumulate_fast_metrics(accumulator: Dict[str, Tensor], metrics: Mapping[str, Tensor]) -> None:
+    count = accumulator["_fast_metric_count"] + 1.0
+    for key in [
+        "fast_state_norm_ratio_mean",
+        "fast_weight_clipped_fraction",
+        "fast_update_norm_ratio_mean",
+    ]:
+        accumulator[key] = accumulator[key] + metrics[key].to(accumulator[key].device)
+    for key in ["fast_state_norm_ratio_max", "fast_update_norm_ratio_max"]:
+        accumulator[key] = torch.maximum(accumulator[key], metrics[key].to(accumulator[key].device))
+    accumulator["_fast_metric_count"] = count
+
+
+def _finalise_fast_metrics(accumulator: Dict[str, Tensor]) -> Dict[str, Tensor]:
+    count = accumulator["_fast_metric_count"].clamp(min=1.0)
+    return {
+        "fast_state_norm_ratio_mean": accumulator["fast_state_norm_ratio_mean"] / count,
+        "fast_state_norm_ratio_max": accumulator["fast_state_norm_ratio_max"],
+        "fast_weight_clipped_fraction": accumulator["fast_weight_clipped_fraction"] / count,
+        "fast_update_norm_ratio_mean": accumulator["fast_update_norm_ratio_mean"] / count,
+        "fast_update_norm_ratio_max": accumulator["fast_update_norm_ratio_max"],
+    }
 
 
 def rollout_recordings_with_plasticity_candidates(
@@ -246,6 +262,7 @@ def rollout_recordings_with_plasticity_candidates(
         device=device,
         dtype=dtype,
     )
+    fast_metric_accumulator = _empty_fast_metrics(device)
     transcript_parts: List[List[List[str]]] = [[[] for _ in range(N)] for _ in range(B)]
     chunks_per_recording = (chunk_lengths > 0).sum(dim=1)
     progress_base = dict(progress_context or {})
@@ -310,12 +327,13 @@ def rollout_recordings_with_plasticity_candidates(
                 sigma=sigma,
                 config=config,
             )
-            updated_active_fast_state = apply_fast_updates(
+            updated_active_fast_state, fast_metrics = apply_fast_updates(
                 fast_state=active_fast_state,
                 updates=updates,
-                max_fast_rank=int(_cfg_get(config, "plasticity.max_fast_rank", 8)),
                 max_fast_norm_ratio=float(_cfg_get(config, "plasticity.max_fast_norm_ratio", 1e-3)),
+                return_metrics=True,
             )
+            _accumulate_fast_metrics(fast_metric_accumulator, fast_metrics)
             fast_state = _scatter_fast_state_recordings(
                 fast_state,
                 updated_active_fast_state,
@@ -337,7 +355,7 @@ def rollout_recordings_with_plasticity_candidates(
     valid_chunk_lengths = chunk_lengths[chunk_lengths > 0]
     if valid_chunk_lengths.numel() == 0:
         valid_chunk_lengths = torch.zeros(1, device=device, dtype=chunk_lengths.dtype)
-    return reward_per_candidate, {
+    info = {
         "wer": wers,
         "quality": quality,
         "rewards_bn": rewards_bn,
@@ -347,11 +365,9 @@ def rollout_recordings_with_plasticity_candidates(
         "chunk_overlap_frames": torch.tensor(overlap, device=device),
         "rollout_chunk_steps": torch.tensor(T, device=device),
         "rollout_streams": torch.tensor(B * N, device=device),
-        "final_fast_state_rank": torch.tensor(
-            [fast_state[name].A.shape[-1] for name in fast_state.keys()],
-            device=device,
-        ),
     }
+    info.update(_finalise_fast_metrics(fast_metric_accumulator))
+    return reward_per_candidate, info
 
 
 def serial_reference_rollout(

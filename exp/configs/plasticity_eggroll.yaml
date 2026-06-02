@@ -14,10 +14,10 @@ plasticity:
   token_dim: 128
   comm_dim: 128
   update_rank: 1
-  max_fast_rank: 4
+  fast_state_mode: dense
   max_eta: 1.0e-4
   default_rho: 0.95
-  max_fast_norm_ratio: 1.0e-3
+  max_fast_norm_ratio: 5.0e-2
 
 eggroll:
   num_candidates: 32

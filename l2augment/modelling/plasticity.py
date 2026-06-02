@@ -14,8 +14,7 @@ from l2augment.utils.eggroll import EggrollLinear, EggrollPerturbations
 
 @dataclass
 class FastWeightFactors:
-    A: Tensor
-    B: Tensor
+    F: Tensor
     base_weight_norm: Optional[Tensor] = None
 
 
@@ -47,8 +46,7 @@ class FastWeightState:
         return FastWeightState(
             {
                 name: FastWeightFactors(
-                    A=factors.A.to(device),
-                    B=factors.B.to(device),
+                    F=factors.F.to(device),
                     base_weight_norm=(
                         None if factors.base_weight_norm is None else factors.base_weight_norm.to(device)
                     ),
@@ -156,8 +154,7 @@ class FastWeightLinear(nn.Module):
             x_seq,
             self.base_linear.weight,
             self.base_linear.bias,
-            fast_state[self.module_name].A,
-            fast_state[self.module_name].B,
+            fast_state[self.module_name].F,
         )
         y = y_seq.reshape(*original_shape[:-1], self.out_features)
 
@@ -174,12 +171,10 @@ def fast_weight_linear(
     x: Tensor,
     weight: Tensor,
     bias: Optional[Tensor],
-    A_fast: Tensor,
-    B_fast: Tensor,
+    F_fast: Tensor,
 ) -> Tensor:
     base = torch.einsum("bntd,od->bnto", x, weight)
-    mid = torch.einsum("bntd,bndr->bntr", x, B_fast)
-    delta = torch.einsum("bntr,bnor->bnto", mid, A_fast)
+    delta = torch.einsum("bntd,bnod->bnto", x, F_fast)
     y = base + delta
     if bias is not None:
         y = y + bias
@@ -203,22 +198,36 @@ def init_fast_state(
             out_features, in_features = spec
             base_weight_norm = None
         factors[name] = FastWeightFactors(
-            A=torch.zeros(batch_size, num_candidates, out_features, 0, device=device, dtype=dtype),
-            B=torch.zeros(batch_size, num_candidates, in_features, 0, device=device, dtype=dtype),
+            F=torch.zeros(batch_size, num_candidates, out_features, in_features, device=device, dtype=dtype),
             base_weight_norm=base_weight_norm,
         )
     return FastWeightState(factors)
+
+
+def dense_fast_weight_update(update: FastWeightUpdate) -> Tensor:
+    eta = update.eta
+    if eta.dim() != 3:
+        raise ValueError("eta must have shape [B, N, R] or [B, N, 1]")
+    if eta.shape[-1] not in (1, update.P.shape[-1]):
+        raise ValueError("eta rank dimension must be 1 or match P/Q update rank")
+    scaled_P = update.P * eta.unsqueeze(-2)
+    return torch.einsum("bnor,bnir->bnoi", scaled_P, update.Q)
 
 
 def apply_fast_updates(
     fast_state: FastWeightState,
     updates: Mapping[str, FastWeightUpdate],
     *,
-    max_fast_rank: int,
+    max_fast_rank: Optional[int] = None,
     max_fast_norm_ratio: Optional[float] = None,
     eps: float = 1e-8,
-) -> FastWeightState:
+    return_metrics: bool = False,
+) -> FastWeightState | Tuple[FastWeightState, Dict[str, Tensor]]:
+    del max_fast_rank
     next_factors: Dict[str, FastWeightFactors] = {}
+    state_ratios: List[Tensor] = []
+    update_ratios: List[Tensor] = []
+    clipped_flags: List[Tensor] = []
     for name, factors in fast_state.items():
         if name not in updates:
             next_factors[name] = factors
@@ -226,35 +235,74 @@ def apply_fast_updates(
 
         update = updates[name]
         rho = update.rho.clamp(0.0, 1.0)
-        rho_sqrt = rho.sqrt().reshape(rho.shape[0], rho.shape[1], 1, 1)
-        A_decayed = factors.A * rho_sqrt
-        B_decayed = factors.B * rho_sqrt
+        rho_view = rho.reshape(rho.shape[0], rho.shape[1], 1, 1)
+        dense_update = dense_fast_weight_update(update).to(dtype=factors.F.dtype, device=factors.F.device)
+        F_next = rho_view * factors.F + dense_update
 
-        eta = update.eta
-        if eta.dim() == 3:
-            eta = eta.unsqueeze(-2)
-        A_new = update.P * eta
-        B_new = update.Q
+        if factors.base_weight_norm is not None:
+            base_norm = factors.base_weight_norm.to(device=F_next.device, dtype=torch.float32).reshape(1, 1)
+            update_norm = dense_update.float().norm(dim=(-2, -1))
+            update_ratios.append(update_norm / (base_norm + eps))
 
-        A = torch.cat([A_decayed, A_new], dim=-1)
-        B = torch.cat([B_decayed, B_new], dim=-1)
-        if max_fast_rank is not None and A.shape[-1] > max_fast_rank:
-            A = A[..., -max_fast_rank:]
-            B = B[..., -max_fast_rank:]
+        if max_fast_norm_ratio is not None and factors.base_weight_norm is not None:
+            fast_norm = F_next.float().norm(dim=(-2, -1), keepdim=True)
+            max_norm = (
+                factors.base_weight_norm.to(device=F_next.device, dtype=torch.float32).reshape(1, 1, 1, 1)
+                * max_fast_norm_ratio
+            )
+            scale = (max_norm / (fast_norm + eps)).clamp(max=1.0).to(dtype=F_next.dtype)
+            clipped_flags.append((scale < 1.0).reshape(-1).float())
+            F_next = F_next * scale
 
-        if max_fast_norm_ratio is not None and factors.base_weight_norm is not None and A.shape[-1] > 0:
-            dense = torch.einsum("bnor,bnir->bnoi", A, B)
-            fast_norm = dense.norm(dim=(-2, -1), keepdim=True)
-            max_norm = factors.base_weight_norm.reshape(1, 1, 1, 1) * max_fast_norm_ratio
-            scale = (max_norm / (fast_norm + eps)).clamp(max=1.0)
-            A = A * scale
+        if factors.base_weight_norm is not None:
+            base_norm = factors.base_weight_norm.to(device=F_next.device, dtype=torch.float32).reshape(1, 1)
+            state_norm = F_next.float().norm(dim=(-2, -1))
+            state_ratios.append(state_norm / (base_norm + eps))
 
         next_factors[name] = FastWeightFactors(
-            A=A,
-            B=B,
+            F=F_next,
             base_weight_norm=factors.base_weight_norm,
         )
-    return FastWeightState(next_factors)
+    next_state = FastWeightState(next_factors)
+    metrics = _fast_update_metrics(state_ratios, update_ratios, clipped_flags, device=next_state_metrics_device(next_state))
+    if return_metrics:
+        return next_state, metrics
+    return next_state
+
+
+def next_state_metrics_device(fast_state: FastWeightState) -> torch.device:
+    first = next(iter(fast_state.factors.values()), None)
+    if first is None:
+        return torch.device("cpu")
+    return first.F.device
+
+
+def _fast_update_metrics(
+    state_ratios: List[Tensor],
+    update_ratios: List[Tensor],
+    clipped_flags: List[Tensor],
+    *,
+    device: torch.device,
+) -> Dict[str, Tensor]:
+    if state_ratios:
+        state_flat = torch.cat([item.reshape(-1).float() for item in state_ratios])
+    else:
+        state_flat = torch.zeros(1, device=device)
+    if update_ratios:
+        update_flat = torch.cat([item.reshape(-1).float() for item in update_ratios])
+    else:
+        update_flat = torch.zeros(1, device=device)
+    if clipped_flags:
+        clipped_flat = torch.cat([item.reshape(-1).float() for item in clipped_flags])
+    else:
+        clipped_flat = torch.zeros(1, device=device)
+    return {
+        "fast_state_norm_ratio_mean": state_flat.mean(),
+        "fast_state_norm_ratio_max": state_flat.max(),
+        "fast_update_norm_ratio_mean": update_flat.mean(),
+        "fast_update_norm_ratio_max": update_flat.max(),
+        "fast_weight_clipped_fraction": clipped_flat.mean(),
+    }
 
 
 def _unwrap_fast_weight_linear(module: nn.Module) -> nn.Module:
@@ -565,7 +613,6 @@ def infer_with_plasticity(
         fast_state = apply_fast_updates(
             fast_state,
             updates,
-            max_fast_rank=config.plasticity.max_fast_rank,
             max_fast_norm_ratio=config.plasticity.max_fast_norm_ratio,
         )
         transcript_parts.append(decode_output(output, tokenizer, 1, 1)[0][0])

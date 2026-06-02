@@ -122,7 +122,11 @@ def test_multi_device_rollout_info_combines_rewards_over_full_candidate_axis():
         "chunk_overlap_frames": torch.tensor(0.0),
         "rollout_chunk_steps": torch.tensor(2.0),
         "rollout_streams": torch.tensor(4.0),
-        "final_fast_state_rank": torch.tensor([1]),
+        "fast_state_norm_ratio_mean": torch.tensor(0.01),
+        "fast_state_norm_ratio_max": torch.tensor(0.02),
+        "fast_weight_clipped_fraction": torch.tensor(0.0),
+        "fast_update_norm_ratio_mean": torch.tensor(0.001),
+        "fast_update_norm_ratio_max": torch.tensor(0.002),
     }
     shard_b = {
         "wer": torch.tensor([[0.5, 1.5], [0.0, 1.0]]),
@@ -132,7 +136,11 @@ def test_multi_device_rollout_info_combines_rewards_over_full_candidate_axis():
         "chunk_overlap_frames": torch.tensor(0.0),
         "rollout_chunk_steps": torch.tensor(2.0),
         "rollout_streams": torch.tensor(4.0),
-        "final_fast_state_rank": torch.tensor([1]),
+        "fast_state_norm_ratio_mean": torch.tensor(0.03),
+        "fast_state_norm_ratio_max": torch.tensor(0.04),
+        "fast_weight_clipped_fraction": torch.tensor(0.5),
+        "fast_update_norm_ratio_mean": torch.tensor(0.003),
+        "fast_update_norm_ratio_max": torch.tensor(0.004),
     }
 
     rewards, info = combine_rollout_infos(
@@ -152,6 +160,11 @@ def test_multi_device_rollout_info_combines_rewards_over_full_candidate_axis():
     torch.testing.assert_close(rewards, expected_rewards_bn.mean(dim=0))
     assert info["rollout_num_devices"].item() == 2
     torch.testing.assert_close(info["rollout_streams_per_device"], torch.tensor([4.0, 4.0]))
+    torch.testing.assert_close(info["fast_state_norm_ratio_mean"], torch.tensor(0.02))
+    torch.testing.assert_close(info["fast_state_norm_ratio_max"], torch.tensor(0.04))
+    torch.testing.assert_close(info["fast_weight_clipped_fraction"], torch.tensor(0.25))
+    torch.testing.assert_close(info["fast_update_norm_ratio_mean"], torch.tensor(0.002))
+    torch.testing.assert_close(info["fast_update_norm_ratio_max"], torch.tensor(0.004))
 
 
 def test_train_script_supports_adamw_optimizer():

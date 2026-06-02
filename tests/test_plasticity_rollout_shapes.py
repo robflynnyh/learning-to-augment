@@ -86,7 +86,7 @@ def _config():
             decode_mode="causal_chunk",
             reward_eps=1e-8,
         ),
-        plasticity=SimpleNamespace(max_fast_rank=3, max_fast_norm_ratio=10.0),
+        plasticity=SimpleNamespace(max_fast_norm_ratio=10.0),
         eggroll=SimpleNamespace(sigma=0.05),
     )
 
@@ -311,12 +311,13 @@ def test_multi_target_attention_out_proj_path_captures_and_updates_all_modules()
     next_state = apply_fast_updates(
         fast_state,
         updates,
-        max_fast_rank=4,
         max_fast_norm_ratio=10.0,
     )
-    assert {name: next_state[name].A.shape[-1] for name in target_modules} == {
-        name: 1 for name in target_modules
+    assert {name: tuple(next_state[name].F.shape) for name in target_modules} == {
+        name: (2, 2, 2, 2) for name in target_modules
     }
+    for name in target_modules:
+        assert next_state[name].F.abs().sum().item() > 0.0
 
 
 def test_inner_forward_functions_do_not_accept_label_or_reward_inputs():

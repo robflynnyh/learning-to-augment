@@ -234,6 +234,16 @@ def combine_rollout_infos(
         key: value.to(device) if torch.is_tensor(value) else value
         for key, value in shard_infos[0].items()
     }
+    for key in [
+        "fast_state_norm_ratio_mean",
+        "fast_weight_clipped_fraction",
+        "fast_update_norm_ratio_mean",
+    ]:
+        if key in shard_infos[0]:
+            combined[key] = torch.stack([info[key].to(device).float() for info in shard_infos]).mean()
+    for key in ["fast_state_norm_ratio_max", "fast_update_norm_ratio_max"]:
+        if key in shard_infos[0]:
+            combined[key] = torch.stack([info[key].to(device).float() for info in shard_infos]).max()
     combined.update(
         {
             "wer": wer,
@@ -494,18 +504,15 @@ def _metric_float(value: torch.Tensor) -> float:
     return float(value.detach().float().cpu())
 
 
-def _fast_weight_rank_mean(info: dict) -> float:
-    ranks = info.get("final_fast_state_rank")
-    if ranks is None:
-        return 0.0
-    return _metric_float(ranks.float().mean())
-
-
-def _fast_weight_rank_max(info: dict) -> float:
-    ranks = info.get("final_fast_state_rank")
-    if ranks is None:
-        return 0.0
-    return _metric_float(ranks.float().max())
+def _fast_weight_metrics(info: dict) -> Dict[str, float]:
+    keys = [
+        "fast_state_norm_ratio_mean",
+        "fast_state_norm_ratio_max",
+        "fast_weight_clipped_fraction",
+        "fast_update_norm_ratio_mean",
+        "fast_update_norm_ratio_max",
+    ]
+    return {key: _metric_float(info[key]) for key in keys if key in info}
 
 
 def _candidate_spread_metrics(info: dict) -> Dict[str, float]:
@@ -739,14 +746,13 @@ def main(config):
                 "quality_mean": _metric_float(info["quality"].mean()),
                 "reward_std": _metric_float(rewards.std(unbiased=False)),
                 "reward_mean": _metric_float(rewards.mean()),
-                "fast_weight_rank_mean": _fast_weight_rank_mean(info),
-                "fast_weight_rank_max": _fast_weight_rank_max(info),
                 "plasticity_num_modules": len(target_modules),
                 "adaptation_parameters": adaptation_parameter_count(updater),
                 "eggroll_lr": eggroll_lr,
                 "eggroll_sigma": eggroll_sigma,
                 "eggroll_lr_over_sigma": eggroll_lr / eggroll_sigma if eggroll_sigma > 0 else 0.0,
             }
+            metrics.update(_fast_weight_metrics(info))
             metrics.update(_candidate_spread_metrics(info))
             metrics.update(_chunk_metrics(info))
             if step % log_every == 0 or step == start_step + 1:

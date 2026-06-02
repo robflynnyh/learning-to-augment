@@ -391,3 +391,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   padded activations. The real restart config returns to `B=8`, `N=32`,
   yielding 128 streams per logical CUDA device under the two-GPU candidate
   shard requested on 2026-06-02.
+- ROB-186 dense-fast-state follow-up replaces factor-history accumulation with
+  dense per-recording/per-candidate fast matrices `F`, keeps low-rank per-chunk
+  updater emissions, removes `max_fast_rank` from the default config, loosens
+  the fast-state norm cap to `5.0e-2`, and adds fast-state/update norm plus
+  clipping-fraction logs for the next run.

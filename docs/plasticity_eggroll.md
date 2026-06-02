@@ -97,6 +97,27 @@ Each training-step log includes `chunks_per_recording_mean`,
 `plasticity_num_modules` so long-form recordings can be checked for the expected
 number of causal update chunks and adapted modules.
 
+Fast weights now accumulate as dense per-recording/per-candidate matrices:
+
+```text
+F: [B, N, D_out, D_in]
+```
+
+The updater still emits a low-rank chunk update with `P`, `Q`, `eta`, and `rho`,
+but the state update materialises the accumulated dense matrix:
+
+```text
+F <- rho * F + eta * P Q^T
+```
+
+This removes the former `max_fast_rank` history truncation. The dense state is
+still norm-capped against the frozen base weight norm with
+`plasticity.max_fast_norm_ratio`, which is set to `5.0e-2` for the default run.
+Step logs include `fast_state_norm_ratio_mean`,
+`fast_state_norm_ratio_max`, `fast_weight_clipped_fraction`,
+`fast_update_norm_ratio_mean`, and `fast_update_norm_ratio_max` to make the
+looser cap auditable.
+
 The default real run uses `rollout.batch_size_recordings: 8` with 32 EGGROLL
 candidates, giving `rollout_streams = 256` split into 128 streams per logical
 CUDA device. The training dtype is `bfloat16`, and the startup event logs the
@@ -169,8 +190,8 @@ Inference uses the learned centre updater with `B = 1` and `N = 1`.
 
 There is no EGGROLL population, transcript/reference input, WER/CER reward,
 pseudo-label CTC objective, ASR model cloning, or backward pass through the ASR
-model. The frozen/shared ASR parameters remain unchanged; only the factorised
-fast state evolves over chunks.
+model. The frozen/shared ASR parameters remain unchanged; only the learned
+fast-weight update process evolves a dense fast state over chunks.
 
 ## Tensor Layout
 
@@ -186,18 +207,17 @@ chunk_flat inside ASR: [B*N, C, S]
 Fast weights are held only for selected modules:
 
 ```text
-A: [B, N, D_out, R_state]
-B: [B, N, D_in, R_state]
+F: [B, N, D_out, D_in]
 ```
 
 Most ASR modules run normally over the flattened `B * N` batch. Selected
-`FastWeightLinear` modules reshape internally, apply their per-stream low-rank
-delta, and reshape back.
+`FastWeightLinear` modules reshape internally, apply their per-stream dense
+fast-state delta, and reshape back. Each chunk update emitted by the updater is
+low-rank, but the accumulated state can become full-rank over the recording.
 
 ## Current MVP Limits
 
 - only selected `nn.Linear` modules are adaptable;
-- fast-rank capping drops oldest columns;
 - fast-weight norm clipping uses exact dense norms for selected modules;
 - the implemented decode mode is `causal_chunk`;
 - EGGROLL perturbations apply only to 2D updater matrices via `EggrollLinear`.
