@@ -35,6 +35,12 @@ rollout:
   pass_lengths: false
   reward_eps: 1.0e-8
   microbatch_candidates: null
+  # Under with-gpu 1,2 these map to the allocated physical GPUs 1 and 2.
+  # Rollouts are sharded over candidates; the EGGROLL centre update remains on
+  # training.device.
+  devices:
+    - cuda:0
+    - cuda:1
 
 training:
   dataset: tedlium

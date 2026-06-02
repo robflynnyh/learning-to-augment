@@ -1,4 +1,6 @@
 import argparse
+import copy
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 import random
@@ -16,7 +18,13 @@ from l2augment.modelling.plasticity import (
 )
 from l2augment.rollout.gpu_plasticity import rollout_recordings_with_plasticity_candidates
 from l2augment.utils.data import dataset_functions
-from l2augment.utils.eggroll import eggroll_update_shared_params, sample_rank1_perturbations
+from l2augment.utils.eggroll import (
+    EggrollPerturbations,
+    Rank1Perturbation,
+    eggroll_update_shared_params,
+    group_normalise_rewards,
+    sample_rank1_perturbations,
+)
 
 
 SEGMENTED_DATASETS = frozenset({"tedlium3_segmented_data"})
@@ -116,6 +124,228 @@ def build_optimizer(parameters, config):
     if name == "adamw":
         return torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay)
     raise ValueError(f"Unsupported optimizer: {name}")
+
+
+def parse_rollout_devices(config, primary_device: torch.device) -> List[torch.device]:
+    if primary_device.type == "cuda" and primary_device.index is None:
+        primary_device = torch.device("cuda:0")
+    rollout_cfg = config.get("rollout", {})
+    configured = rollout_cfg.get("devices", None)
+    if configured is None:
+        return [primary_device]
+    if isinstance(configured, str):
+        if configured.lower() == "auto":
+            if primary_device.type != "cuda" or not torch.cuda.is_available():
+                return [primary_device]
+            return [torch.device(f"cuda:{idx}") for idx in range(torch.cuda.device_count())]
+        configured = [item.strip() for item in configured.split(",") if item.strip()]
+    devices = []
+    for configured_device in configured:
+        device = torch.device(configured_device)
+        if device.type == "cuda" and device.index is None:
+            device = torch.device("cuda:0")
+        devices.append(device)
+    if not devices:
+        return [primary_device]
+    if devices[0] != primary_device:
+        devices.insert(0, primary_device)
+    deduped = []
+    seen = set()
+    for device in devices:
+        key = (device.type, device.index)
+        if key in seen:
+            continue
+        deduped.append(device)
+        seen.add(key)
+    if torch.cuda.is_available():
+        cuda_count = torch.cuda.device_count()
+        for device in deduped:
+            if device.type == "cuda" and device.index is not None and device.index >= cuda_count:
+                raise ValueError(
+                    f"Configured rollout device {device} is not visible; "
+                    f"torch.cuda.device_count()={cuda_count}"
+                )
+    return deduped
+
+
+def split_candidate_indices(num_candidates: int, num_shards: int) -> List[torch.Tensor]:
+    if num_candidates < 1:
+        raise ValueError("num_candidates must be positive")
+    if num_shards < 1:
+        raise ValueError("num_shards must be positive")
+    active_shards = min(num_candidates, num_shards)
+    return [
+        chunk.to(dtype=torch.long)
+        for chunk in torch.arange(num_candidates, dtype=torch.long).chunk(active_shards)
+        if chunk.numel() > 0
+    ]
+
+
+def subset_eggroll_perturbations(
+    perturbations: EggrollPerturbations,
+    candidate_indices: torch.Tensor,
+    device: torch.device,
+) -> EggrollPerturbations:
+    indexes = candidate_indices.to(device=perturbations_device(perturbations), dtype=torch.long)
+    return EggrollPerturbations(
+        {
+            name: Rank1Perturbation(
+                a=pert.a.index_select(0, indexes).to(device),
+                b=pert.b.index_select(0, indexes).to(device),
+                antithetic=False,
+            )
+            for name, pert in perturbations.items()
+        }
+    )
+
+
+def perturbations_device(perturbations: EggrollPerturbations) -> torch.device:
+    first = next(iter(perturbations.layers.values()), None)
+    if first is None:
+        return torch.device("cpu")
+    return first.a.device
+
+
+def combine_rollout_infos(
+    shard_infos: Sequence[dict],
+    candidate_indices: Sequence[torch.Tensor],
+    *,
+    num_candidates: int,
+    device: torch.device,
+    reward_eps: float,
+) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    if len(shard_infos) != len(candidate_indices):
+        raise ValueError("shard_infos and candidate_indices must have the same length")
+    if not shard_infos:
+        raise ValueError("at least one rollout shard is required")
+
+    B = int(shard_infos[0]["wer"].shape[0])
+    wer = torch.empty(B, num_candidates, device=device, dtype=shard_infos[0]["wer"].dtype)
+    for info, indexes in zip(shard_infos, candidate_indices):
+        wer[:, indexes.to(device)] = info["wer"].to(device)
+
+    quality = 1.0 - wer.clamp(max=1.0)
+    rewards_bn = group_normalise_rewards(quality, eps=reward_eps)
+    reward_per_candidate = rewards_bn.mean(dim=0)
+
+    combined = {
+        key: value.to(device) if torch.is_tensor(value) else value
+        for key, value in shard_infos[0].items()
+    }
+    combined.update(
+        {
+            "wer": wer,
+            "quality": quality,
+            "rewards_bn": rewards_bn,
+            "rollout_num_devices": torch.tensor(len(shard_infos), device=device),
+            "rollout_streams": torch.tensor(B * num_candidates, device=device),
+            "rollout_streams_per_device": torch.tensor(
+                [B * len(indexes) for indexes in candidate_indices],
+                device=device,
+                dtype=torch.float32,
+            ),
+        }
+    )
+    return reward_per_candidate, combined
+
+
+class MultiDeviceRolloutRunner:
+    def __init__(
+        self,
+        *,
+        asr_model,
+        updater,
+        config,
+        module_specs,
+        devices: Sequence[torch.device],
+    ) -> None:
+        self.devices = list(devices)
+        self.config = config
+        self.module_specs = module_specs
+        self.asr_models = []
+        self.updaters = []
+        for idx, device in enumerate(self.devices):
+            if idx == 0:
+                model = asr_model
+                worker_updater = updater
+            else:
+                model = copy.deepcopy(asr_model).to(device)
+                worker_updater = copy.deepcopy(updater).to(device)
+            model.eval()
+            worker_updater.eval()
+            self.asr_models.append(model)
+            self.updaters.append(worker_updater)
+
+    @property
+    def enabled(self) -> bool:
+        return len(self.devices) > 1
+
+    def sync_updaters(self) -> None:
+        if len(self.updaters) <= 1:
+            return
+        state = self.updaters[0].state_dict()
+        for updater in self.updaters[1:]:
+            updater.load_state_dict(state)
+
+    def run(
+        self,
+        *,
+        recording_audio_batch: torch.Tensor,
+        reference_text_batch: Sequence[str],
+        tokenizer,
+        candidate_perturbations: EggrollPerturbations,
+        reward_eps: float,
+        wer_fn=None,
+    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        if not self.enabled:
+            return rollout_recordings_with_plasticity_candidates(
+                asr_model=self.asr_models[0],
+                updater=self.updaters[0],
+                recording_audio_batch=recording_audio_batch,
+                reference_text_batch=reference_text_batch,
+                tokenizer=tokenizer,
+                candidate_perturbations=candidate_perturbations,
+                config=self.config,
+                module_specs=self.module_specs,
+                wer_fn=wer_fn,
+            )
+
+        self.sync_updaters()
+        candidate_splits = split_candidate_indices(
+            candidate_perturbations.num_candidates,
+            len(self.devices),
+        )
+
+        def run_shard(shard_idx: int):
+            device = self.devices[shard_idx]
+            indexes = candidate_splits[shard_idx]
+            _, info = rollout_recordings_with_plasticity_candidates(
+                asr_model=self.asr_models[shard_idx],
+                updater=self.updaters[shard_idx],
+                recording_audio_batch=recording_audio_batch.to(device),
+                reference_text_batch=reference_text_batch,
+                tokenizer=tokenizer,
+                candidate_perturbations=subset_eggroll_perturbations(
+                    candidate_perturbations,
+                    indexes,
+                    device,
+                ),
+                config=self.config,
+                module_specs=self.module_specs,
+                wer_fn=wer_fn,
+            )
+            return info
+
+        with ThreadPoolExecutor(max_workers=len(candidate_splits)) as executor:
+            shard_infos = list(executor.map(run_shard, range(len(candidate_splits))))
+
+        return combine_rollout_infos(
+            shard_infos,
+            candidate_splits,
+            num_candidates=candidate_perturbations.num_candidates,
+            device=self.devices[0],
+            reward_eps=reward_eps,
+        )
 
 
 def build_checkpoint_payload(updater, optimizer, config, step: int, metrics: dict) -> Dict[str, Any]:
@@ -250,7 +480,7 @@ def _candidate_spread_metrics(info: dict) -> Dict[str, float]:
 
 def _chunk_metrics(info: dict) -> Dict[str, float]:
     chunks_per_recording = info["chunks_per_recording"].detach().float()
-    return {
+    metrics = {
         "chunks_per_recording_mean": _metric_float(chunks_per_recording.mean()),
         "chunks_per_recording_min": _metric_float(chunks_per_recording.min()),
         "chunks_per_recording_max": _metric_float(chunks_per_recording.max()),
@@ -260,6 +490,16 @@ def _chunk_metrics(info: dict) -> Dict[str, float]:
         "rollout_chunk_steps": _metric_float(info["rollout_chunk_steps"]),
         "rollout_streams": _metric_float(info["rollout_streams"]),
     }
+    if "rollout_num_devices" in info:
+        metrics["rollout_num_devices"] = _metric_float(info["rollout_num_devices"])
+    if "rollout_streams_per_device" in info:
+        metrics["rollout_streams_per_device_min"] = _metric_float(
+            info["rollout_streams_per_device"].detach().float().min()
+        )
+        metrics["rollout_streams_per_device_max"] = _metric_float(
+            info["rollout_streams_per_device"].detach().float().max()
+        )
+    return metrics
 
 
 def _print_metrics(metrics: dict) -> None:
@@ -340,6 +580,8 @@ def main(config):
     torch.manual_seed(seed)
 
     device = torch.device(config.get("training", {}).get("device", "cuda" if torch.cuda.is_available() else "cpu"))
+    if device.type == "cuda" and device.index is None:
+        device = torch.device("cuda:0")
     dtype = getattr(torch, config.get("training", {}).get("dtype", "float32"))
     tokenizer = load_tokenizer()
     asr_model = load_asr_from_config(config, tokenizer, device, dtype)
@@ -358,10 +600,19 @@ def main(config):
     ).to(device=device, dtype=dtype)
 
     optimizer = build_optimizer(updater.parameters(), config)
+    rollout_devices = parse_rollout_devices(config, device)
+    rollout_runner = MultiDeviceRolloutRunner(
+        asr_model=asr_model,
+        updater=updater,
+        config=config,
+        module_specs=module_specs,
+        devices=rollout_devices,
+    )
     resume_path = _resolve_resume_path(config)
     start_step = 0
     if resume_path is not None:
         start_step = load_updater_checkpoint(updater, optimizer, resume_path, device)
+        rollout_runner.sync_updaters()
 
     wandb_run = init_wandb(config)
     eggroll_lr = float(config.get("eggroll", {}).get("lr", 1e-4))
@@ -371,6 +622,7 @@ def main(config):
             {
                 "event": "plasticity_train_start",
                 "device": str(device),
+                "rollout_devices": [str(rollout_device) for rollout_device in rollout_devices],
                 "dtype": str(dtype).replace("torch.", ""),
                 "dataset": config["training"].get("dataset", "tedlium"),
                 "split": config["training"].get("split", "train"),
@@ -408,15 +660,12 @@ def main(config):
                 device=device,
                 dtype=dtype,
             )
-            rewards, info = rollout_recordings_with_plasticity_candidates(
-                asr_model=asr_model,
-                updater=updater,
+            rewards, info = rollout_runner.run(
                 recording_audio_batch=audio_batch,
                 reference_text_batch=reference_text_batch,
                 tokenizer=tokenizer,
                 candidate_perturbations=perturbations,
-                config=config,
-                module_specs=module_specs,
+                reward_eps=float(config.get("rollout", {}).get("reward_eps", 1e-8)),
             )
             eggroll_update_shared_params(
                 updater,

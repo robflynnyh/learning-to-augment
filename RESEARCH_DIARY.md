@@ -349,3 +349,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   the Mimas LCASR checkpoint. Target wrapping now preserves configured order,
   startup/step logs include `plasticity_num_modules`, and the multi-target test
   checks activation capture, layer tokens, updates, and fast-state rank growth.
+- ROB-186 multi-GPU follow-up shards EGGROLL rollout candidates across
+  `rollout.devices` while keeping the optimizer and shared updater centre on
+  `training.device`. The default run maps `cuda:0,cuda:1` to the allocated
+  `with-gpu 1,2` devices, recombines WER over the full candidate axis before
+  group normalisation, and logs rollout device/stream counts.

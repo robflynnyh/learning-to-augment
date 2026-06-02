@@ -6,11 +6,14 @@ from omegaconf import OmegaConf
 from exp.train_plasticity_eggroll import (
     build_optimizer,
     build_checkpoint_payload,
+    combine_rollout_infos,
     load_updater_checkpoint,
     merge_dotlist_overrides,
+    parse_rollout_devices,
     save_checkpoint,
     validate_training_dataset,
 )
+from l2augment.utils.eggroll import group_normalise_rewards
 
 
 def _config(root: Path):
@@ -83,6 +86,55 @@ def test_train_script_dotlist_overrides():
     assert merged.training.num_steps == 1
     assert merged.eggroll.num_candidates == 2
     assert merged.training.wandb_mode == "offline"
+
+
+def test_rollout_device_config_normalises_cuda_primary_without_duplicates():
+    config = OmegaConf.create({"rollout": {"devices": ["cuda:0", "cuda:1"]}})
+
+    devices = parse_rollout_devices(config, torch.device("cuda"))
+
+    assert [str(device) for device in devices] == ["cuda:0", "cuda:1"]
+
+
+def test_multi_device_rollout_info_combines_rewards_over_full_candidate_axis():
+    shard_a = {
+        "wer": torch.tensor([[0.0, 1.0], [0.5, 1.5]]),
+        "chunks_per_recording": torch.tensor([2, 2]),
+        "chunk_length_frames_mean": torch.tensor(2.0),
+        "chunk_size_frames": torch.tensor(2.0),
+        "chunk_overlap_frames": torch.tensor(0.0),
+        "rollout_chunk_steps": torch.tensor(2.0),
+        "rollout_streams": torch.tensor(4.0),
+        "final_fast_state_rank": torch.tensor([1]),
+    }
+    shard_b = {
+        "wer": torch.tensor([[0.5, 1.5], [0.0, 1.0]]),
+        "chunks_per_recording": torch.tensor([2, 2]),
+        "chunk_length_frames_mean": torch.tensor(2.0),
+        "chunk_size_frames": torch.tensor(2.0),
+        "chunk_overlap_frames": torch.tensor(0.0),
+        "rollout_chunk_steps": torch.tensor(2.0),
+        "rollout_streams": torch.tensor(4.0),
+        "final_fast_state_rank": torch.tensor([1]),
+    }
+
+    rewards, info = combine_rollout_infos(
+        [shard_a, shard_b],
+        [torch.tensor([0, 2]), torch.tensor([1, 3])],
+        num_candidates=4,
+        device=torch.device("cpu"),
+        reward_eps=1e-8,
+    )
+
+    expected_wer = torch.tensor([[0.0, 0.5, 1.0, 1.5], [0.5, 0.0, 1.5, 1.0]])
+    expected_quality = 1.0 - expected_wer.clamp(max=1.0)
+    expected_rewards_bn = group_normalise_rewards(expected_quality)
+    torch.testing.assert_close(info["wer"], expected_wer)
+    torch.testing.assert_close(info["quality"], expected_quality)
+    torch.testing.assert_close(info["rewards_bn"], expected_rewards_bn)
+    torch.testing.assert_close(rewards, expected_rewards_bn.mean(dim=0))
+    assert info["rollout_num_devices"].item() == 2
+    torch.testing.assert_close(info["rollout_streams_per_device"], torch.tensor([4.0, 4.0]))
 
 
 def test_train_script_supports_adamw_optimizer():

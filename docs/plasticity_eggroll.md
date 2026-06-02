@@ -40,6 +40,13 @@ The queue-safe Mimas launcher is:
   bash scripts/launch_rob186_plasticity_eggroll_gpu.sh
 ```
 
+For the default two-device rollout config, request both GPUs explicitly:
+
+```bash
+/store/store5/software/simple-gpu-schedule/with-gpu 1,2 --num 2 -- \
+  bash scripts/launch_rob186_plasticity_eggroll_gpu.sh
+```
+
 Use these smoke modes before queueing a real run:
 
 ```bash
@@ -87,6 +94,24 @@ number of causal update chunks and adapted modules.
 The default real run uses `rollout.batch_size_recordings: 8` with eight
 EGGROLL candidates, giving `rollout_streams = 64`. This was smoke-tested on the
 Mimas 2048-context checkpoint before restarting the long run.
+
+The default config also sets:
+
+```yaml
+rollout:
+  devices:
+    - cuda:0
+    - cuda:1
+```
+
+When launched through `with-gpu 1,2 --num 2`, those logical CUDA devices
+correspond to the allocated Mimas GPUs 1 and 2. This is not distributed
+training: the optimizer and EGGROLL centre update stay on `training.device`,
+while rollout workers shard the candidate axis across the listed devices. Each
+shard returns WERs for its candidate subset, then the trainer recombines
+`WER[B, N]` and runs candidate group-normalisation over the full `N` axis on
+the primary device. Step logs include `rollout_num_devices` and per-device
+stream counts.
 
 `reward_std` is the standard deviation of `reward_per_candidate`. With
 `B = 1`, group-normalising over candidates makes this metric close to 1 when
