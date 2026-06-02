@@ -302,6 +302,8 @@ class MultiDeviceRolloutRunner:
         reward_eps: float,
         recording_lengths: Optional[torch.Tensor] = None,
         wer_fn=None,
+        progress_log_fn=None,
+        progress_context: Optional[dict] = None,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         if not self.enabled:
             return rollout_recordings_with_plasticity_candidates(
@@ -315,6 +317,8 @@ class MultiDeviceRolloutRunner:
                 config=self.config,
                 module_specs=self.module_specs,
                 wer_fn=wer_fn,
+                progress_log_fn=progress_log_fn,
+                progress_context=progress_context,
             )
 
         self.sync_updaters()
@@ -341,6 +345,13 @@ class MultiDeviceRolloutRunner:
                 config=self.config,
                 module_specs=self.module_specs,
                 wer_fn=wer_fn,
+                progress_log_fn=progress_log_fn,
+                progress_context={
+                    **(progress_context or {}),
+                    "shard_index": shard_idx,
+                    "candidate_start": int(indexes[0]),
+                    "candidate_stop": int(indexes[-1]) + 1,
+                },
             )
             return info
 
@@ -514,6 +525,10 @@ def _print_metrics(metrics: dict) -> None:
     print(json.dumps(metrics, sort_keys=True), flush=True)
 
 
+def _print_event(event: dict) -> None:
+    print(json.dumps(event, sort_keys=True), flush=True)
+
+
 def _resolve_resume_path(config) -> Optional[str]:
     training_cfg = config.get("training", {})
     if training_cfg.get("resume_model_path"):
@@ -683,6 +698,8 @@ def main(config):
                 tokenizer=tokenizer,
                 candidate_perturbations=perturbations,
                 reward_eps=float(config.get("rollout", {}).get("reward_eps", 1e-8)),
+                progress_log_fn=_print_event,
+                progress_context={"step": step},
             )
             eggroll_update_shared_params(
                 updater,

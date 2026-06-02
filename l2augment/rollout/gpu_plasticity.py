@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
+import time
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import torch
 from torch import Tensor, nn
@@ -158,6 +159,8 @@ def rollout_recordings_with_plasticity_candidates(
     module_specs: Mapping[str, Tuple[int, int] | AdaptedLinearSpec],
     recording_lengths: Optional[Tensor | Sequence[int]] = None,
     wer_fn: Optional[Callable[[str, str], float]] = None,
+    progress_log_fn: Optional[Callable[[Mapping[str, Any]], None]] = None,
+    progress_context: Optional[Mapping[str, Any]] = None,
 ) -> Tuple[Tensor, Dict[str, Tensor]]:
     decode_mode = _cfg_get(config, "rollout.decode_mode", "causal_chunk")
     if decode_mode != "causal_chunk":
@@ -174,6 +177,7 @@ def rollout_recordings_with_plasticity_candidates(
     chunk_size = int(chunk_size)
     overlap = int(overlap)
     pass_lengths = bool(_cfg_get(config, "rollout.pass_lengths", False))
+    progress_every = int(_cfg_get(config, "rollout.progress_log_every_chunks", 0) or 0)
 
     chunks, chunk_lengths = segment_batch(
         recording_audio_batch,
@@ -195,6 +199,30 @@ def rollout_recordings_with_plasticity_candidates(
         dtype=dtype,
     )
     transcript_parts: List[List[List[str]]] = [[[] for _ in range(N)] for _ in range(B)]
+    chunks_per_recording = (chunk_lengths > 0).sum(dim=1)
+    progress_base = dict(progress_context or {})
+    progress_base.update(
+        {
+            "B": B,
+            "N": N,
+            "T": T,
+            "device": str(device),
+            "rollout_streams": B * N,
+            "chunks_per_recording_min": int(chunks_per_recording.min().detach().cpu()),
+            "chunks_per_recording_max": int(chunks_per_recording.max().detach().cpu()),
+            "chunks_per_recording_mean": float(chunks_per_recording.detach().float().mean().cpu()),
+        }
+    )
+
+    def log_progress(event: str, **fields: Any) -> None:
+        if progress_log_fn is None:
+            return
+        payload = dict(progress_base)
+        payload.update({"event": event, **fields})
+        progress_log_fn(payload)
+
+    rollout_start = time.monotonic()
+    log_progress("plasticity_rollout_start")
 
     asr_model.eval()
     updater.eval()
@@ -232,12 +260,19 @@ def rollout_recordings_with_plasticity_candidates(
                 max_fast_rank=int(_cfg_get(config, "plasticity.max_fast_rank", 8)),
                 max_fast_norm_ratio=float(_cfg_get(config, "plasticity.max_fast_norm_ratio", 1e-3)),
             )
+            if progress_every > 0 and (
+                t == 0 or (t + 1) % progress_every == 0 or t + 1 == T
+            ):
+                log_progress(
+                    "plasticity_rollout_chunk",
+                    chunk_index=t + 1,
+                    elapsed_seconds=round(time.monotonic() - rollout_start, 3),
+                )
 
     wers = compute_wer_matrix(transcript_parts, reference_text_batch, wer_fn=wer_fn).to(device)
     quality = 1.0 - wers.clamp(max=1.0)
     rewards_bn = group_normalise_rewards(quality, eps=float(_cfg_get(config, "rollout.reward_eps", 1e-8)))
     reward_per_candidate = rewards_bn.mean(dim=0)
-    chunks_per_recording = (chunk_lengths > 0).sum(dim=1)
     valid_chunk_lengths = chunk_lengths[chunk_lengths > 0]
     if valid_chunk_lengths.numel() == 0:
         valid_chunk_lengths = torch.zeros(1, device=device, dtype=chunk_lengths.dtype)

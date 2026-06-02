@@ -28,19 +28,21 @@ eggroll:
   weight_decay: 0.0
 
 rollout:
-  batch_size_recordings: 8
+  # Keep N=32 while restoring the B*N/2 per-GPU stream count used by the
+  # successful B=8/N=8 two-GPU smoke: 2 recordings * 16 candidates = 32.
+  batch_size_recordings: 2
   chunk_size_frames: 2048
   chunk_overlap_frames: 0
   decode_mode: causal_chunk
   pass_lengths: false
   reward_eps: 1.0e-8
+  progress_log_every_chunks: 10
   microbatch_candidates: null
-  # Under with-gpu 1,2 these map to the allocated physical GPUs 1 and 2.
-  # Rollouts are sharded over candidates; the EGGROLL centre update remains on
-  # training.device.
+  # Keep the default run on one allocated GPU. The threaded secondary-CUDA
+  # shard path is currently pathological in the LCASR rollout stack; the
+  # primary-device N=32/B=2 path keeps the validated 64-stream workload.
   devices:
     - cuda:0
-    - cuda:1
 
 training:
   dataset: tedlium

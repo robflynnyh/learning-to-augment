@@ -364,3 +364,13 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `N=8` to `N=32` candidates for the two-GPU B=8 restart requested on
   2026-06-02. The candidate-sharded rollout path should split this as 16
   candidates per allocated GPU under `with-gpu 1,2 --num 2`.
+- ROB-186 N=32 slowdown follow-up stopped the silent B=8/N=32 screen after it
+  exceeded the useful first-step debug window. The default N=32 config now uses
+  `batch_size_recordings=2`, restoring the previously smoke-tested 32 streams
+  per GPU, and logs per-shard rollout-start/chunk heartbeat events so a future
+  long first step is observable before the final WER metric.
+- ROB-186 secondary-device debug found that the threaded multi-GPU rollout path
+  initializes both shards but the `cuda:1` shard stalls in native CUDA work
+  before the first chunk heartbeat. The default run is therefore back to one
+  rollout device (`cuda:0`) with N=32/B=2, preserving the validated 64-stream
+  single-device workload while avoiding the bad secondary path.
