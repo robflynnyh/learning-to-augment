@@ -1,0 +1,68 @@
+# EGGROLL Plasticity Path
+
+This path trains a label-free forward-only updater for ASR test-time adaptation.
+It is separate from the existing augmentation and pseudo-label CTC adaptation
+rollouts.
+
+## Training
+
+`exp/train_plasticity_eggroll.py` loads a frozen ASR checkpoint, wraps only the
+configured `nn.Linear` target modules with `FastWeightLinear`, and trains a
+`PlasticityPolicy` centre updater with EGGROLL rank-1 perturbations.
+
+For each step:
+
+1. sample `B` labelled recordings;
+2. segment each recording into `T` chunks;
+3. sample `N` rank-1 EGGROLL perturbations of updater matrices;
+4. run the ASR over all `B * N` streams per chunk;
+5. update the per-recording/per-candidate fast-weight state from activations;
+6. decode transcripts after each causal chunk;
+7. compute `WER[B, N]` only after rollout;
+8. compute `quality = 1.0 - wer.clamp(max=1.0)`;
+9. group-normalise quality over candidates for each recording;
+10. average rewards over recordings and update the shared updater centre.
+
+The updater receives selected layer activations and final ASR layer outputs only
+as generic tensors. It is not passed reference text, WER/CER, pseudo-labels, CTC
+loss, entropy, blank ratio, confidence, or other hand-engineered ASR diagnostic
+features.
+
+## Inference
+
+Inference uses the learned centre updater with `B = 1` and `N = 1`.
+
+There is no EGGROLL population, transcript/reference input, WER/CER reward,
+pseudo-label CTC objective, ASR model cloning, or backward pass through the ASR
+model. The frozen/shared ASR parameters remain unchanged; only the factorised
+fast state evolves over chunks.
+
+## Tensor Layout
+
+The rollout keeps recordings and candidates batched:
+
+```text
+chunks: [B, T, C, S]
+chunk_t: [B, C, S]
+chunk_bn: [B, N, C, S]
+chunk_flat inside ASR: [B*N, C, S]
+```
+
+Fast weights are held only for selected modules:
+
+```text
+A: [B, N, D_out, R_state]
+B: [B, N, D_in, R_state]
+```
+
+Most ASR modules run normally over the flattened `B * N` batch. Selected
+`FastWeightLinear` modules reshape internally, apply their per-stream low-rank
+delta, and reshape back.
+
+## Current MVP Limits
+
+- only selected `nn.Linear` modules are adaptable;
+- fast-rank capping drops oldest columns;
+- fast-weight norm clipping uses exact dense norms for selected modules;
+- the implemented decode mode is `causal_chunk`;
+- EGGROLL perturbations apply only to 2D updater matrices via `EggrollLinear`.

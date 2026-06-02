@@ -1,0 +1,40 @@
+checkpointing:
+  asr_model: "/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt"
+
+plasticity:
+  target_modules:
+    - encoder.layers.0.ffn.out_proj
+  token_dim: 128
+  comm_dim: 128
+  update_rank: 1
+  max_fast_rank: 4
+  max_eta: 1.0e-4
+  default_rho: 0.95
+  max_fast_norm_ratio: 1.0e-3
+
+eggroll:
+  num_candidates: 8
+  sigma: 1.0e-3
+  antithetic: true
+  optimizer: adam
+  lr: 1.0e-4
+
+rollout:
+  batch_size_recordings: 1
+  chunk_size_frames: 4096
+  chunk_overlap_frames: 0
+  decode_mode: causal_chunk
+  reward_eps: 1.0e-8
+  microbatch_candidates: null
+
+training:
+  dataset: tedlium3_segmented_data
+  split: train
+  device: cuda
+  dtype: float32
+  seed: 0
+  num_steps: 10
+  checkpoint_every: 5
+  log_every: 1
+  model_save_path: exp/results/plasticity_eggroll/updater.pt
+  resume: false

@@ -312,3 +312,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/`. The combined
   result summary is `OUTCOME.md`; method-specific launcher summaries are
   `UFMR_OUTCOME.md` and `RFM_OUTCOME.md`.
+
+## 2026-06-02
+
+- ROB-186 added the EGGROLL-trained forward-only plasticity scaffold for ASR
+  test-time adaptation. New entry point: `exp/train_plasticity_eggroll.py`;
+  tiny config: `exp/configs/plasticity_eggroll.yaml`; design notes:
+  `docs/plasticity_eggroll.md`. This path trains only a shared updater centre
+  and keeps transcripts out of the inner rollout except for final WER reward.
