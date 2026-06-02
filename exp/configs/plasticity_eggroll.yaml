@@ -15,7 +15,7 @@ plasticity:
   comm_dim: 128
   update_rank: 1
   fast_state_mode: dense
-  max_eta: 1.0e-4
+  max_eta: 1.0e-3
   default_rho: 0.95
   max_fast_norm_ratio: 5.0e-2
 

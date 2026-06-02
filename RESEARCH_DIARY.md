@@ -396,3 +396,6 @@ reproduce results, interpret metrics, or avoid known failure modes.
   updater emissions, removes `max_fast_rank` from the default config, loosens
   the fast-state norm cap to `5.0e-2`, and adds fast-state/update norm plus
   clipping-fraction logs for the next run.
+- ROB-186 max-eta restart follow-up stops the dense B=8/N=32 two-GPU run at
+  the user's request and increases the default plasticity `max_eta` from
+  `1.0e-4` to `1.0e-3` for the replacement dense bf16 restart.
