@@ -152,6 +152,7 @@ def rollout_recordings_with_plasticity_candidates(
         overlap = _cfg_get(config, "rollout.chunk_overlap_seconds", 0)
     chunk_size = int(chunk_size)
     overlap = int(overlap)
+    pass_lengths = bool(_cfg_get(config, "rollout.pass_lengths", False))
 
     chunks, chunk_lengths = segment_batch(
         recording_audio_batch,
@@ -185,7 +186,7 @@ def rollout_recordings_with_plasticity_candidates(
             output, activations = asr_forward_with_fast_state(
                 asr_model=asr_model,
                 audio=chunk_bn,
-                lengths=length_bn,
+                lengths=length_bn if pass_lengths else None,
                 fast_state=fast_state,
                 batch_size=B,
                 num_candidates=N,

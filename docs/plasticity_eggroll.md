@@ -54,6 +54,16 @@ The real config enables W&B logging with `training.wandb_enabled: true` and
 `training.wandb_mode: online`. Smoke mode overrides W&B to `offline` and runs a
 single training step with two antithetic candidates.
 
+The default config targets `layers.0.attend.fn.out_proj`, a standard
+`nn.Linear` in the Mimas 2048-context LCASR checkpoint. Feed-forward fused dense
+internals such as `layers.0.ff2.fn.fn.fc2` are not suitable MVP targets because
+LCASR reads their raw `.weight` tensors inside the fused block.
+
+The launcher exports the Mimas TEDLIUM and Earnings22 dataset roots. The rollout
+defaults to `rollout.pass_lengths: false`, matching the existing rollout calls
+that run LCASR on padded chunks without an explicit `length`; passing padded
+chunk lengths can produce rotary-cache length mismatches in this checkpoint.
+
 ## Checkpoints
 
 Plasticity checkpoints are adaptation-only. The payload is marked with:

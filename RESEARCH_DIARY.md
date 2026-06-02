@@ -324,3 +324,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
   enabled in the real config, `scripts/launch_rob186_plasticity_eggroll_gpu.sh`
   provides callback/config/one-step smoke modes, and checkpoints are explicitly
   updater-only with bounded retention under `exp/results/plasticity_eggroll/`.
+- ROB-186 GPU smoke follow-up fixed real LCASR runtime issues before queueing:
+  the plasticity target is now the callable attention output projection
+  `layers.0.attend.fn.out_proj`, the launcher exports Mimas TEDLIUM/Earnings22
+  dataset roots, the config uses 2048-frame chunks, and plasticity rollout
+  defaults to no explicit `length` for padded chunks to match existing LCASR
+  rollout behavior. One-step smoke succeeded under
+  `exp/results/plasticity_eggroll/smoke_20260602T141936Z/`.

@@ -93,6 +93,8 @@ export WANDB_DIR="${WANDB_DIR:-${RESULT_ROOT}/wandb}"
 export WANDB_CACHE_DIR="${WANDB_CACHE_DIR:-${SCRATCH_ROOT}/wandb-cache}"
 export WANDB_CONFIG_DIR="${WANDB_CONFIG_DIR:-${SCRATCH_ROOT}/wandb-config}"
 export PYTHONPATH="${REPO_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
+export L2A_TEDLIUM3_LEGACY_DIR="${L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TEDLIUM_release-3/legacy}"
+export L2A_EARNINGS22_DIR="${L2A_EARNINGS22_DIR:-/store/store4/data/earnings-22}"
 
 if [ "${ROB186_SKIP_CONDA:-0}" != "1" ]; then
   source /store/store4/software/bin/anaconda3/etc/profile.d/conda.sh
@@ -108,6 +110,7 @@ train_overrides=(
 if [ "${ROB186_SMOKE:-0}" = "1" ]; then
   echo "[rob186] one-step smoke mode enabled."
   train_overrides+=(
+    "training.split=dev"
     "training.num_steps=1"
     "training.checkpoint_every=1"
     "training.keep_last_checkpoints=1"
