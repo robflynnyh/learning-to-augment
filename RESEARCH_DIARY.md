@@ -399,3 +399,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - ROB-186 max-eta restart follow-up stops the dense B=8/N=32 two-GPU run at
   the user's request and increases the default plasticity `max_eta` from
   `1.0e-4` to `1.0e-3` for the replacement dense bf16 restart.
+- ROB-186 high-eta restart follow-up stops the `max_eta=1.0e-3` dense B=8/N=32
+  two-GPU run at the user's request after the update signal remained small, and
+  increases the default plasticity `max_eta` to `0.1` for the replacement dense
+  bf16 restart.
