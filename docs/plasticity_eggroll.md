@@ -71,12 +71,37 @@ defaults to `rollout.pass_lengths: false`, matching the existing rollout calls
 that run LCASR on padded chunks without an explicit `length`; passing padded
 chunk lengths can produce rotary-cache length mismatches in this checkpoint.
 
+Each training-step log includes `chunks_per_recording_mean`,
+`chunks_per_recording_min`, `chunks_per_recording_max`,
+`chunk_length_frames_mean`, and `rollout_chunk_steps` so long-form recordings
+can be checked for the expected number of causal update chunks.
+
 `reward_std` is the standard deviation of `reward_per_candidate`. With
 `B = 1`, group-normalising over candidates makes this metric close to 1 when
 candidate qualities differ and 0 when all candidates tie. The script also logs
 `quality_std_over_candidates_mean`, `quality_std_over_candidates_max`,
 `reward_group_std_mean`, and `reward_active_recording_fraction` so ties and
 pre-normalisation spread are visible.
+
+## EGGROLL Paper Notes
+
+Sarkar et al. (2026) define EGGROLL as low-rank ES over matrix parameters:
+sample `A` and `B`, form `E = A B^T / sqrt(r)`, evaluate `M + sigma E`, and
+average reward-weighted perturbations across workers. The ROB-186 MVP uses
+rank 1, so the `1 / sqrt(r)` factor is numerically 1, and its implicit
+`EggrollLinear` forward path matches the paper's efficient decomposition:
+shared `x M^T` plus a cheap candidate-specific low-rank term.
+
+The paper's Algorithm 1 absorbs the ES `1 / sigma` factor into the learning
+rate. This implementation follows the ROB-186 issue formula and computes
+`delta / sigma` before passing it to a PyTorch optimizer. To make that scale
+auditable, logs include `eggroll_lr`, `eggroll_sigma`, and
+`eggroll_lr_over_sigma`. The default `lr = 1e-4` and `sigma = 1e-3` therefore
+correspond to an Algorithm-1-style scale of `0.1`, close to the `0.125` scale
+reported for the paper's RWKV reasoning experiment, while staying conservative
+for this new ASR updater path. The default optimizer is `adamw` with zero weight
+decay, matching the paper's small-policy ES optimizer choice without adding
+regularisation to the updater centre.
 
 ## Checkpoints
 

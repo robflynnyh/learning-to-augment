@@ -215,10 +215,20 @@ def rollout_recordings_with_plasticity_candidates(
     quality = 1.0 - wers.clamp(max=1.0)
     rewards_bn = group_normalise_rewards(quality, eps=float(_cfg_get(config, "rollout.reward_eps", 1e-8)))
     reward_per_candidate = rewards_bn.mean(dim=0)
+    chunks_per_recording = (chunk_lengths > 0).sum(dim=1)
+    valid_chunk_lengths = chunk_lengths[chunk_lengths > 0]
+    if valid_chunk_lengths.numel() == 0:
+        valid_chunk_lengths = torch.zeros(1, device=device, dtype=chunk_lengths.dtype)
     return reward_per_candidate, {
         "wer": wers,
         "quality": quality,
         "rewards_bn": rewards_bn,
+        "chunks_per_recording": chunks_per_recording.to(device),
+        "chunk_length_frames_mean": valid_chunk_lengths.float().mean().to(device),
+        "chunk_size_frames": torch.tensor(chunk_size, device=device),
+        "chunk_overlap_frames": torch.tensor(overlap, device=device),
+        "rollout_chunk_steps": torch.tensor(T, device=device),
+        "rollout_streams": torch.tensor(B * N, device=device),
         "final_fast_state_rank": torch.tensor(
             [fast_state[name].A.shape[-1] for name in fast_state.keys()],
             device=device,

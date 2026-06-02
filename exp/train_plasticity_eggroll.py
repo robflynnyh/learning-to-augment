@@ -108,10 +108,13 @@ def validate_training_dataset(config) -> str:
 def build_optimizer(parameters, config):
     name = str(config.get("eggroll", {}).get("optimizer", "adam")).lower()
     lr = float(config.get("eggroll", {}).get("lr", 1e-4))
+    weight_decay = float(config.get("eggroll", {}).get("weight_decay", 0.0))
     if name == "sgd":
         return torch.optim.SGD(parameters, lr=lr)
     if name == "adam":
-        return torch.optim.Adam(parameters, lr=lr)
+        return torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay)
+    if name == "adamw":
+        return torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay)
     raise ValueError(f"Unsupported optimizer: {name}")
 
 
@@ -245,6 +248,20 @@ def _candidate_spread_metrics(info: dict) -> Dict[str, float]:
     }
 
 
+def _chunk_metrics(info: dict) -> Dict[str, float]:
+    chunks_per_recording = info["chunks_per_recording"].detach().float()
+    return {
+        "chunks_per_recording_mean": _metric_float(chunks_per_recording.mean()),
+        "chunks_per_recording_min": _metric_float(chunks_per_recording.min()),
+        "chunks_per_recording_max": _metric_float(chunks_per_recording.max()),
+        "chunk_length_frames_mean": _metric_float(info["chunk_length_frames_mean"]),
+        "chunk_size_frames": _metric_float(info["chunk_size_frames"]),
+        "chunk_overlap_frames": _metric_float(info["chunk_overlap_frames"]),
+        "rollout_chunk_steps": _metric_float(info["rollout_chunk_steps"]),
+        "rollout_streams": _metric_float(info["rollout_streams"]),
+    }
+
+
 def _print_metrics(metrics: dict) -> None:
     print(json.dumps(metrics, sort_keys=True), flush=True)
 
@@ -335,6 +352,8 @@ def main(config):
         start_step = load_updater_checkpoint(updater, optimizer, resume_path, device)
 
     wandb_run = init_wandb(config)
+    eggroll_lr = float(config.get("eggroll", {}).get("lr", 1e-4))
+    eggroll_sigma = float(config.get("eggroll", {}).get("sigma", 1e-3))
     print(
         json.dumps(
             {
@@ -346,6 +365,10 @@ def main(config):
                 "target_modules": target_modules,
                 "adaptation_parameters": adaptation_parameter_count(updater),
                 "checkpoint_type": "plasticity_updater_only",
+                "eggroll_optimizer": str(config.get("eggroll", {}).get("optimizer", "adam")),
+                "eggroll_lr": eggroll_lr,
+                "eggroll_sigma": eggroll_sigma,
+                "eggroll_lr_over_sigma": eggroll_lr / eggroll_sigma if eggroll_sigma > 0 else None,
                 "resume_step": start_step,
             },
             sort_keys=True,
@@ -399,8 +422,12 @@ def main(config):
                 "fast_weight_rank_mean": _fast_weight_rank_mean(info),
                 "fast_weight_rank_max": _fast_weight_rank_max(info),
                 "adaptation_parameters": adaptation_parameter_count(updater),
+                "eggroll_lr": eggroll_lr,
+                "eggroll_sigma": eggroll_sigma,
+                "eggroll_lr_over_sigma": eggroll_lr / eggroll_sigma if eggroll_sigma > 0 else 0.0,
             }
             metrics.update(_candidate_spread_metrics(info))
+            metrics.update(_chunk_metrics(info))
             if step % log_every == 0 or step == start_step + 1:
                 _print_metrics(metrics)
             log_metrics(wandb_run, metrics)

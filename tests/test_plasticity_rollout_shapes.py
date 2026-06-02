@@ -115,6 +115,10 @@ def test_batched_rollout_matches_serial_candidate_reference(monkeypatch):
 
     torch.testing.assert_close(batched_info["wer"], serial_wers, rtol=1e-5, atol=1e-6)
     torch.testing.assert_close(batched_rewards, serial_rewards, rtol=1e-5, atol=1e-6)
+    torch.testing.assert_close(batched_info["chunks_per_recording"], torch.tensor([2, 2]))
+    assert batched_info["rollout_chunk_steps"].item() == 2
+    assert batched_info["rollout_streams"].item() == 8
+    assert batched_info["chunk_size_frames"].item() == 2
 
 
 def test_inner_forward_functions_do_not_accept_label_or_reward_inputs():

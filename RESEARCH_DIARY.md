@@ -336,3 +336,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   setup. The default config now uses unsegmented `tedlium`, rejects the known
   segmented loader unless explicitly allowed for debug, and logs extra
   candidate-spread metrics to explain binary-looking reward standard deviation.
+- ROB-186 restart follow-up adds chunk-count logging for the unsegmented
+  long-recording run (`chunks_per_recording_*`, `rollout_chunk_steps`,
+  `rollout_streams`) and logs the EGGROLL `lr/sigma` scale after checking the
+  paper convention where `1/sigma` is absorbed into the learning rate. The
+  default updater optimizer is now AdamW with zero weight decay.

@@ -4,6 +4,7 @@ import torch
 from omegaconf import OmegaConf
 
 from exp.train_plasticity_eggroll import (
+    build_optimizer,
     build_checkpoint_payload,
     load_updater_checkpoint,
     merge_dotlist_overrides,
@@ -82,6 +83,17 @@ def test_train_script_dotlist_overrides():
     assert merged.training.num_steps == 1
     assert merged.eggroll.num_candidates == 2
     assert merged.training.wandb_mode == "offline"
+
+
+def test_train_script_supports_adamw_optimizer():
+    model = torch.nn.Linear(2, 3)
+    config = OmegaConf.create({"eggroll": {"optimizer": "adamw", "lr": 1e-4, "weight_decay": 0.0}})
+
+    optimizer = build_optimizer(model.parameters(), config)
+
+    assert isinstance(optimizer, torch.optim.AdamW)
+    assert optimizer.param_groups[0]["lr"] == 1e-4
+    assert optimizer.param_groups[0]["weight_decay"] == 0.0
 
 
 def test_plasticity_training_rejects_segmented_dataset_by_default():

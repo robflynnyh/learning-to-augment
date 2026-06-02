@@ -16,8 +16,9 @@ eggroll:
   num_candidates: 8
   sigma: 1.0e-3
   antithetic: true
-  optimizer: adam
+  optimizer: adamw
   lr: 1.0e-4
+  weight_decay: 0.0
 
 rollout:
   batch_size_recordings: 1
