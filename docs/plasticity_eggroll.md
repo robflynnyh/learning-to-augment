@@ -97,8 +97,8 @@ Each training-step log includes `chunks_per_recording_mean`,
 `plasticity_num_modules` so long-form recordings can be checked for the expected
 number of causal update chunks and adapted modules.
 
-The default real run uses `rollout.batch_size_recordings: 2` with 32 EGGROLL
-candidates, giving `rollout_streams = 64` split into 32 streams per logical
+The default real run uses `rollout.batch_size_recordings: 8` with 32 EGGROLL
+candidates, giving `rollout_streams = 256` split into 128 streams per logical
 CUDA device. The training dtype is `bfloat16`, and the startup event logs the
 resolved dtype so W&B and local logs can verify the run did not fall back to
 `float32`.

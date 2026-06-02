@@ -384,3 +384,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - ROB-186 multi-GPU follow-up restores the default rollout devices to
   `cuda:0,cuda:1` and explicitly binds each rollout worker thread to its CUDA
   device before running LCASR, targeting the earlier secondary-device stall.
+- ROB-186 padded-chunk follow-up changes the plasticity rollout loop to run
+  only recordings with positive chunk length at each chunk index, then scatter
+  updated fast weights back into the full batch. This prevents finished
+  recordings from decoding zero-padded chunks or updating fast weights from
+  padded activations. The real restart config returns to `B=8`, `N=32`,
+  yielding 128 streams per logical CUDA device under the two-GPU candidate
+  shard requested on 2026-06-02.

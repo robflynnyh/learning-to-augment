@@ -147,6 +147,54 @@ def compute_wer_matrix(
     return wers
 
 
+def _select_fast_state_recordings(fast_state: FastWeightState, indexes: Tensor) -> FastWeightState:
+    return FastWeightState(
+        {
+            name: type(factors)(
+                A=factors.A.index_select(0, indexes),
+                B=factors.B.index_select(0, indexes),
+                base_weight_norm=factors.base_weight_norm,
+            )
+            for name, factors in fast_state.items()
+        }
+    )
+
+
+def _scatter_fast_state_recordings(
+    fast_state: FastWeightState,
+    updated_subset: FastWeightState,
+    indexes: Tensor,
+) -> FastWeightState:
+    next_factors = {}
+    for name, factors in fast_state.items():
+        updated = updated_subset[name]
+        target_rank = max(factors.A.shape[-1], updated.A.shape[-1])
+        if target_rank == factors.A.shape[-1]:
+            A = factors.A.clone()
+            Bf = factors.B.clone()
+        else:
+            A = factors.A.new_zeros(*factors.A.shape[:-1], target_rank)
+            Bf = factors.B.new_zeros(*factors.B.shape[:-1], target_rank)
+            A[..., : factors.A.shape[-1]] = factors.A
+            Bf[..., : factors.B.shape[-1]] = factors.B
+        if updated.A.shape[-1] != target_rank:
+            A_update = updated.A.new_zeros(*updated.A.shape[:-1], target_rank)
+            B_update = updated.B.new_zeros(*updated.B.shape[:-1], target_rank)
+            A_update[..., : updated.A.shape[-1]] = updated.A
+            B_update[..., : updated.B.shape[-1]] = updated.B
+        else:
+            A_update = updated.A
+            B_update = updated.B
+        A.index_copy_(0, indexes, A_update)
+        Bf.index_copy_(0, indexes, B_update)
+        next_factors[name] = type(factors)(
+            A=A,
+            B=Bf,
+            base_weight_norm=factors.base_weight_norm,
+        )
+    return FastWeightState(next_factors)
+
+
 def rollout_recordings_with_plasticity_candidates(
     *,
     asr_model: nn.Module,
@@ -230,35 +278,48 @@ def rollout_recordings_with_plasticity_candidates(
         for t in range(T):
             chunk_t = chunks[:, t]
             length_t = chunk_lengths[:, t]
-            chunk_bn = chunk_t[:, None].expand(B, N, C, S).contiguous()
-            length_bn = length_t[:, None].expand(B, N).contiguous()
+            active_indexes = (length_t > 0).nonzero(as_tuple=False).flatten()
+            if active_indexes.numel() == 0:
+                continue
+
+            B_active = int(active_indexes.numel())
+            chunk_active = chunk_t.index_select(0, active_indexes)
+            length_active = length_t.index_select(0, active_indexes)
+            chunk_bn = chunk_active[:, None].expand(B_active, N, C, S).contiguous()
+            length_bn = length_active[:, None].expand(B_active, N).contiguous()
+            active_fast_state = _select_fast_state_recordings(fast_state, active_indexes)
 
             output, activations = asr_forward_with_fast_state(
                 asr_model=asr_model,
                 audio=chunk_bn,
                 lengths=length_bn if pass_lengths else None,
-                fast_state=fast_state,
-                batch_size=B,
+                fast_state=active_fast_state,
+                batch_size=B_active,
                 num_candidates=N,
                 return_selected_activations=True,
             )
-            decoded = decode_output(output, tokenizer, B, N)
-            for bidx in range(B):
+            decoded = decode_output(output, tokenizer, B_active, N)
+            for active_bidx, original_bidx in enumerate(active_indexes.tolist()):
                 for nidx in range(N):
-                    transcript_parts[bidx][nidx].append(decoded[bidx][nidx])
+                    transcript_parts[original_bidx][nidx].append(decoded[active_bidx][nidx])
 
             updates = updater(
                 activations=activations,
-                fast_state=fast_state,
+                fast_state=active_fast_state,
                 perturbations=candidate_perturbations,
                 sigma=sigma,
                 config=config,
             )
-            fast_state = apply_fast_updates(
-                fast_state=fast_state,
+            updated_active_fast_state = apply_fast_updates(
+                fast_state=active_fast_state,
                 updates=updates,
                 max_fast_rank=int(_cfg_get(config, "plasticity.max_fast_rank", 8)),
                 max_fast_norm_ratio=float(_cfg_get(config, "plasticity.max_fast_norm_ratio", 1e-3)),
+            )
+            fast_state = _scatter_fast_state_recordings(
+                fast_state,
+                updated_active_fast_state,
+                active_indexes,
             )
             if progress_every > 0 and (
                 t == 0 or (t + 1) % progress_every == 0 or t + 1 == T

@@ -28,9 +28,11 @@ class TinyASR(nn.Module):
     def __init__(self):
         super().__init__()
         self.adapt = nn.Linear(2, 2, bias=False)
+        self.batch_sizes = []
 
     def forward(self, audio_signal, length=None):
         del length
+        self.batch_sizes.append(audio_signal.shape[0])
         x = audio_signal.transpose(1, 2)
         y = self.adapt(x)
         return {"final_posteriors": y}
@@ -101,6 +103,16 @@ def _wer_from_numeric_chunks(hyp, ref):
     if not hyp:
         return 0.0
     return abs(sum(float(part) for part in hyp.split())) * 0.01
+
+
+def _decode_one_token_per_stream(output, tokenizer, batch_size, num_candidates):
+    del output, tokenizer
+    return [["1" for _ in range(num_candidates)] for _ in range(batch_size)]
+
+
+def _wer_token_count(hyp, ref):
+    del ref
+    return float(len(hyp.split()))
 
 
 class _StrictTokenizer:
@@ -213,6 +225,40 @@ def test_batched_rollout_matches_serial_candidate_reference(monkeypatch):
     assert batched_info["rollout_chunk_steps"].item() == 2
     assert batched_info["rollout_streams"].item() == 8
     assert batched_info["chunk_size_frames"].item() == 2
+
+
+def test_rollout_does_not_decode_or_forward_padded_recording_chunks(monkeypatch):
+    torch.manual_seed(1)
+    monkeypatch.setattr(gpu_plasticity, "decode_output", _decode_one_token_per_stream)
+    asr = TinyASR()
+    module_specs = wrap_linear_modules(asr, ["adapt"])
+    updater = PlasticityPolicy(
+        module_specs,
+        token_dim=4,
+        comm_dim=4,
+        update_rank=1,
+        max_eta=1e-3,
+        default_rho=0.8,
+    )
+    perturbations = sample_rank1_perturbations(updater, 2, antithetic=True)
+    audio = torch.randn(2, 2, 4)
+
+    _, info = rollout_recordings_with_plasticity_candidates(
+        asr_model=asr,
+        updater=updater,
+        recording_audio_batch=audio,
+        recording_lengths=torch.tensor([2, 4]),
+        reference_text_batch=["", ""],
+        tokenizer=None,
+        candidate_perturbations=perturbations,
+        config=_config(),
+        module_specs=module_specs,
+        wer_fn=_wer_token_count,
+    )
+
+    torch.testing.assert_close(info["chunks_per_recording"], torch.tensor([1, 2]))
+    torch.testing.assert_close(info["wer"], torch.tensor([[1.0, 1.0], [2.0, 2.0]]))
+    assert asr.batch_sizes == [4, 2]
 
 
 def test_multi_target_attention_out_proj_path_captures_and_updates_all_modules():
