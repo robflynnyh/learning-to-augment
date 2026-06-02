@@ -9,6 +9,7 @@ from exp.train_plasticity_eggroll import (
     combine_rollout_infos,
     load_updater_checkpoint,
     merge_dotlist_overrides,
+    parse_training_dtype,
     parse_rollout_devices,
     save_checkpoint,
     validate_training_dataset,
@@ -86,6 +87,22 @@ def test_train_script_dotlist_overrides():
     assert merged.training.num_steps == 1
     assert merged.eggroll.num_candidates == 2
     assert merged.training.wandb_mode == "offline"
+
+
+def test_train_script_parses_bfloat16_dtype_aliases():
+    assert parse_training_dtype(OmegaConf.create({"training": {"dtype": "bfloat16"}})) is torch.bfloat16
+    assert parse_training_dtype(OmegaConf.create({"training": {"dtype": "bf16"}})) is torch.bfloat16
+
+
+def test_train_script_rejects_unknown_dtype():
+    config = OmegaConf.create({"training": {"dtype": "float8"}})
+
+    try:
+        parse_training_dtype(config)
+    except ValueError as exc:
+        assert "Unsupported training.dtype" in str(exc)
+    else:
+        raise AssertionError("unknown dtype should be rejected")
 
 
 def test_rollout_device_config_normalises_cuda_primary_without_duplicates():

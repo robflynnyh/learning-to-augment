@@ -466,6 +466,24 @@ def merge_dotlist_overrides(config, overrides: Sequence[str]):
     return OmegaConf.merge(config, OmegaConf.from_dotlist(list(overrides)))
 
 
+def parse_training_dtype(config) -> torch.dtype:
+    name = str(config.get("training", {}).get("dtype", "float32")).lower()
+    aliases = {
+        "float": torch.float32,
+        "float32": torch.float32,
+        "fp32": torch.float32,
+        "bfloat16": torch.bfloat16,
+        "bf16": torch.bfloat16,
+        "float16": torch.float16,
+        "fp16": torch.float16,
+    }
+    try:
+        return aliases[name]
+    except KeyError as exc:
+        supported = ", ".join(sorted(aliases))
+        raise ValueError(f"Unsupported training.dtype {name!r}; supported values: {supported}") from exc
+
+
 def _metric_float(value: torch.Tensor) -> float:
     return float(value.detach().float().cpu())
 
@@ -605,7 +623,7 @@ def main(config):
     device = torch.device(config.get("training", {}).get("device", "cuda" if torch.cuda.is_available() else "cpu"))
     if device.type == "cuda" and device.index is None:
         device = torch.device("cuda:0")
-    dtype = getattr(torch, config.get("training", {}).get("dtype", "float32"))
+    dtype = parse_training_dtype(config)
     tokenizer = load_tokenizer()
     asr_model = load_asr_from_config(config, tokenizer, device, dtype)
     assert_asr_frozen(asr_model)

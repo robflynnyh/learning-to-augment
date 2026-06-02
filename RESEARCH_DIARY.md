@@ -374,3 +374,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   before the first chunk heartbeat. The default run is therefore back to one
   rollout device (`cuda:0`) with N=32/B=2, preserving the validated 64-stream
   single-device workload while avoiding the bad secondary path.
+- ROB-186 dtype follow-up changes the real N=32/B=2 single-GPU plasticity
+  config to `training.dtype=bfloat16` and documents that the prior W&B
+  comparison should be read as a different-regime/reward-spread diagnostic, not
+  as batch size alone explaining an order-of-magnitude WER change.
