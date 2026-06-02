@@ -1,5 +1,5 @@
 checkpointing:
-  asr_model: "/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt"
+  asr_model: "/store/store5/data/acp21rjf_checkpoints/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt"
 
 plasticity:
   target_modules:
@@ -33,8 +33,17 @@ training:
   device: cuda
   dtype: float32
   seed: 0
-  num_steps: 10
-  checkpoint_every: 5
+  num_steps: 10000
+  checkpoint_every: 500
+  keep_last_checkpoints: 3
   log_every: 1
-  model_save_path: exp/results/plasticity_eggroll/updater.pt
+  checkpoint_dir: exp/results/plasticity_eggroll/checkpoints
+  model_save_path: exp/results/plasticity_eggroll/checkpoints/latest.pt
+  summary_path: exp/results/plasticity_eggroll/OUTCOME.md
+  save_optimizer_state: true
   resume: false
+  wandb_enabled: true
+  wandb_project: l2augment
+  wandb_name: rob186-plasticity-eggroll
+  wandb_group: rob186-plasticity-eggroll
+  wandb_mode: online

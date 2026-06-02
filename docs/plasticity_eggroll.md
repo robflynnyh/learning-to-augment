@@ -28,6 +28,49 @@ as generic tensors. It is not passed reference text, WER/CER, pseudo-labels, CTC
 loss, entropy, blank ratio, confidence, or other hand-engineered ASR diagnostic
 features.
 
+## GPU Run Setup
+
+The queue-safe Mimas launcher is:
+
+```bash
+/store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- \
+  bash scripts/launch_rob186_plasticity_eggroll_gpu.sh
+```
+
+Use these smoke modes before queueing a real run:
+
+```bash
+ROB186_CALLBACK_ONLY=1 ROB186_CALLBACK_DRY_RUN=1 \
+  bash scripts/launch_rob186_plasticity_eggroll_gpu.sh
+
+ROB186_CONFIG_ONLY=1 ROB186_DISABLE_CALLBACK=1 \
+  bash scripts/launch_rob186_plasticity_eggroll_gpu.sh
+
+ROB186_SMOKE=1 ROB186_DISABLE_CALLBACK=1 \
+  bash scripts/launch_rob186_plasticity_eggroll_gpu.sh
+```
+
+The real config enables W&B logging with `training.wandb_enabled: true` and
+`training.wandb_mode: online`. Smoke mode overrides W&B to `offline` and runs a
+single training step with two antithetic candidates.
+
+## Checkpoints
+
+Plasticity checkpoints are adaptation-only. The payload is marked with:
+
+```text
+checkpoint_type: plasticity_updater_only
+contains_asr_model_state: false
+```
+
+It stores the updater centre state, optional updater optimizer state, config,
+step, and last metrics. It does not store the frozen seed ASR model weights.
+
+By default step checkpoints are written under
+`exp/results/plasticity_eggroll/checkpoints/`, `latest.pt` is refreshed each
+save, and only the last three `updater_step_*.pt` files are kept. Change
+`training.keep_last_checkpoints` if a run needs a different retention policy.
+
 ## Inference
 
 Inference uses the learned centre updater with `B = 1` and `N = 1`.

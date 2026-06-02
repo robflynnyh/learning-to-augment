@@ -320,3 +320,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   tiny config: `exp/configs/plasticity_eggroll.yaml`; design notes:
   `docs/plasticity_eggroll.md`. This path trains only a shared updater centre
   and keeps transcripts out of the inner rollout except for final WER reward.
+- ROB-186 follow-up made the plasticity path GPU-run ready: W&B logging is
+  enabled in the real config, `scripts/launch_rob186_plasticity_eggroll_gpu.sh`
+  provides callback/config/one-step smoke modes, and checkpoints are explicitly
+  updater-only with bounded retention under `exp/results/plasticity_eggroll/`.
