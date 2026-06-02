@@ -11,7 +11,7 @@ from omegaconf import OmegaConf
 
 from l2augment.modelling.plasticity import (
     PlasticityPolicy,
-    collect_linear_specs,
+    discover_attention_out_proj_modules,
     wrap_linear_modules,
 )
 from l2augment.rollout.gpu_plasticity import rollout_recordings_with_plasticity_candidates
@@ -289,6 +289,18 @@ def assert_asr_frozen(asr_model) -> None:
         raise RuntimeError(f"ASR model must remain frozen; trainable params include: {preview}")
 
 
+def resolve_target_modules(asr_model, config) -> List[str]:
+    configured = config["plasticity"].get("target_modules", [])
+    if isinstance(configured, str):
+        configured = [configured]
+    target_modules = list(configured)
+    if target_modules == ["auto_attention_out_proj"]:
+        target_modules = discover_attention_out_proj_modules(asr_model)
+    if not target_modules:
+        raise ValueError("plasticity.target_modules must select at least one module")
+    return target_modules
+
+
 def adaptation_parameter_count(module) -> int:
     return sum(param.numel() for param in module.parameters() if param.requires_grad)
 
@@ -310,6 +322,7 @@ def write_run_summary(config, metrics: dict, checkpoint_path: Optional[Path]) ->
                 f"- Mean WER: `{metrics['wer_mean']:.6f}`",
                 f"- Mean quality: `{metrics['quality_mean']:.6f}`",
                 f"- Reward std: `{metrics['reward_std']:.6f}`",
+                f"- Plasticity modules: `{metrics.get('plasticity_num_modules', 'unknown')}`",
                 "- Checkpoint payload type: `plasticity_updater_only`",
                 "- Seed ASR checkpoint is loaded as frozen context and is not saved in updater checkpoints.",
             ]
@@ -332,9 +345,8 @@ def main(config):
     asr_model = load_asr_from_config(config, tokenizer, device, dtype)
     assert_asr_frozen(asr_model)
 
-    target_modules = list(config["plasticity"]["target_modules"])
+    target_modules = resolve_target_modules(asr_model, config)
     module_specs = wrap_linear_modules(asr_model, target_modules)
-    module_specs = collect_linear_specs(asr_model, target_modules)
 
     updater = PlasticityPolicy(
         module_specs,
@@ -363,6 +375,7 @@ def main(config):
                 "dataset": config["training"].get("dataset", "tedlium"),
                 "split": config["training"].get("split", "train"),
                 "target_modules": target_modules,
+                "plasticity_num_modules": len(target_modules),
                 "adaptation_parameters": adaptation_parameter_count(updater),
                 "checkpoint_type": "plasticity_updater_only",
                 "eggroll_optimizer": str(config.get("eggroll", {}).get("optimizer", "adam")),
@@ -421,6 +434,7 @@ def main(config):
                 "reward_mean": _metric_float(rewards.mean()),
                 "fast_weight_rank_mean": _fast_weight_rank_mean(info),
                 "fast_weight_rank_max": _fast_weight_rank_max(info),
+                "plasticity_num_modules": len(target_modules),
                 "adaptation_parameters": adaptation_parameter_count(updater),
                 "eggroll_lr": eggroll_lr,
                 "eggroll_sigma": eggroll_sigma,

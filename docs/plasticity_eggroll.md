@@ -8,7 +8,10 @@ rollouts.
 
 `exp/train_plasticity_eggroll.py` loads a frozen ASR checkpoint, wraps only the
 configured `nn.Linear` target modules with `FastWeightLinear`, and trains a
-`PlasticityPolicy` centre updater with EGGROLL rank-1 perturbations.
+`PlasticityPolicy` centre updater with EGGROLL rank-1 perturbations. The main
+ROB-186 setup observes and adapts every attention `out_proj` layer selected in
+`plasticity.target_modules`; the default Mimas checkpoint exposes
+`layers.0.attend.fn.out_proj` through `layers.5.attend.fn.out_proj`.
 
 For each step:
 
@@ -54,10 +57,14 @@ The real config enables W&B logging with `training.wandb_enabled: true` and
 `training.wandb_mode: online`. Smoke mode overrides W&B to `offline` and runs a
 single training step with two antithetic candidates.
 
-The default config targets `layers.0.attend.fn.out_proj`, a standard
-`nn.Linear` in the Mimas 2048-context LCASR checkpoint. Feed-forward fused dense
-internals such as `layers.0.ff2.fn.fn.fc2` are not suitable MVP targets because
-LCASR reads their raw `.weight` tensors inside the fused block.
+The default real-run config targets all six standard `nn.Linear` attention
+`out_proj` modules in the Mimas 2048-context LCASR checkpoint. The training
+script also supports `plasticity.target_modules: auto_attention_out_proj` to
+discover names from `asr_model.named_modules()` at startup. A single target such
+as `layers.0.attend.fn.out_proj` is only a smoke/debug setting; it does not
+exercise cross-layer communication. Feed-forward fused dense internals such as
+`layers.0.ff2.fn.fn.fc2` are not suitable MVP targets because LCASR reads their
+raw `.weight` tensors inside the fused block.
 
 The default dataset is unsegmented TED-LIUM via `training.dataset: tedlium`.
 Do not use `tedlium3_segmented_data` for ROB-186 training: that loader returns
@@ -73,8 +80,9 @@ chunk lengths can produce rotary-cache length mismatches in this checkpoint.
 
 Each training-step log includes `chunks_per_recording_mean`,
 `chunks_per_recording_min`, `chunks_per_recording_max`,
-`chunk_length_frames_mean`, and `rollout_chunk_steps` so long-form recordings
-can be checked for the expected number of causal update chunks.
+`chunk_length_frames_mean`, `rollout_chunk_steps`, and
+`plasticity_num_modules` so long-form recordings can be checked for the expected
+number of causal update chunks and adapted modules.
 
 The default real run uses `rollout.batch_size_recordings: 8` with eight
 EGGROLL candidates, giving `rollout_streams = 64`. This was smoke-tested on the

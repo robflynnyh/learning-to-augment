@@ -2,8 +2,15 @@ checkpointing:
   asr_model: "/store/store5/data/acp21rjf_checkpoints/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt"
 
 plasticity:
+  # Main ROB-186 runs adapt every non-fused attention out_proj layer. For a
+  # single-layer smoke/debug run, override this list explicitly.
   target_modules:
     - layers.0.attend.fn.out_proj
+    - layers.1.attend.fn.out_proj
+    - layers.2.attend.fn.out_proj
+    - layers.3.attend.fn.out_proj
+    - layers.4.attend.fn.out_proj
+    - layers.5.attend.fn.out_proj
   token_dim: 128
   comm_dim: 128
   update_rank: 1

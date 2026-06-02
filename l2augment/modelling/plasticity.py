@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Dict, Iterable, Iterator, Mapping, Optional, Tuple
+from typing import Dict, Iterable, Iterator, List, Mapping, Optional, Tuple
 
 import torch
 from torch import Tensor, nn
@@ -257,16 +257,28 @@ def apply_fast_updates(
     return FastWeightState(next_factors)
 
 
+def _unwrap_fast_weight_linear(module: nn.Module) -> nn.Module:
+    if isinstance(module, FastWeightLinear):
+        return module.base_linear
+    return module
+
+
+def discover_attention_out_proj_modules(model: nn.Module) -> List[str]:
+    return [
+        name
+        for name, module in model.named_modules()
+        if name.endswith("attend.fn.out_proj")
+        and isinstance(_unwrap_fast_weight_linear(module), nn.Linear)
+    ]
+
+
 def collect_linear_specs(model: nn.Module, target_modules: Iterable[str]) -> Dict[str, AdaptedLinearSpec]:
     specs: Dict[str, AdaptedLinearSpec] = {}
     module_map = dict(model.named_modules())
     for name in target_modules:
         module = module_map.get(name)
-        if isinstance(module, FastWeightLinear):
-            linear = module.base_linear
-        elif isinstance(module, nn.Linear):
-            linear = module
-        else:
+        linear = _unwrap_fast_weight_linear(module) if module is not None else None
+        if not isinstance(linear, nn.Linear):
             raise ValueError(f"Target module {name!r} is not an nn.Linear")
         specs[name] = AdaptedLinearSpec(
             name=name,
@@ -278,9 +290,9 @@ def collect_linear_specs(model: nn.Module, target_modules: Iterable[str]) -> Dic
 
 
 def wrap_linear_modules(model: nn.Module, target_modules: Iterable[str]) -> Dict[str, AdaptedLinearSpec]:
-    target_set = set(target_modules)
-    specs = collect_linear_specs(model, target_set)
-    for name in target_set:
+    target_list = list(target_modules)
+    specs = collect_linear_specs(model, target_list)
+    for name in target_list:
         parent, attr = _resolve_parent_module(model, name)
         child = getattr(parent, attr)
         if isinstance(child, FastWeightLinear):
@@ -475,6 +487,25 @@ class PlasticityPolicy(nn.Module):
         config=None,
     ) -> Dict[str, FastWeightUpdate]:
         del fast_state, config
+        token_stack = self.project_layer_tokens(activations, perturbations, sigma)
+        token_stack = self.communication(token_stack, perturbations, sigma, "communication")
+        updates = {}
+        for idx, name in enumerate(self.module_names):
+            safe_name = self._safe_name(name)
+            updates[name] = self.heads[safe_name](
+                token_stack[:, :, idx],
+                perturbations,
+                sigma,
+                f"heads.{safe_name}",
+            )
+        return updates
+
+    def project_layer_tokens(
+        self,
+        activations: Mapping[str, Tensor],
+        perturbations: Optional[EggrollPerturbations] = None,
+        sigma: float = 0.0,
+    ) -> Tensor:
         tokens = []
         for name in self.module_names:
             if name not in activations:
@@ -487,18 +518,7 @@ class PlasticityPolicy(nn.Module):
                     sigma,
                 )
             )
-        token_stack = torch.stack(tokens, dim=2)
-        token_stack = self.communication(token_stack, perturbations, sigma, "communication")
-        updates = {}
-        for idx, name in enumerate(self.module_names):
-            safe_name = self._safe_name(name)
-            updates[name] = self.heads[safe_name](
-                token_stack[:, :, idx],
-                perturbations,
-                sigma,
-                f"heads.{safe_name}",
-            )
-        return updates
+        return torch.stack(tokens, dim=2)
 
     @staticmethod
     def _safe_name(name: str) -> str:

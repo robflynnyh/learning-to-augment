@@ -6,7 +6,14 @@ import torch
 from torch import nn
 
 from l2augment.modelling import plasticity
-from l2augment.modelling.plasticity import PlasticityPolicy, wrap_linear_modules
+from l2augment.modelling.plasticity import (
+    PlasticityPolicy,
+    apply_fast_updates,
+    asr_forward_with_fast_state,
+    discover_attention_out_proj_modules,
+    init_fast_state,
+    wrap_linear_modules,
+)
 from l2augment.rollout import gpu_plasticity
 from l2augment.rollout.gpu_plasticity import rollout_recordings_with_plasticity_candidates
 from l2augment.utils.eggroll import (
@@ -27,6 +34,46 @@ class TinyASR(nn.Module):
         x = audio_signal.transpose(1, 2)
         y = self.adapt(x)
         return {"final_posteriors": y}
+
+
+class TinyAttendFn(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.out_proj = nn.Linear(2, 2)
+
+    def forward(self, x):
+        return self.out_proj(x)
+
+
+class TinyAttend(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fn = TinyAttendFn()
+
+    def forward(self, x):
+        return self.fn(x)
+
+
+class TinyEncoderLayer(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.attend = TinyAttend()
+
+    def forward(self, x):
+        return self.attend(x)
+
+
+class TinyLayeredASR(nn.Module):
+    def __init__(self, num_layers=3):
+        super().__init__()
+        self.layers = nn.ModuleList([TinyEncoderLayer() for _ in range(num_layers)])
+
+    def forward(self, audio_signal, length=None):
+        del length
+        x = audio_signal.transpose(1, 2)
+        for layer in self.layers:
+            x = layer(x)
+        return {"final_posteriors": x}
 
 
 def _config():
@@ -119,6 +166,64 @@ def test_batched_rollout_matches_serial_candidate_reference(monkeypatch):
     assert batched_info["rollout_chunk_steps"].item() == 2
     assert batched_info["rollout_streams"].item() == 8
     assert batched_info["chunk_size_frames"].item() == 2
+
+
+def test_multi_target_attention_out_proj_path_captures_and_updates_all_modules():
+    torch.manual_seed(2)
+    model = TinyLayeredASR(num_layers=3)
+    target_modules = discover_attention_out_proj_modules(model)
+
+    assert target_modules == [
+        "layers.0.attend.fn.out_proj",
+        "layers.1.attend.fn.out_proj",
+        "layers.2.attend.fn.out_proj",
+    ]
+
+    module_specs = wrap_linear_modules(model, target_modules)
+    assert list(module_specs) == target_modules
+
+    updater = PlasticityPolicy(
+        module_specs,
+        token_dim=4,
+        comm_dim=4,
+        update_rank=1,
+        max_eta=1e-3,
+        default_rho=0.8,
+    )
+    fast_state = init_fast_state(
+        batch_size=2,
+        num_candidates=2,
+        module_specs=module_specs,
+        device="cpu",
+    )
+    audio = torch.randn(2, 2, 2, 5)
+
+    _, activations = asr_forward_with_fast_state(
+        asr_model=model,
+        audio=audio,
+        lengths=None,
+        fast_state=fast_state,
+        batch_size=2,
+        num_candidates=2,
+        return_selected_activations=True,
+    )
+    assert list(activations) == target_modules
+
+    layer_tokens = updater.project_layer_tokens(activations)
+    assert layer_tokens.shape == (2, 2, 3, 4)
+
+    updates = updater(activations, fast_state=fast_state)
+    assert list(updates) == target_modules
+
+    next_state = apply_fast_updates(
+        fast_state,
+        updates,
+        max_fast_rank=4,
+        max_fast_norm_ratio=10.0,
+    )
+    assert {name: next_state[name].A.shape[-1] for name in target_modules} == {
+        name: 1 for name in target_modules
+    }
 
 
 def test_inner_forward_functions_do_not_accept_label_or_reward_inputs():

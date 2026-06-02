@@ -344,3 +344,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - ROB-186 batch-size follow-up increases the real plasticity rollout batch to
   8 recordings. A one-step Mimas smoke with `B=8`, `N=8` succeeded and logged
   `rollout_streams=64` with chunk-count metrics before the long run restart.
+- ROB-186 PR-comment follow-up changes the real plasticity target from the
+  single-layer debug path to all six verified attention `out_proj` modules in
+  the Mimas LCASR checkpoint. Target wrapping now preserves configured order,
+  startup/step logs include `plasticity_num_modules`, and the multi-target test
+  checks activation capture, layer tokens, updates, and fast-state rank growth.
