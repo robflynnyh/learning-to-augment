@@ -354,3 +354,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `training.device`. The default run maps `cuda:0,cuda:1` to the allocated
   `with-gpu 1,2` devices, recombines WER over the full candidate axis before
   group normalisation, and logs rollout device/stream counts.
+- ROB-186 decode/length follow-up hardens plasticity rollout decoding by
+  collapsing CTC predictions on CPU with the blank inferred from the model
+  output dimension, and carries true recording lengths through the padded
+  training batch so chunk metrics and rollout work exclude padded tails. A
+  two-GPU one-step `B=8`, `N=8` train smoke succeeded under
+  `exp/results/plasticity_eggroll/smoke_decode_lengths_20260602T163955Z/`.

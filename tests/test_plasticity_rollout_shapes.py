@@ -103,6 +103,53 @@ def _wer_from_numeric_chunks(hyp, ref):
     return abs(sum(float(part) for part in hyp.split())) * 0.01
 
 
+class _StrictTokenizer:
+    def vocab_size(self):
+        return 99
+
+    def decode(self, token_ids):
+        if any(token_id >= 2 for token_id in token_ids):
+            raise AssertionError(f"decode received non-token ids: {token_ids}")
+        return "".join(str(token_id) for token_id in token_ids)
+
+
+def test_decode_output_uses_model_output_blank_and_cpu_ctc_collapse():
+    logits = torch.tensor(
+        [
+            [
+                [0.0, 3.0, 1.0],
+                [0.0, 3.0, 1.0],
+                [0.0, 0.0, 5.0],
+                [4.0, 0.0, 0.0],
+            ]
+        ]
+    )
+
+    decoded = gpu_plasticity.decode_output(
+        {"final_posteriors": logits},
+        _StrictTokenizer(),
+        batch_size=1,
+        num_candidates=1,
+    )
+
+    assert decoded == [["10"]]
+
+
+def test_segment_batch_respects_true_lengths_for_padded_tensor_batch():
+    audio = torch.zeros(2, 1, 6)
+    audio[0, :, :3] = 1.0
+    audio[1, :, :5] = 2.0
+
+    _, lengths = gpu_plasticity.segment_batch(
+        audio,
+        chunk_size=2,
+        overlap=0,
+        recording_lengths=torch.tensor([3, 5]),
+    )
+
+    torch.testing.assert_close(lengths, torch.tensor([[2, 1, 0], [2, 2, 1]]))
+
+
 def test_batched_rollout_matches_serial_candidate_reference(monkeypatch):
     torch.manual_seed(0)
     monkeypatch.setattr(gpu_plasticity, "decode_output", _decode_from_logits)

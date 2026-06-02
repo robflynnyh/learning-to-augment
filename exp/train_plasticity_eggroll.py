@@ -76,7 +76,7 @@ def normalise_processed_recording(processed) -> Tuple[torch.Tensor, str]:
     return audio, str(text)
 
 
-def sample_labelled_batch(data, batch_size: int) -> Tuple[torch.Tensor, List[str]]:
+def sample_labelled_batch(data, batch_size: int) -> Tuple[torch.Tensor, torch.Tensor, List[str]]:
     indexes = random.sample(range(len(data)), k=min(batch_size, len(data)))
     audios, texts = [], []
     for idx in indexes:
@@ -92,7 +92,8 @@ def sample_labelled_batch(data, batch_size: int) -> Tuple[torch.Tensor, List[str
         if audio.shape[0] != channels:
             raise ValueError("All recordings in a batch must have the same feature count")
         batch[bidx, :, : audio.shape[-1]] = audio
-    return batch, texts
+    lengths = torch.tensor([audio.shape[-1] for audio in audios], dtype=torch.long)
+    return batch, lengths, texts
 
 
 def validate_training_dataset(config) -> str:
@@ -299,6 +300,7 @@ class MultiDeviceRolloutRunner:
         tokenizer,
         candidate_perturbations: EggrollPerturbations,
         reward_eps: float,
+        recording_lengths: Optional[torch.Tensor] = None,
         wer_fn=None,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         if not self.enabled:
@@ -306,6 +308,7 @@ class MultiDeviceRolloutRunner:
                 asr_model=self.asr_models[0],
                 updater=self.updaters[0],
                 recording_audio_batch=recording_audio_batch,
+                recording_lengths=recording_lengths,
                 reference_text_batch=reference_text_batch,
                 tokenizer=tokenizer,
                 candidate_perturbations=candidate_perturbations,
@@ -327,6 +330,7 @@ class MultiDeviceRolloutRunner:
                 asr_model=self.asr_models[shard_idx],
                 updater=self.updaters[shard_idx],
                 recording_audio_batch=recording_audio_batch.to(device),
+                recording_lengths=None if recording_lengths is None else recording_lengths.to(device),
                 reference_text_batch=reference_text_batch,
                 tokenizer=tokenizer,
                 candidate_perturbations=subset_eggroll_perturbations(
@@ -662,8 +666,9 @@ def main(config):
 
     try:
         for step in range(start_step + 1, start_step + num_steps + 1):
-            audio_batch, reference_text_batch = sample_labelled_batch(data, batch_size)
+            audio_batch, recording_lengths, reference_text_batch = sample_labelled_batch(data, batch_size)
             audio_batch = audio_batch.to(device=device, dtype=dtype)
+            recording_lengths = recording_lengths.to(device=device)
             perturbations = sample_rank1_perturbations(
                 updater,
                 int(config["eggroll"].get("num_candidates", 8)),
@@ -673,6 +678,7 @@ def main(config):
             )
             rewards, info = rollout_runner.run(
                 recording_audio_batch=audio_batch,
+                recording_lengths=recording_lengths,
                 reference_text_batch=reference_text_batch,
                 tokenizer=tokenizer,
                 candidate_perturbations=perturbations,

@@ -28,7 +28,13 @@ def _cfg_get(config, path: str, default=None):
     return cur
 
 
-def segment_recording(audio: Tensor, chunk_size: int, overlap: int = 0) -> Tuple[Tensor, Tensor]:
+def segment_recording(
+    audio: Tensor,
+    chunk_size: int,
+    overlap: int = 0,
+    *,
+    recording_length: Optional[int] = None,
+) -> Tuple[Tensor, Tensor]:
     if audio.dim() != 2:
         raise ValueError("audio must have shape [C, S]")
     if chunk_size <= 0:
@@ -37,6 +43,13 @@ def segment_recording(audio: Tensor, chunk_size: int, overlap: int = 0) -> Tuple
         raise ValueError("overlap must be in [0, chunk_size)")
 
     C, S = audio.shape
+    if recording_length is not None:
+        S = int(recording_length)
+        if S <= 0:
+            raise ValueError("recording_length must be positive")
+        if S > audio.shape[-1]:
+            raise ValueError("recording_length cannot exceed audio length")
+        audio = audio[:, :S]
     stride = chunk_size - overlap
     chunks: List[Tensor] = []
     lengths: List[int] = []
@@ -62,12 +75,22 @@ def segment_batch(
     *,
     chunk_size: int,
     overlap: int = 0,
+    recording_lengths: Optional[Tensor | Sequence[int]] = None,
 ) -> Tuple[Tensor, Tensor]:
     if isinstance(recording_audio_batch, Tensor):
         recordings = [recording_audio_batch[i] for i in range(recording_audio_batch.shape[0])]
     else:
         recordings = list(recording_audio_batch)
-    segmented = [segment_recording(audio, chunk_size, overlap) for audio in recordings]
+    if recording_lengths is None:
+        lengths = [None] * len(recordings)
+    else:
+        lengths = [int(length) for length in recording_lengths]
+        if len(lengths) != len(recordings):
+            raise ValueError("recording_lengths must match the recording batch size")
+    segmented = [
+        segment_recording(audio, chunk_size, overlap, recording_length=length)
+        for audio, length in zip(recordings, lengths)
+    ]
     max_chunks = max(chunks.shape[0] for chunks, _ in segmented)
     C = segmented[0][0].shape[1]
     chunk_size = segmented[0][0].shape[2]
@@ -82,19 +105,16 @@ def segment_batch(
 
 
 def decode_output(output, tokenizer, batch_size: int, num_candidates: int) -> List[List[str]]:
-    try:
-        from lcasr.decoding.greedy import GreedyCTCDecoder
-    except Exception as exc:  # pragma: no cover - only exercised without lcasr installed
-        raise RuntimeError("lcasr is required for tokenizer-based ASR decoding") from exc
-
     posteriors = output["final_posteriors"]
     if posteriors.shape[0] != batch_size * num_candidates:
         raise ValueError("ASR output batch does not match B*N")
     blank_id = posteriors.shape[-1] - 1
-    if hasattr(tokenizer, "vocab_size"):
-        blank_id = tokenizer.vocab_size()
-    decoder = GreedyCTCDecoder(tokenizer=tokenizer, blank_id=blank_id)
-    decoded = [decoder(posteriors[i]) for i in range(posteriors.shape[0])]
+    predictions = posteriors.detach().argmax(dim=-1).to("cpu")
+    decoded = []
+    for indices in predictions:
+        collapsed = torch.unique_consecutive(indices, dim=-1).tolist()
+        token_ids = [idx for idx in collapsed if idx != blank_id]
+        decoded.append(tokenizer.decode(token_ids) if tokenizer is not None else token_ids)
     return [
         decoded[bidx * num_candidates : (bidx + 1) * num_candidates]
         for bidx in range(batch_size)
@@ -136,6 +156,7 @@ def rollout_recordings_with_plasticity_candidates(
     candidate_perturbations: EggrollPerturbations,
     config,
     module_specs: Mapping[str, Tuple[int, int] | AdaptedLinearSpec],
+    recording_lengths: Optional[Tensor | Sequence[int]] = None,
     wer_fn: Optional[Callable[[str, str], float]] = None,
 ) -> Tuple[Tensor, Dict[str, Tensor]]:
     decode_mode = _cfg_get(config, "rollout.decode_mode", "causal_chunk")
@@ -158,6 +179,7 @@ def rollout_recordings_with_plasticity_candidates(
         recording_audio_batch,
         chunk_size=chunk_size,
         overlap=overlap,
+        recording_lengths=recording_lengths,
     )
     B, T, C, S = chunks.shape
     N = candidate_perturbations.num_candidates
