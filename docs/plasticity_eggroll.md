@@ -59,10 +59,24 @@ The default config targets `layers.0.attend.fn.out_proj`, a standard
 internals such as `layers.0.ff2.fn.fn.fc2` are not suitable MVP targets because
 LCASR reads their raw `.weight` tensors inside the fused block.
 
+The default dataset is unsegmented TED-LIUM via `training.dataset: tedlium`.
+Do not use `tedlium3_segmented_data` for ROB-186 training: that loader returns
+pre-segmented utterances, while this method must adapt over chunks cut from full
+long-form recordings. The training script rejects that known segmented loader
+unless `training.allow_segmented_dataset_for_debug: true` is set explicitly for
+debug tests.
+
 The launcher exports the Mimas TEDLIUM and Earnings22 dataset roots. The rollout
 defaults to `rollout.pass_lengths: false`, matching the existing rollout calls
 that run LCASR on padded chunks without an explicit `length`; passing padded
 chunk lengths can produce rotary-cache length mismatches in this checkpoint.
+
+`reward_std` is the standard deviation of `reward_per_candidate`. With
+`B = 1`, group-normalising over candidates makes this metric close to 1 when
+candidate qualities differ and 0 when all candidates tie. The script also logs
+`quality_std_over_candidates_mean`, `quality_std_over_candidates_max`,
+`reward_group_std_mean`, and `reward_active_recording_fraction` so ties and
+pre-normalisation spread are visible.
 
 ## Checkpoints
 

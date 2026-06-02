@@ -8,6 +8,7 @@ from exp.train_plasticity_eggroll import (
     load_updater_checkpoint,
     merge_dotlist_overrides,
     save_checkpoint,
+    validate_training_dataset,
 )
 
 
@@ -81,3 +82,34 @@ def test_train_script_dotlist_overrides():
     assert merged.training.num_steps == 1
     assert merged.eggroll.num_candidates == 2
     assert merged.training.wandb_mode == "offline"
+
+
+def test_plasticity_training_rejects_segmented_dataset_by_default():
+    config = OmegaConf.create(
+        {
+            "training": {
+                "dataset": "tedlium3_segmented_data",
+                "require_long_form_recordings": True,
+            }
+        }
+    )
+
+    try:
+        validate_training_dataset(config)
+    except ValueError as exc:
+        assert "requires unsegmented long-form recordings" in str(exc)
+    else:
+        raise AssertionError("segmented TED-LIUM loader should be rejected")
+
+
+def test_plasticity_training_accepts_unsegmented_tedlium_dataset():
+    config = OmegaConf.create(
+        {
+            "training": {
+                "dataset": "tedlium",
+                "require_long_form_recordings": True,
+            }
+        }
+    )
+
+    assert validate_training_dataset(config) == "tedlium"

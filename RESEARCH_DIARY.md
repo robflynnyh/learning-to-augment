@@ -331,3 +331,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   defaults to no explicit `length` for padded chunks to match existing LCASR
   rollout behavior. One-step smoke succeeded under
   `exp/results/plasticity_eggroll/smoke_20260602T141936Z/`.
+- ROB-186 stopped the first long GPU run at step 655 after confirming it used
+  `tedlium3_segmented_data`, which is invalid for the long-recording plasticity
+  setup. The default config now uses unsegmented `tedlium`, rejects the known
+  segmented loader unless explicitly allowed for debug, and logs extra
+  candidate-spread metrics to explain binary-looking reward standard deviation.

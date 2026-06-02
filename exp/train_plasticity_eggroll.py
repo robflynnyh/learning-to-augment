@@ -19,6 +19,9 @@ from l2augment.utils.data import dataset_functions
 from l2augment.utils.eggroll import eggroll_update_shared_params, sample_rank1_perturbations
 
 
+SEGMENTED_DATASETS = frozenset({"tedlium3_segmented_data"})
+
+
 def load_asr_from_config(config, tokenizer, device, dtype):
     from lcasr.utils.general import get_model_class
     from lcasr.utils.general import load_model as load_asr_model
@@ -82,6 +85,24 @@ def sample_labelled_batch(data, batch_size: int) -> Tuple[torch.Tensor, List[str
             raise ValueError("All recordings in a batch must have the same feature count")
         batch[bidx, :, : audio.shape[-1]] = audio
     return batch, texts
+
+
+def validate_training_dataset(config) -> str:
+    training_cfg = config.get("training", {})
+    dataset_name = str(training_cfg.get("dataset", "tedlium"))
+    require_long_form = bool(training_cfg.get("require_long_form_recordings", True))
+    allow_segmented_debug = bool(training_cfg.get("allow_segmented_dataset_for_debug", False))
+    if require_long_form and dataset_name in SEGMENTED_DATASETS and not allow_segmented_debug:
+        raise ValueError(
+            "ROB-186 plasticity training requires unsegmented long-form recordings. "
+            f"Configured dataset {dataset_name!r} returns pre-segmented utterances; use "
+            "'tedlium' for full TED-LIUM recordings or set "
+            "training.allow_segmented_dataset_for_debug=true only for explicit debug tests."
+        )
+    if dataset_name not in dataset_functions:
+        available = ", ".join(sorted(dataset_functions))
+        raise KeyError(f"Unknown dataset {dataset_name!r}; available datasets: {available}")
+    return dataset_name
 
 
 def build_optimizer(parameters, config):
@@ -211,6 +232,19 @@ def _fast_weight_rank_max(info: dict) -> float:
     return _metric_float(ranks.float().max())
 
 
+def _candidate_spread_metrics(info: dict) -> Dict[str, float]:
+    quality = info["quality"].detach().float()
+    rewards_bn = info["rewards_bn"].detach().float()
+    quality_std_by_recording = quality.std(dim=1, unbiased=False)
+    reward_std_by_recording = rewards_bn.std(dim=1, unbiased=False)
+    return {
+        "quality_std_over_candidates_mean": _metric_float(quality_std_by_recording.mean()),
+        "quality_std_over_candidates_max": _metric_float(quality_std_by_recording.max()),
+        "reward_group_std_mean": _metric_float(reward_std_by_recording.mean()),
+        "reward_active_recording_fraction": _metric_float((reward_std_by_recording > 0).float().mean()),
+    }
+
+
 def _print_metrics(metrics: dict) -> None:
     print(json.dumps(metrics, sort_keys=True), flush=True)
 
@@ -307,6 +341,8 @@ def main(config):
                 "event": "plasticity_train_start",
                 "device": str(device),
                 "dtype": str(dtype).replace("torch.", ""),
+                "dataset": config["training"].get("dataset", "tedlium"),
+                "split": config["training"].get("split", "train"),
                 "target_modules": target_modules,
                 "adaptation_parameters": adaptation_parameter_count(updater),
                 "checkpoint_type": "plasticity_updater_only",
@@ -316,9 +352,8 @@ def main(config):
         ),
         flush=True,
     )
-    data = dataset_functions[config["training"].get("dataset", "tedlium3_segmented_data")](
-        config["training"].get("split", "train")
-    )
+    dataset_name = validate_training_dataset(config)
+    data = dataset_functions[dataset_name](config["training"].get("split", "train"))
 
     num_steps = int(config["training"].get("num_steps", 1))
     log_every = int(config["training"].get("log_every", 10))
@@ -365,6 +400,7 @@ def main(config):
                 "fast_weight_rank_max": _fast_weight_rank_max(info),
                 "adaptation_parameters": adaptation_parameter_count(updater),
             }
+            metrics.update(_candidate_spread_metrics(info))
             if step % log_every == 0 or step == start_step + 1:
                 _print_metrics(metrics)
             log_metrics(wandb_run, metrics)
