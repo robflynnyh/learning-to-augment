@@ -378,3 +378,6 @@ reproduce results, interpret metrics, or avoid known failure modes.
   config to `training.dtype=bfloat16` and documents that the prior W&B
   comparison should be read as a different-regime/reward-spread diagnostic, not
   as batch size alone explaining an order-of-magnitude WER change.
+- ROB-186 bf16 update follow-up fixes the EGGROLL centre-update estimator to
+  accumulate reward-weighted rank-1 perturbation deltas in float32 before
+  casting gradients back to the updater weight dtype.

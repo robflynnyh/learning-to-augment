@@ -4,6 +4,7 @@ from l2augment.utils.eggroll import (
     EggrollLinear,
     EggrollPerturbations,
     Rank1Perturbation,
+    eggroll_delta_matrix,
     eggroll_update_shared_params,
     group_normalise_rewards,
 )
@@ -69,3 +70,17 @@ def test_eggroll_optimizer_update_moves_in_reward_increasing_direction():
     eggroll_update_shared_params(layer, pert, rewards=torch.ones(1), sigma=1.0, optimizer=optimizer)
 
     assert layer.weight.item() > 0.0
+
+
+def test_eggroll_delta_accumulates_bfloat16_perturbations_in_float32():
+    rewards = torch.tensor([1.0, -1.0], dtype=torch.float32)
+    pert = Rank1Perturbation(
+        a=torch.tensor([[1.0, 2.0], [-1.0, -2.0]], dtype=torch.bfloat16),
+        b=torch.tensor([[3.0], [3.0]], dtype=torch.bfloat16),
+        antithetic=True,
+    )
+
+    delta = eggroll_delta_matrix(rewards, pert, sigma=0.5)
+
+    assert delta.dtype is torch.float32
+    torch.testing.assert_close(delta, torch.tensor([[6.0], [12.0]]))

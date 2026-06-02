@@ -165,17 +165,21 @@ def eggroll_delta_matrix(rewards: Tensor, perturbation: Rank1Perturbation, sigma
     if sigma <= 0:
         raise ValueError("sigma must be positive")
 
+    rewards = rewards.to(device=perturbation.a.device, dtype=torch.float32)
+    a_all = perturbation.a.to(dtype=torch.float32)
+    b_all = perturbation.b.to(dtype=torch.float32)
+
     if perturbation.antithetic:
         pair_count = perturbation.num_candidates // 2
         rewards_pos = rewards[:pair_count]
         rewards_neg = rewards[pair_count:]
-        a = perturbation.a[:pair_count]
-        b = perturbation.b[:pair_count]
+        a = a_all[:pair_count]
+        b = b_all[:pair_count]
         reward_diff = rewards_pos - rewards_neg
         delta = torch.einsum("p,po,pi->oi", reward_diff, a, b)
         return delta / (2 * pair_count * sigma)
 
-    delta = torch.einsum("n,no,ni->oi", rewards, perturbation.a, perturbation.b)
+    delta = torch.einsum("n,no,ni->oi", rewards, a_all, b_all)
     return delta / (perturbation.num_candidates * sigma)
 
 
