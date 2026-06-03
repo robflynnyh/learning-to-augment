@@ -259,11 +259,17 @@ def test_plasticity_eval_variants_can_request_seed_and_latest_only():
 
 
 def test_plasticity_eval_variant_supports_stitched_seed_baseline():
-    config = OmegaConf.create({"variants": ["seed_asr_stitched"]})
+    config = OmegaConf.create(
+        {"variants": ["seed_asr_stitched", "step0_random_init_stitched", "latest_checkpoint_stitched"]}
+    )
 
-    variants = resolve_eval_variants(config, latest_checkpoint=None)
+    variants = resolve_eval_variants(config, latest_checkpoint="checkpoints/latest.pt")
 
-    assert variants == [("seed_asr_stitched", None, True, True)]
+    assert variants == [
+        ("seed_asr_stitched", None, True, True),
+        ("step0_random_init_stitched", None, False, True),
+        ("latest_checkpoint_stitched", "checkpoints/latest.pt", False, True),
+    ]
 
 
 def test_stitch_chunk_posteriors_averages_overlapping_probabilities():

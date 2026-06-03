@@ -423,10 +423,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - ROB-186 step-0 full-test follow-up corrects the full TED-LIUM test launcher
   to run the requested three-way comparison: frozen `seed_asr`,
   `step0_random_init`, and the step-3000 `latest_checkpoint` updater.
-- ROB-186 stitched-baseline follow-up adds an explicit `seed_asr_stitched`
-  diagnostic eval variant that averages overlapping chunk posteriors onto one
-  recording timeline before CTC decoding, matching the older repo seed-ASR
-  protocol more closely than the streaming `causal_chunk` decode. A one-record
-  smoke on TED-LIUM test dropped the seed baseline from `0.149465` causal WER
-  to `0.069197` stitched WER, confirming the earlier 16-17% full-test seed
-  result was a decode-protocol artifact rather than plasticity degradation.
+- ROB-186 stitched-baseline follow-up adds explicit `*_stitched` diagnostic
+  eval variants that average overlapping chunk posteriors onto one recording
+  timeline before CTC decoding, matching the older repo protocol more closely
+  than the streaming `causal_chunk` decode. A one-record TED-LIUM test smoke
+  gave stitched WERs of `0.069197` for seed ASR, `0.069869` for the step-0
+  updater, and `0.068861` for the step-3000 updater, confirming the earlier
+  16-17% full-test causal baseline was a decode-protocol artifact rather than
+  plasticity degradation.
