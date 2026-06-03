@@ -3,6 +3,19 @@
 Keep concise dated notes for project changes that future agents need in order to
 reproduce results, interpret metrics, or avoid known failure modes.
 
+## 2026-06-03
+
+- ROB-186: stopped the active `max_eta=0.1` dense B=8/N=32 run after the user
+  requested a checkpoint test. The latest persisted updater checkpoint was
+  `exp/results/plasticity_eggroll/maxeta01_dense_n32_b8_bf16_multigpu_20260602T211050Z/checkpoints/latest.pt`
+  at step 3000; logs had reached about step 3285 but that state was not saved.
+- Added `exp/eval_plasticity_eggroll.py` for fixed-recording plasticity
+  evaluation with `N=1`, zero EGGROLL perturbation, and no training update. On
+  the first three TED-LIUM test recordings, step-3000 `latest.pt` had mean WER
+  `0.187486` versus step-0 random-init mean WER `0.187907`; durable outputs are
+  in
+  `exp/results/plasticity_eggroll/test_eval_latest_vs_step0_20260603T080124Z/`.
+
 ## 2026-05-10
 
 - Added Symphony project wiring for the Learn-to-Augment Linear project,

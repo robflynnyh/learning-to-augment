@@ -14,6 +14,8 @@ from exp.train_plasticity_eggroll import (
     save_checkpoint,
     validate_training_dataset,
 )
+from exp.eval_plasticity_eggroll import summarise_eval_rows, zero_center_perturbations
+from l2augment.utils.eggroll import EggrollLinear
 from l2augment.utils.eggroll import group_normalise_rewards
 
 
@@ -207,3 +209,27 @@ def test_plasticity_training_accepts_unsegmented_tedlium_dataset():
     )
 
     assert validate_training_dataset(config) == "tedlium"
+
+
+def test_plasticity_eval_summary_averages_per_recording_rows():
+    rows = [
+        {"wer": 0.2, "quality": 0.8},
+        {"wer": 0.6, "quality": 0.4},
+    ]
+
+    summary = summarise_eval_rows(rows)
+
+    assert summary["num_recordings"] == 2
+    assert summary["wer_mean"] == 0.4
+    assert summary["quality_mean"] == 0.6000000000000001
+
+
+def test_zero_center_perturbations_uses_single_candidate_zero_rank1_noise():
+    module = torch.nn.Sequential(EggrollLinear(2, 3), torch.nn.LayerNorm(3))
+
+    perturbations = zero_center_perturbations(module, device=torch.device("cpu"), dtype=torch.float32)
+
+    assert perturbations.num_candidates == 1
+    assert "0" in perturbations.layers
+    torch.testing.assert_close(perturbations.get("0").a, torch.zeros(1, 3))
+    torch.testing.assert_close(perturbations.get("0").b, torch.zeros(1, 2))

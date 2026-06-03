@@ -1,0 +1,7 @@
+variant,checkpoint_path,checkpoint_step,recording_index,recording_id,chunks,wer,quality
+step0_random_init,,0,0,/store/store4/data/TEDLIUM_release-3/legacy/test/sph/AimeeMullins_2009P.sph,65,0.1511908918619156,0.8488091230392456
+step0_random_init,,0,1,/store/store4/data/TEDLIUM_release-3/legacy/test/sph/BillGates_2010.sph,87,0.18402926623821259,0.8159707188606262
+step0_random_init,,0,2,/store/store4/data/TEDLIUM_release-3/legacy/test/sph/DanBarber_2010.sph,58,0.22850020229816437,0.7714998126029968
+latest_checkpoint,exp/results/plasticity_eggroll/maxeta01_dense_n32_b8_bf16_multigpu_20260602T211050Z/checkpoints/latest.pt,3000,0,/store/store4/data/TEDLIUM_release-3/legacy/test/sph/AimeeMullins_2009P.sph,65,0.1511908918619156,0.8488091230392456
+latest_checkpoint,exp/results/plasticity_eggroll/maxeta01_dense_n32_b8_bf16_multigpu_20260602T211050Z/checkpoints/latest.pt,3000,1,/store/store4/data/TEDLIUM_release-3/legacy/test/sph/BillGates_2010.sph,87,0.18359880149364471,0.8164011836051941
+latest_checkpoint,exp/results/plasticity_eggroll/maxeta01_dense_n32_b8_bf16_multigpu_20260602T211050Z/checkpoints/latest.pt,3000,2,/store/store4/data/TEDLIUM_release-3/legacy/test/sph/DanBarber_2010.sph,58,0.22766929864883423,0.7723307013511658
