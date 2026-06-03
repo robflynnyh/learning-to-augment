@@ -293,6 +293,14 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Consolidated the ROB-158 primary outcome so `OUTCOME.md` contains
   both UFMR and RFM aggregate/per-repeat results plus the direct shared-cell
   large-ASR comparison.
+- Consolidated the ROB-132 audio+reward-conditioned test-set artifacts under
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/`.
+  The folder now covers TED-LIUM, Earnings22, Rev16, TAL, and CHiME-6 test
+  fixed-reward cells. It has `16/20` cells complete; the missing Rev16/TAL
+  epoch-5 rows were intentionally deferred after runtime estimates showed they
+  were likely to exceed the 4-day Stanage limit. CHiME uses multi-channel raw
+  audio paths, so `exp/eval.py` extracts SSL from the aligned raw channel slice
+  before averaging channels.
 - ROB-177 adds a UFMR ablation over `candidate_repeats`
   `1 2 5 10 15 20 40 100 200 1000` on Earnings22 and TED-LIUM test, with
   three seed trials per setting. Here `candidate_repeats` is the UFMR
@@ -312,3 +320,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/`. The combined
   result summary is `OUTCOME.md`; method-specific launcher summaries are
   `UFMR_OUTCOME.md` and `RFM_OUTCOME.md`.
+
+## 2026-06-03
+
+- Finalized the ROB-132 remaining-dataset fixed-reward test-set sync. The
+  result root has 8/12 cells complete: all Rev16/TAL/CHiME-6 1-epoch cells
+  improved, while both CHiME-6 5-epoch cells collapsed to WER `1.000000`. The
+  Rev16/TAL 5-epoch cells were intentionally cancelled after runtime estimates
+  showed they were likely to hit Stanage's 4-day walltime; do not rerun them
+  without a new explicit instruction.

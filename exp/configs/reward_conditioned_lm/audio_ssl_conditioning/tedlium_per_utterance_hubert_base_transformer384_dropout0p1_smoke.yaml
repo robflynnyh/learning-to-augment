@@ -1,0 +1,69 @@
+checkpointing:
+  asr_model: /store/store5/data/acp21rjf_checkpoints/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt
+
+training:
+  device: cuda
+  random_seed: 123456
+  batch_size: 2
+  policy_training_step: true
+  epochs: 1
+  tolerance: 2
+  max_steps: 1
+  num_workers: 0
+  prefetch_factor: null
+  wandb_project: l2augment
+  wandb_mode: disabled
+  model_save_path: exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/train/smoke/audio_ssl_hubert_base_transformer384_dropout0p1_smoke.pt
+  tmp_model_save_path: exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/train/smoke/audio_ssl_hubert_base_transformer384_dropout0p1_smoke_tmp.pt
+
+evaluation:
+  id: ROB-132-audio-ssl-hubert-base-transformer384-smoke
+  dataset: tedlium
+  split: dev
+  rollout_fn: multistep
+  use_cer: false
+  epochs: 1
+  augmentation_config:
+    conditioning_reward: 1.0
+    sample: true
+  optim_args:
+    lr: 1e-5
+  save_path: exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/train/smoke/tedlium_dev_eval_smoke.txt
+
+collate_function: AudioRewardConditionedMaskLM
+dataset_class: AudioRewardConditionedMaskLMDataset
+
+dataset:
+  reward_metric: wer
+  normalization: per_utterance_minmax
+  degenerate_range_eps: 1e-6
+  degenerate_value: 0.5
+  ssl_feature_mode: on_the_fly
+  ssl_feature_alignment: native
+  ssl_bundle: HUBERT_BASE
+  ssl_device: cuda
+  tedlium_base: /store/store4/data/TEDLIUM_release-3/legacy
+
+policy:
+  lr: 1e-3
+  class: AudioRewardConditionedMaskLM
+  config:
+    hidden_dim: 384
+    ssl_dim: 768
+    num_heads: 8
+    decoder_layers: 4
+    candidate_microbatch_size: 8
+    dropout: 0.1
+    default_conditioning_reward: 1.0
+    reward_encoder: timestep
+    sample_generation: true
+    mask_vae_state_dict_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/bvae/bvae_USINGTHISFORNOW_2048gpu.pt
+    mask_vae_config:
+      latent_dim: 128
+      codebook_size: 2048
+      use_vq: true
+
+generation:
+  save_dir: /store/store4/data/l2augment_rollout_uvqmlm
+  train_max_files: 2
+  dev_max_files: 2

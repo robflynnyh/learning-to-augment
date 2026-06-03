@@ -1,0 +1,1 @@
+ID: ROB-132-chime6-test-audio-ssl-transformer384-reward0p0-epoch5-lr1e-5 - Dataset: chime6 - Split: test - Epochs: 5 - Original_WER: 0.8436200211491012 - Updated_WER: 1.0
