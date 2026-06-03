@@ -420,3 +420,6 @@ reproduce results, interpret metrics, or avoid known failure modes.
   variant to the plasticity eval script, supports `evaluation.num_recordings=all`
   with batched long-recording processing, and adds a callback-owned Mimas
   launcher for the requested TED-LIUM test-set seed-vs-latest comparison.
+- ROB-186 step-0 full-test follow-up corrects the full TED-LIUM test launcher
+  to run the requested three-way comparison: frozen `seed_asr`,
+  `step0_random_init`, and the step-3000 `latest_checkpoint` updater.
