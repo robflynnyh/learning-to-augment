@@ -293,16 +293,14 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Consolidated the ROB-158 primary outcome so `OUTCOME.md` contains
   both UFMR and RFM aggregate/per-repeat results plus the direct shared-cell
   large-ASR comparison.
-- Completed the ROB-132 audio+reward-conditioned test-set follow-up after
-  splitting the slow remaining cells onto Stanage. The result root
-  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1_test_tedlium_earnings22/`
-  now has all 8 fixed-reward TED-LIUM/Earnings22 test cells complete, and every
-  cell improved WER versus its unadapted original row.
-- Started the ROB-132 remaining-dataset extension for Rev16, TAL, and CHiME-6.
-  The new result root is
-  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1_test_remaining_datasets/`.
-  CHiME uses multi-channel raw audio paths, so `exp/eval.py` now extracts SSL
-  from the aligned raw channel slice before averaging channels.
+- Consolidated the ROB-132 audio+reward-conditioned test-set artifacts under
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/`.
+  The folder now covers TED-LIUM, Earnings22, Rev16, TAL, and CHiME-6 test
+  fixed-reward cells. It has `16/20` cells complete; the missing Rev16/TAL
+  epoch-5 rows were intentionally deferred after runtime estimates showed they
+  were likely to exceed the 4-day Stanage limit. CHiME uses multi-channel raw
+  audio paths, so `exp/eval.py` extracts SSL from the aligned raw channel slice
+  before averaging channels.
 - ROB-177 adds a UFMR ablation over `candidate_repeats`
   `1 2 5 10 15 20 40 100 200 1000` on Earnings22 and TED-LIUM test, with
   three seed trials per setting. Here `candidate_repeats` is the UFMR

@@ -13,7 +13,7 @@ if [ -f /exp/exp4/acp21rjf/symphony-config/.env ]; then
 fi
 
 LINEAR_ISSUE="${LINEAR_ISSUE:-ROB-132}"
-RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1}"
+RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/dev_tedlium_fixed_rewards_0_and_1}"
 LOG_PATH="${LOG_PATH:-${RESULT_ROOT}/logs/rob132_audio_ssl_self_train_fixed_rewards_0_and_1.log}"
 SCREEN_LOG_PATH="${SCREEN_LOG_PATH:-${RESULT_ROOT}/logs/rob132_audio_ssl_self_train_fixed_rewards_0_and_1.screen.log}"
 SCREEN_NAME="${SCREEN_NAME:-rob132-audio-ssl-selftrain-fixed-rewards}"

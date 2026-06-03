@@ -4,7 +4,7 @@
 set -euo pipefail
 
 REPO_DIR="${REPO_DIR:-/mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-132}"
-RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1_test_remaining_datasets}"
+RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1}"
 SCRATCH_ROOT="${SCRATCH_ROOT:-/mnt/parscratch/users/acp21rjf/rob132-audio-ssl-scratch}"
 CHECKPOINT_PATH="${CHECKPOINT_PATH:-/mnt/parscratch/users/acp21rjf/l2augment_model/reward_conditioned_mask_lm/audio_ssl_hubert_base_tedlium_per_utterance_transformer384_dropout0p1_500ep_lr1e3.pt}"
 ASR_CKPT="${ASR_CKPT:-/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt}"
@@ -16,7 +16,7 @@ DATASETS="${ROB132_TESTSETS_DATASETS:-rev16 TAL chime6}"
 FIXED_REWARDS="${ROB132_TESTSETS_FIXED_REWARDS:-1.0 0.0}"
 EPOCHS="${ROB132_TESTSETS_EPOCHS:-1 5}"
 LR="${ROB132_TESTSETS_LR:-1e-5}"
-CSV_NAME="${ROB132_TESTSETS_CSV_NAME:-rob132_audio_ssl_self_train_remaining_datasets_fixed_rewards.csv}"
+CSV_NAME="${ROB132_TESTSETS_CSV_NAME:-rob132_audio_ssl_test_fixed_rewards.csv}"
 PARTITIONS="${ROB132_TESTSETS_PARTITIONS:-gpu-h100-nvl gpu-h100 gpu}"
 
 cd "${REPO_DIR}"

@@ -13,7 +13,7 @@ if [ -f /exp/exp4/acp21rjf/symphony-config/.env ]; then
 fi
 
 LINEAR_ISSUE="${LINEAR_ISSUE:-ROB-132}"
-RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384}"
+RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/train}"
 LOG_PATH="${LOG_PATH:-${RESULT_ROOT}/logs/rob132_audio_ssl_hubert_base_transformer384_dropout0p1_500ep_lr1e3.log}"
 SCREEN_LOG_PATH="${SCREEN_LOG_PATH:-${RESULT_ROOT}/logs/rob132_audio_ssl_hubert_base_transformer384_dropout0p1_500ep_lr1e3.screen.log}"
 SCREEN_NAME="${SCREEN_NAME:-rob132-audio-ssl-mask-lm-transformer384}"

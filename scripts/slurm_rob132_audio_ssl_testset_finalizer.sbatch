@@ -20,14 +20,14 @@ fi
 
 REPO_DIR="${REPO_DIR:-/mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-132}"
 LINEAR_ISSUE="${LINEAR_ISSUE:-ROB-132}"
-RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1_test_tedlium_earnings22}"
+RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1}"
 LOG_PATH="${LOG_PATH:-${RESULT_ROOT}/logs/stanage/rob132_stanage_finalizer-${SLURM_JOB_ID:-manual}.log}"
 CHECKPOINT_PATH="${CHECKPOINT_PATH:-/mnt/parscratch/users/acp21rjf/l2augment_model/reward_conditioned_mask_lm/audio_ssl_hubert_base_tedlium_per_utterance_transformer384_dropout0p1_500ep_lr1e3.pt}"
 ROB132_FIXED_REWARDS="${ROB132_FIXED_REWARDS:-1.0 0.0}"
-ROB132_DATASETS="${ROB132_DATASETS:-tedlium earnings22}"
+ROB132_DATASETS="${ROB132_DATASETS:-tedlium earnings22 rev16 TAL chime6}"
 ROB132_EPOCHS="${ROB132_EPOCHS:-1 5}"
 ROB132_LR="${ROB132_LR:-1e-5}"
-CSV_NAME="${CSV_NAME:-rob132_audio_ssl_self_train_test_sets_fixed_rewards.csv}"
+CSV_NAME="${CSV_NAME:-rob132_audio_ssl_test_fixed_rewards.csv}"
 RUNNER_LABEL="${RUNNER_LABEL:-slurm-finalizer:${SLURM_JOB_ID:-manual}}"
 QUEUED_COMMAND="${QUEUED_COMMAND:-sbatch ${SLURM_SUBMIT_SCRIPT:-scripts/slurm_rob132_audio_ssl_testset_finalizer.sbatch}}"
 

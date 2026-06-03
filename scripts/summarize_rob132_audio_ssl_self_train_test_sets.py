@@ -262,11 +262,11 @@ def main() -> None:
         type=Path,
         default=Path(
             "exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/"
-            "rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1_test_tedlium_earnings22"
+            "rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1"
         ),
     )
     parser.add_argument("--fixed-rewards", default="1.0 0.0")
-    parser.add_argument("--datasets", default="tedlium earnings22")
+    parser.add_argument("--datasets", default="tedlium earnings22 rev16 TAL chime6")
     parser.add_argument("--epochs", default="1 5")
     parser.add_argument("--lr", default="1e-5")
     parser.add_argument("--checkpoint", required=True)
@@ -275,7 +275,7 @@ def main() -> None:
     parser.add_argument("--commit", required=True)
     parser.add_argument("--log-path", required=True)
     parser.add_argument("--screen-log-path", required=True)
-    parser.add_argument("--csv-name", default="rob132_audio_ssl_self_train_test_sets_fixed_rewards.csv")
+    parser.add_argument("--csv-name", default="rob132_audio_ssl_test_fixed_rewards.csv")
     parser.add_argument("--outcome-name", default="OUTCOME.md")
     args = parser.parse_args()
 

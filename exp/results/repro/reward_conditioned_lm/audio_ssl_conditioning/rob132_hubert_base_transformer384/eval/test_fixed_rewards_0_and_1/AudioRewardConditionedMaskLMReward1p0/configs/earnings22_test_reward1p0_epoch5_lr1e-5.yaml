@@ -4,40 +4,29 @@ checkpointing:
 training:
   device: cuda
   random_seed: 123456
-  batch_size: 48
-  policy_training_step: true
+  batch_size: 1
   epochs: 500
-  tolerance: 5
-  num_workers: 0
-  prefetch_factor: null
-  wandb_project: l2augment
   model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/audio_ssl_hubert_base_tedlium_per_utterance_transformer384_dropout0p1_500ep_lr1e3.pt
-  tmp_model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/audio_ssl_hubert_base_tedlium_per_utterance_transformer384_dropout0p1_500ep_lr1e3_tmp.pt
+  tmp_model_save_path: /store/store5/data/acp21rjf_checkpoints/l2augment/models/reward_conditioned_mask_lm/audio_ssl_hubert_base_tedlium_per_utterance_transformer384_dropout0p1_500ep_lr1e3.pt
+  prefetch_factor: null
+  num_workers: 0
 
 evaluation:
-  id: ROB-132-audio-ssl-hubert-base-transformer384-tedlium-dev-500ep-lr1e3
-  dataset: tedlium
-  split: dev
+  id: ROB-132-earnings22-test-audio-ssl-transformer384-reward1p0-epoch5-lr1e-5
+  dataset: earnings22
+  split: test
   rollout_fn: multistep
   use_cer: false
-  epochs: 1
+  epochs: 5
   augmentation_config:
     conditioning_reward: 1.0
     sample: true
+    seed: 123456
   optim_args:
     lr: 1e-5
-  save_path: exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/train/tedlium_dev_eval_hubert_base_transformer384_dropout0p1_500ep_lr1e3.txt
-
-collate_function: AudioRewardConditionedMaskLM
-dataset_class: AudioRewardConditionedMaskLMDataset
+  save_path: /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-132/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/AudioRewardConditionedMaskLMReward1p0/earnings22_test_reward1p0_epoch5_lr1e-5.txt
 
 dataset:
-  reward_metric: wer
-  normalization: per_utterance_minmax
-  degenerate_range_eps: 1e-6
-  degenerate_value: 0.5
-  ssl_feature_mode: on_the_fly
-  ssl_feature_alignment: native
   ssl_bundle: HUBERT_BASE
   ssl_device: cuda
   tedlium_base: /store/store4/data/TEDLIUM_release-3/legacy
@@ -60,6 +49,3 @@ policy:
       latent_dim: 128
       codebook_size: 2048
       use_vq: true
-
-generation:
-  save_dir: /store/store4/data/l2augment_rollout_uvqmlm

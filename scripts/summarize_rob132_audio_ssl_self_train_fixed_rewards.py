@@ -199,7 +199,7 @@ def main() -> None:
         type=Path,
         default=Path(
             "exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/"
-            "rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1"
+            "rob132_hubert_base_transformer384/eval/dev_tedlium_fixed_rewards_0_and_1"
         ),
     )
     parser.add_argument("--dataset", default="tedlium")

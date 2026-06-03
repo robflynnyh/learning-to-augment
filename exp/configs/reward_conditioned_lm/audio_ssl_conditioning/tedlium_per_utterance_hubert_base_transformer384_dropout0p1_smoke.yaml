@@ -13,8 +13,8 @@ training:
   prefetch_factor: null
   wandb_project: l2augment
   wandb_mode: disabled
-  model_save_path: exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/smoke/audio_ssl_hubert_base_transformer384_dropout0p1_smoke.pt
-  tmp_model_save_path: exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/smoke/audio_ssl_hubert_base_transformer384_dropout0p1_smoke_tmp.pt
+  model_save_path: exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/train/smoke/audio_ssl_hubert_base_transformer384_dropout0p1_smoke.pt
+  tmp_model_save_path: exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/train/smoke/audio_ssl_hubert_base_transformer384_dropout0p1_smoke_tmp.pt
 
 evaluation:
   id: ROB-132-audio-ssl-hubert-base-transformer384-smoke
@@ -28,7 +28,7 @@ evaluation:
     sample: true
   optim_args:
     lr: 1e-5
-  save_path: exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/smoke/tedlium_dev_eval_smoke.txt
+  save_path: exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/train/smoke/tedlium_dev_eval_smoke.txt
 
 collate_function: AudioRewardConditionedMaskLM
 dataset_class: AudioRewardConditionedMaskLMDataset
