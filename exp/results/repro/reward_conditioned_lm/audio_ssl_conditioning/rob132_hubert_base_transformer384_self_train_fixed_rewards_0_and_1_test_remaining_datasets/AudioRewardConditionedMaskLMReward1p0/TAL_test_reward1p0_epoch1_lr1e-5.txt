@@ -1,0 +1,1 @@
+ID: ROB-132-TAL-test-audio-ssl-transformer384-reward1p0-epoch1-lr1e-5 - Dataset: this_american_life - Split: test - Epochs: 1 - Original_WER: 0.16569115043249766 - Updated_WER: 0.15842834748677695

@@ -24,7 +24,7 @@ evaluation:
     seed: 123456
   optim_args:
     lr: 1e-5
-  save_path: /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-132/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1_test_remaining_datasets/AudioRewardConditionedMaskLMReward1p0/TAL_test_reward1p0_epoch1_lr1e-5.txt
+  save_path: /mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-132/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1_test_remaining_datasets/AudioRewardConditionedMaskLMReward1p0/TAL_test_reward1p0_epoch1_lr1e-5.txt
 
 dataset:
   ssl_bundle: HUBERT_BASE

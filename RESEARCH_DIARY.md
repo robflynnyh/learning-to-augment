@@ -275,3 +275,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384_self_train_fixed_rewards_0_and_1_test_remaining_datasets/`.
   CHiME uses multi-channel raw audio paths, so `exp/eval.py` now extracts SSL
   from the aligned raw channel slice before averaging channels.
+
+## 2026-06-03
+
+- Finalized the ROB-132 remaining-dataset fixed-reward test-set sync. The
+  result root has 8/12 cells complete: all Rev16/TAL/CHiME-6 1-epoch cells
+  improved, while both CHiME-6 5-epoch cells collapsed to WER `1.000000`. The
+  Rev16/TAL 5-epoch cells were intentionally cancelled after runtime estimates
+  showed they were likely to hit Stanage's 4-day walltime; do not rerun them
+  without a new explicit instruction.
