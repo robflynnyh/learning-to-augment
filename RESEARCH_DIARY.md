@@ -431,3 +431,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   updater, and `0.068861` for the step-3000 updater, confirming the earlier
   16-17% full-test causal baseline was a decode-protocol artifact rather than
   plasticity degradation.
+- ROB-186 step-2000 stitched full-test follow-up evaluates the exact
+  `updater_step_00002000.pt` checkpoint on all 11 unsegmented TED-LIUM test
+  recordings using stitched decode variants only. Mean WERs were `0.087710`
+  for `seed_asr_stitched`, `0.087530` for `step0_random_init_stitched`, and
+  `0.087472` for the step-2000 `latest_checkpoint_stitched` updater.

@@ -1,0 +1,41 @@
+[
+  {
+    "checkpoint_path": null,
+    "checkpoint_step": 0,
+    "fast_state_norm_ratio_max": 0.0,
+    "fast_state_norm_ratio_mean": 0.0,
+    "fast_weight_clipped_fraction": 0.0,
+    "num_recordings": 11,
+    "quality_mean": 0.9122904583113332,
+    "variant": "seed_asr_stitched",
+    "wer_max": 0.11851015801354402,
+    "wer_mean": 0.08770954168866694,
+    "wer_min": 0.05516705516705517
+  },
+  {
+    "checkpoint_path": null,
+    "checkpoint_step": 0,
+    "fast_state_norm_ratio_max": 0.05011278763413429,
+    "fast_state_norm_ratio_mean": 0.018301307731731373,
+    "fast_weight_clipped_fraction": 0.028960366114254364,
+    "num_recordings": 11,
+    "quality_mean": 0.9124698189049375,
+    "variant": "step0_random_init_stitched",
+    "wer_max": 0.11738148984198646,
+    "wer_mean": 0.08753018109506266,
+    "wer_min": 0.055944055944055944
+  },
+  {
+    "checkpoint_path": "/exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-186/exp/results/plasticity_eggroll/maxeta01_dense_n32_b8_bf16_multigpu_20260602T211050Z/checkpoints/updater_step_00002000.pt",
+    "checkpoint_step": 2000,
+    "fast_state_norm_ratio_max": 0.050107356160879135,
+    "fast_state_norm_ratio_mean": 0.014195081185210835,
+    "fast_weight_clipped_fraction": 0.0742052340964702,
+    "num_recordings": 11,
+    "quality_mean": 0.9125279189440684,
+    "variant": "latest_checkpoint_stitched",
+    "wer_max": 0.1162528216704289,
+    "wer_mean": 0.0874720810559315,
+    "wer_min": 0.05542605542605543
+  }
+]
