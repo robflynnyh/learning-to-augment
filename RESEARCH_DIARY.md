@@ -416,3 +416,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   two-GPU run at the user's request after the update signal remained small, and
   increases the default plasticity `max_eta` to `0.1` for the replacement dense
   bf16 restart.
+- ROB-186 full-test evaluation follow-up adds an explicit `seed_asr` baseline
+  variant to the plasticity eval script, supports `evaluation.num_recordings=all`
+  with batched long-recording processing, and adds a callback-owned Mimas
+  launcher for the requested TED-LIUM test-set seed-vs-latest comparison.

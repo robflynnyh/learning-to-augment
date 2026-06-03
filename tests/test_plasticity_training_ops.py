@@ -14,7 +14,12 @@ from exp.train_plasticity_eggroll import (
     save_checkpoint,
     validate_training_dataset,
 )
-from exp.eval_plasticity_eggroll import summarise_eval_rows, zero_center_perturbations
+from exp.eval_plasticity_eggroll import (
+    resolve_eval_indexes,
+    resolve_eval_variants,
+    summarise_eval_rows,
+    zero_center_perturbations,
+)
 from l2augment.utils.eggroll import EggrollLinear
 from l2augment.utils.eggroll import group_normalise_rewards
 
@@ -233,3 +238,20 @@ def test_zero_center_perturbations_uses_single_candidate_zero_rank1_noise():
     assert "0" in perturbations.layers
     torch.testing.assert_close(perturbations.get("0").a, torch.zeros(1, 3))
     torch.testing.assert_close(perturbations.get("0").b, torch.zeros(1, 2))
+
+
+def test_plasticity_eval_indexes_support_all_recordings():
+    config = OmegaConf.create({"start_index": 2, "num_recordings": "all"})
+
+    assert resolve_eval_indexes(config, dataset_size=5) == [2, 3, 4]
+
+
+def test_plasticity_eval_variants_can_request_seed_and_latest_only():
+    config = OmegaConf.create({"variants": ["seed_asr", "latest_checkpoint"]})
+
+    variants = resolve_eval_variants(config, latest_checkpoint="checkpoints/latest.pt")
+
+    assert variants == [
+        ("seed_asr", None, True),
+        ("latest_checkpoint", "checkpoints/latest.pt", False),
+    ]

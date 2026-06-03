@@ -193,6 +193,41 @@ pseudo-label CTC objective, ASR model cloning, or backward pass through the ASR
 model. The frozen/shared ASR parameters remain unchanged; only the learned
 fast-weight update process evolves a dense fast state over chunks.
 
+## Test Evaluation
+
+`exp/eval_plasticity_eggroll.py` evaluates checkpointed plasticity inference
+without an EGGROLL population. It supports explicit variants:
+
+```text
+seed_asr
+latest_checkpoint
+step0_random_init
+```
+
+`seed_asr` is the frozen ASR baseline. The selected `FastWeightLinear` wrappers
+are still installed, but the updater is constructed with `max_eta = 0`, so the
+fast state remains zero and the wrapped modules reduce to the seed ASR weights.
+
+`latest_checkpoint` loads the updater-only `latest.pt` checkpoint and runs the
+centre updater with a single zero outer perturbation. This matches inference
+semantics: no population, no reward, no labels passed to the updater, and no
+ASR backpropagation. References are used only after decoding to compute WER.
+
+For the full TED-LIUM test-set comparison requested in ROB-186, use the
+queue-safe launcher:
+
+```bash
+/store/store5/software/simple-gpu-schedule/with-gpu 1,2 --num 1 -- \
+  bash scripts/launch_rob186_plasticity_full_test_eval.sh
+```
+
+The launcher defaults to `evaluation.num_recordings=all`,
+`evaluation.variants=[seed_asr,latest_checkpoint]`, and
+`evaluation.batch_size_recordings=1` so long recordings are processed in small
+batches instead of being padded into one large tensor. It writes
+`per_recording.csv`, `summary.json`, `resolved_config.yaml`, and `OUTCOME.md`
+under `exp/results/plasticity_eggroll/full_test_seed_vs_latest_*`.
+
 ## Tensor Layout
 
 The rollout keeps recordings and candidates batched:

@@ -69,10 +69,56 @@ def summarise_eval_rows(rows: Sequence[dict]) -> dict:
     }
 
 
+def resolve_eval_indexes(eval_cfg, dataset_size: int) -> List[int]:
+    start_index = int(eval_cfg.get("start_index", 0))
+    if start_index < 0 or start_index > dataset_size:
+        raise ValueError(f"evaluation.start_index={start_index} is outside dataset size {dataset_size}")
+
+    requested = eval_cfg.get("num_recordings", 3)
+    if isinstance(requested, str) and requested.lower() == "all":
+        stop_index = dataset_size
+    else:
+        count = int(requested)
+        if count < 0:
+            raise ValueError("evaluation.num_recordings must be non-negative or 'all'")
+        stop_index = min(start_index + count, dataset_size)
+    return list(range(start_index, stop_index))
+
+
+def resolve_eval_variants(eval_cfg, latest_checkpoint: Optional[str]) -> List[Tuple[str, Optional[str], bool]]:
+    requested = eval_cfg.get("variants")
+    if requested is None:
+        variants = ["step0_random_init"]
+        if latest_checkpoint:
+            variants.append("latest_checkpoint")
+    elif isinstance(requested, str):
+        variants = [part.strip() for part in requested.split(",") if part.strip()]
+    else:
+        variants = [str(part) for part in requested]
+
+    resolved = []
+    for variant in variants:
+        if variant == "seed_asr":
+            resolved.append((variant, None, True))
+        elif variant == "step0_random_init":
+            resolved.append((variant, None, False))
+        elif variant == "latest_checkpoint":
+            if not latest_checkpoint:
+                raise ValueError("latest_checkpoint variant requested but no checkpoint path was configured")
+            resolved.append((variant, str(latest_checkpoint), False))
+        else:
+            raise ValueError(
+                "Unknown evaluation variant "
+                f"{variant!r}; expected seed_asr, step0_random_init, or latest_checkpoint"
+            )
+    return resolved
+
+
 def evaluate_variant(
     *,
     variant: str,
     checkpoint_path: Optional[str],
+    seed_asr: bool = False,
     config,
     asr_model,
     module_specs,
@@ -81,6 +127,7 @@ def evaluate_variant(
     recording_lengths: torch.Tensor,
     reference_texts: Sequence[str],
     recording_ids: Sequence[str],
+    recording_indexes: Optional[Sequence[int]] = None,
     device,
     dtype,
 ) -> Tuple[List[dict], dict]:
@@ -89,7 +136,7 @@ def evaluate_variant(
         token_dim=int(config["plasticity"].get("token_dim", 128)),
         comm_dim=int(config["plasticity"].get("comm_dim", 128)),
         update_rank=int(config["plasticity"].get("update_rank", 1)),
-        max_eta=float(config["plasticity"].get("max_eta", 1e-4)),
+        max_eta=0.0 if seed_asr else float(config["plasticity"].get("max_eta", 1e-4)),
         default_rho=float(config["plasticity"].get("default_rho", 0.95)),
     ).to(device=device, dtype=dtype)
     checkpoint_step = 0
@@ -119,7 +166,7 @@ def evaluate_variant(
                 "variant": variant,
                 "checkpoint_path": checkpoint_path or "",
                 "checkpoint_step": checkpoint_step,
-                "recording_index": idx,
+                "recording_index": int(recording_indexes[idx]) if recording_indexes is not None else idx,
                 "recording_id": rec_id,
                 "chunks": int(chunks[idx]),
                 "wer": float(wer[idx]),
@@ -144,7 +191,20 @@ def write_outputs(result_dir: Path, rows: Sequence[dict], summaries: Sequence[di
     result_dir.mkdir(parents=True, exist_ok=True)
     rows_path = result_dir / "per_recording.csv"
     with rows_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()), lineterminator="\n")
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "variant",
+                "checkpoint_path",
+                "checkpoint_step",
+                "recording_index",
+                "recording_id",
+                "chunks",
+                "wer",
+                "quality",
+            ],
+            lineterminator="\n",
+        )
         writer.writeheader()
         writer.writerows(rows)
     summary_path = result_dir / "summary.json"
@@ -162,11 +222,24 @@ def write_outputs(result_dir: Path, rows: Sequence[dict], summaries: Sequence[di
         "| Variant | Step | Recordings | Mean WER | Mean quality | Fast-state max | Clipped fraction |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
+    def fmt(value, digits=6):
+        if value is None:
+            return "n/a"
+        return f"{float(value):.{digits}f}"
+
     for summary in summaries:
         lines.append(
-            "| {variant} | {checkpoint_step} | {num_recordings} | {wer_mean:.6f} | "
-            "{quality_mean:.6f} | {fast_state_norm_ratio_max:.6f} | "
-            "{fast_weight_clipped_fraction:.6f} |".format(**summary)
+            "| {variant} | {checkpoint_step} | {num_recordings} | {wer_mean} | "
+            "{quality_mean} | {fast_state_norm_ratio_max} | "
+            "{fast_weight_clipped_fraction} |".format(
+                variant=summary["variant"],
+                checkpoint_step=summary["checkpoint_step"],
+                num_recordings=summary["num_recordings"],
+                wer_mean=fmt(summary["wer_mean"]),
+                quality_mean=fmt(summary["quality_mean"]),
+                fast_state_norm_ratio_max=fmt(summary["fast_state_norm_ratio_max"]),
+                fast_weight_clipped_fraction=fmt(summary["fast_weight_clipped_fraction"]),
+            )
         )
     (result_dir / "OUTCOME.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -191,35 +264,97 @@ def main(config) -> None:
     dataset_name = str(eval_cfg.get("dataset", config.get("training", {}).get("dataset", "tedlium")))
     split = str(eval_cfg.get("split", "test"))
     data = dataset_functions[dataset_name](split)
-    num_recordings = int(eval_cfg.get("num_recordings", 3))
-    start_index = int(eval_cfg.get("start_index", 0))
-    indexes = list(range(start_index, min(start_index + num_recordings, len(data))))
-    recording_ids, audio_batch, recording_lengths, reference_texts = build_eval_batch(data, indexes)
-    audio_batch = audio_batch.to(device=device, dtype=dtype)
-    recording_lengths = recording_lengths.to(device=device)
+    indexes = resolve_eval_indexes(eval_cfg, len(data))
+    batch_size = int(eval_cfg.get("batch_size_recordings", config.get("rollout", {}).get("batch_size_recordings", 1)))
+    if batch_size <= 0:
+        raise ValueError("evaluation.batch_size_recordings must be positive")
 
     latest_checkpoint = eval_cfg.get("latest_checkpoint", config.get("training", {}).get("model_save_path"))
-    variants = [("step0_random_init", None)]
-    if latest_checkpoint:
-        variants.append(("latest_checkpoint", str(latest_checkpoint)))
+    variants = resolve_eval_variants(eval_cfg, latest_checkpoint)
 
     all_rows, summaries = [], []
-    for variant, checkpoint_path in variants:
-        rows, summary = evaluate_variant(
-            variant=variant,
-            checkpoint_path=checkpoint_path,
-            config=config,
-            asr_model=asr_model,
-            module_specs=module_specs,
-            tokenizer=tokenizer,
-            audio_batch=audio_batch,
-            recording_lengths=recording_lengths,
-            reference_texts=reference_texts,
-            recording_ids=recording_ids,
-            device=device,
-            dtype=dtype,
+    print(
+        json.dumps(
+            {
+                "dataset": dataset_name,
+                "split": split,
+                "num_dataset_recordings": len(data),
+                "num_eval_recordings": len(indexes),
+                "batch_size_recordings": batch_size,
+                "variants": [variant for variant, _, _ in variants],
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
+    for variant, checkpoint_path, seed_asr in variants:
+        variant_rows = []
+        batch_summaries = []
+        for batch_start in range(0, len(indexes), batch_size):
+            batch_indexes = indexes[batch_start : batch_start + batch_size]
+            recording_ids, audio_batch, recording_lengths, reference_texts = build_eval_batch(data, batch_indexes)
+            audio_batch = audio_batch.to(device=device, dtype=dtype)
+            recording_lengths = recording_lengths.to(device=device)
+            rows, batch_summary = evaluate_variant(
+                variant=variant,
+                checkpoint_path=checkpoint_path,
+                seed_asr=seed_asr,
+                config=config,
+                asr_model=asr_model,
+                module_specs=module_specs,
+                tokenizer=tokenizer,
+                audio_batch=audio_batch,
+                recording_lengths=recording_lengths,
+                reference_texts=reference_texts,
+                recording_ids=recording_ids,
+                recording_indexes=batch_indexes,
+                device=device,
+                dtype=dtype,
+            )
+            variant_rows.extend(rows)
+            batch_summaries.append(batch_summary)
+            print(
+                json.dumps(
+                    {
+                        "event": "eval_batch",
+                        "variant": variant,
+                        "batch_start": batch_start,
+                        "batch_size": len(batch_indexes),
+                        "wer_mean_so_far": summarise_eval_rows(variant_rows)["wer_mean"],
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
+        summary = summarise_eval_rows(variant_rows)
+        fast_max_values = [
+            float(batch_summary["fast_state_norm_ratio_max"])
+            for batch_summary in batch_summaries
+            if batch_summary.get("fast_state_norm_ratio_max") is not None
+        ]
+        clipped_values = [
+            float(batch_summary["fast_weight_clipped_fraction"])
+            for batch_summary in batch_summaries
+            if batch_summary.get("fast_weight_clipped_fraction") is not None
+        ]
+        summary.update(
+            {
+                "variant": variant,
+                "checkpoint_path": checkpoint_path,
+                "checkpoint_step": batch_summaries[0]["checkpoint_step"] if batch_summaries else 0,
+                "fast_state_norm_ratio_mean": (
+                    sum(float(batch_summary["fast_state_norm_ratio_mean"]) for batch_summary in batch_summaries)
+                    / len(batch_summaries)
+                    if batch_summaries
+                    else None
+                ),
+                "fast_state_norm_ratio_max": max(fast_max_values) if fast_max_values else None,
+                "fast_weight_clipped_fraction": (
+                    sum(clipped_values) / len(clipped_values) if clipped_values else None
+                ),
+            }
         )
-        all_rows.extend(rows)
+        all_rows.extend(variant_rows)
         summaries.append(summary)
         print(json.dumps(summary, sort_keys=True), flush=True)
 
