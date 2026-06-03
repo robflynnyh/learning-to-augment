@@ -17,6 +17,7 @@ from exp.train_plasticity_eggroll import (
 from exp.eval_plasticity_eggroll import (
     resolve_eval_indexes,
     resolve_eval_variants,
+    stitch_chunk_posteriors,
     summarise_eval_rows,
     zero_center_perturbations,
 )
@@ -252,6 +253,41 @@ def test_plasticity_eval_variants_can_request_seed_and_latest_only():
     variants = resolve_eval_variants(config, latest_checkpoint="checkpoints/latest.pt")
 
     assert variants == [
-        ("seed_asr", None, True),
-        ("latest_checkpoint", "checkpoints/latest.pt", False),
+        ("seed_asr", None, True, False),
+        ("latest_checkpoint", "checkpoints/latest.pt", False, False),
     ]
+
+
+def test_plasticity_eval_variant_supports_stitched_seed_baseline():
+    config = OmegaConf.create({"variants": ["seed_asr_stitched"]})
+
+    variants = resolve_eval_variants(config, latest_checkpoint=None)
+
+    assert variants == [("seed_asr_stitched", None, True, True)]
+
+
+def test_stitch_chunk_posteriors_averages_overlapping_probabilities():
+    class ToyASR(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.outputs = [
+                torch.log(torch.tensor([[[0.8, 0.2], [0.6, 0.4]]])),
+                torch.log(torch.tensor([[[0.2, 0.8], [0.4, 0.6]]])),
+            ]
+
+        def forward(self, audio_signal):
+            del audio_signal
+            return {"final_posteriors": self.outputs.pop(0)}
+
+    chunks = torch.zeros(2, 1, 4)
+
+    stitched = stitch_chunk_posteriors(
+        chunks,
+        [0, 2],
+        asr_model=ToyASR(),
+        output_frames_hint=4,
+        device=torch.device("cpu"),
+    )
+
+    expected = torch.log(torch.tensor([[[0.8, 0.2], [0.4, 0.6], [0.4, 0.6]]]))
+    torch.testing.assert_close(stitched, expected)

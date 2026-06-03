@@ -17,6 +17,7 @@ from exp.train_plasticity_eggroll import (
     resolve_target_modules,
 )
 from l2augment.modelling.plasticity import PlasticityPolicy, wrap_linear_modules
+from l2augment.rollout.gpu_plasticity import segment_recording
 from l2augment.rollout.gpu_plasticity import rollout_recordings_with_plasticity_candidates
 from l2augment.utils.data import dataset_functions
 from l2augment.utils.eggroll import EggrollPerturbations, Rank1Perturbation
@@ -85,7 +86,7 @@ def resolve_eval_indexes(eval_cfg, dataset_size: int) -> List[int]:
     return list(range(start_index, stop_index))
 
 
-def resolve_eval_variants(eval_cfg, latest_checkpoint: Optional[str]) -> List[Tuple[str, Optional[str], bool]]:
+def resolve_eval_variants(eval_cfg, latest_checkpoint: Optional[str]) -> List[Tuple[str, Optional[str], bool, bool]]:
     requested = eval_cfg.get("variants")
     if requested is None:
         variants = ["step0_random_init"]
@@ -99,19 +100,175 @@ def resolve_eval_variants(eval_cfg, latest_checkpoint: Optional[str]) -> List[Tu
     resolved = []
     for variant in variants:
         if variant == "seed_asr":
-            resolved.append((variant, None, True))
+            resolved.append((variant, None, True, False))
+        elif variant == "seed_asr_stitched":
+            resolved.append((variant, None, True, True))
         elif variant == "step0_random_init":
-            resolved.append((variant, None, False))
+            resolved.append((variant, None, False, False))
         elif variant == "latest_checkpoint":
             if not latest_checkpoint:
                 raise ValueError("latest_checkpoint variant requested but no checkpoint path was configured")
-            resolved.append((variant, str(latest_checkpoint), False))
+            resolved.append((variant, str(latest_checkpoint), False, False))
         else:
             raise ValueError(
                 "Unknown evaluation variant "
-                f"{variant!r}; expected seed_asr, step0_random_init, or latest_checkpoint"
+                f"{variant!r}; expected seed_asr, seed_asr_stitched, "
+                "step0_random_init, or latest_checkpoint"
             )
     return resolved
+
+
+def stitch_chunk_posteriors(
+    chunks: torch.Tensor,
+    chunk_starts: Sequence[int],
+    *,
+    asr_model,
+    output_frames_hint: int,
+    device,
+) -> torch.Tensor:
+    if chunks.dim() != 3:
+        raise ValueError("chunks must have shape [T, C, S]")
+    if chunks.shape[0] != len(chunk_starts):
+        raise ValueError("chunk_starts must match the number of chunks")
+    if chunks.shape[0] == 0:
+        raise ValueError("at least one chunk is required")
+
+    stitched = None
+    counts = None
+    with torch.no_grad():
+        for chunk, start in zip(chunks, chunk_starts):
+            output = asr_model(audio_signal=chunk.unsqueeze(0).to(device))
+            posteriors = output["final_posteriors"][0].detach().to("cpu")
+            probabilities = torch.exp(posteriors.float())
+            downsampled_len = probabilities.shape[0]
+            ratio = chunk.shape[-1] / downsampled_len
+            start_frame = int(round(start / ratio))
+            stop_frame = start_frame + downsampled_len
+            vocab = probabilities.shape[-1]
+            total_frames = max(output_frames_hint, stop_frame)
+            if stitched is None:
+                stitched = torch.zeros(total_frames, vocab, dtype=probabilities.dtype)
+                counts = torch.zeros(total_frames, vocab, dtype=probabilities.dtype)
+            elif stop_frame > stitched.shape[0]:
+                extra = stop_frame - stitched.shape[0]
+                stitched = torch.cat([stitched, torch.zeros(extra, vocab, dtype=stitched.dtype)], dim=0)
+                counts = torch.cat([counts, torch.zeros(extra, vocab, dtype=counts.dtype)], dim=0)
+            stitched[start_frame:stop_frame] += probabilities
+            counts[start_frame:stop_frame] += 1
+
+    active = counts.sum(dim=-1) > 0
+    if not active.any():
+        raise ValueError("stitched decode has no active posterior frames")
+    averaged = stitched[active] / counts[active].clamp_min(1)
+    return averaged.clamp_min(torch.finfo(averaged.dtype).tiny).log().unsqueeze(0)
+
+
+def resolve_stitched_chunking(config) -> Tuple[int, int]:
+    eval_cfg = config.get("evaluation", {})
+    rollout_cfg = config.get("rollout", {})
+    chunk_size = int(eval_cfg.get("stitched_chunk_size_frames", rollout_cfg.get("chunk_size_frames", 2048)))
+    if eval_cfg.get("stitched_chunk_overlap_frames") is not None:
+        overlap = int(eval_cfg["stitched_chunk_overlap_frames"])
+    else:
+        overlap_ratio = float(eval_cfg.get("stitched_chunk_overlap_ratio", 0.875))
+        overlap = int(round(chunk_size * overlap_ratio))
+    if overlap < 0 or overlap >= chunk_size:
+        raise ValueError("stitched chunk overlap must be in [0, chunk_size)")
+    return chunk_size, overlap
+
+
+def decode_stitched_seed_asr(
+    *,
+    asr_model,
+    tokenizer,
+    audio: torch.Tensor,
+    recording_length: int,
+    config,
+    device,
+) -> str:
+    from lcasr.decoding.greedy import GreedyCTCDecoder
+    from whisper.normalizers import EnglishTextNormalizer
+
+    chunk_size, overlap = resolve_stitched_chunking(config)
+    chunks, _ = segment_recording(
+        audio[:, :recording_length],
+        chunk_size=chunk_size,
+        overlap=overlap,
+        recording_length=recording_length,
+    )
+    starts = list(range(0, recording_length, chunk_size - overlap))[: chunks.shape[0]]
+    output_frames_hint = recording_length // 4 + chunk_size
+    stitched_logits = stitch_chunk_posteriors(
+        chunks,
+        starts,
+        asr_model=asr_model,
+        output_frames_hint=output_frames_hint,
+        device=device,
+    )
+    decoder = GreedyCTCDecoder(tokenizer=tokenizer, blank_id=asr_model.decoder.num_classes - 1)
+    return EnglishTextNormalizer()(decoder(stitched_logits.squeeze(0)))
+
+
+def evaluate_stitched_seed_asr(
+    *,
+    variant: str,
+    config,
+    asr_model,
+    tokenizer,
+    audio_batch: torch.Tensor,
+    recording_lengths: torch.Tensor,
+    reference_texts: Sequence[str],
+    recording_ids: Sequence[str],
+    recording_indexes: Optional[Sequence[int]],
+    device,
+) -> Tuple[List[dict], dict]:
+    from lcasr.eval.wer import word_error_rate_detail
+    from whisper.normalizers import EnglishTextNormalizer
+
+    normalizer = EnglishTextNormalizer()
+    chunk_size, overlap = resolve_stitched_chunking(config)
+    rows = []
+    for idx, rec_id in enumerate(recording_ids):
+        hypothesis = decode_stitched_seed_asr(
+            asr_model=asr_model,
+            tokenizer=tokenizer,
+            audio=audio_batch[idx],
+            recording_length=int(recording_lengths[idx].detach().cpu()),
+            config=config,
+            device=device,
+        )
+        reference = normalizer(reference_texts[idx])
+        wer = float(word_error_rate_detail(hypotheses=[hypothesis], references=[reference], use_cer=False)[0])
+        rows.append(
+            {
+                "variant": variant,
+                "checkpoint_path": "",
+                "checkpoint_step": 0,
+                "recording_index": int(recording_indexes[idx]) if recording_indexes is not None else idx,
+                "recording_id": rec_id,
+                "chunks": int(
+                    segment_recording(
+                        audio_batch[idx, :, : int(recording_lengths[idx].detach().cpu())],
+                        chunk_size=chunk_size,
+                        overlap=overlap,
+                    )[0].shape[0]
+                ),
+                "wer": wer,
+                "quality": 1.0 - min(wer, 1.0),
+            }
+        )
+    summary = summarise_eval_rows(rows)
+    summary.update(
+        {
+            "variant": variant,
+            "checkpoint_path": None,
+            "checkpoint_step": 0,
+            "fast_state_norm_ratio_mean": 0.0,
+            "fast_state_norm_ratio_max": 0.0,
+            "fast_weight_clipped_fraction": 0.0,
+        }
+    )
+    return rows, summary
 
 
 def evaluate_variant(
@@ -281,13 +438,13 @@ def main(config) -> None:
                 "num_dataset_recordings": len(data),
                 "num_eval_recordings": len(indexes),
                 "batch_size_recordings": batch_size,
-                "variants": [variant for variant, _, _ in variants],
+                "variants": [variant for variant, _, _, _ in variants],
             },
             sort_keys=True,
         ),
         flush=True,
     )
-    for variant, checkpoint_path, seed_asr in variants:
+    for variant, checkpoint_path, seed_asr, stitched_seed in variants:
         variant_rows = []
         batch_summaries = []
         for batch_start in range(0, len(indexes), batch_size):
@@ -295,22 +452,36 @@ def main(config) -> None:
             recording_ids, audio_batch, recording_lengths, reference_texts = build_eval_batch(data, batch_indexes)
             audio_batch = audio_batch.to(device=device, dtype=dtype)
             recording_lengths = recording_lengths.to(device=device)
-            rows, batch_summary = evaluate_variant(
-                variant=variant,
-                checkpoint_path=checkpoint_path,
-                seed_asr=seed_asr,
-                config=config,
-                asr_model=asr_model,
-                module_specs=module_specs,
-                tokenizer=tokenizer,
-                audio_batch=audio_batch,
-                recording_lengths=recording_lengths,
-                reference_texts=reference_texts,
-                recording_ids=recording_ids,
-                recording_indexes=batch_indexes,
-                device=device,
-                dtype=dtype,
-            )
+            if stitched_seed:
+                rows, batch_summary = evaluate_stitched_seed_asr(
+                    variant=variant,
+                    config=config,
+                    asr_model=asr_model,
+                    tokenizer=tokenizer,
+                    audio_batch=audio_batch,
+                    recording_lengths=recording_lengths,
+                    reference_texts=reference_texts,
+                    recording_ids=recording_ids,
+                    recording_indexes=batch_indexes,
+                    device=device,
+                )
+            else:
+                rows, batch_summary = evaluate_variant(
+                    variant=variant,
+                    checkpoint_path=checkpoint_path,
+                    seed_asr=seed_asr,
+                    config=config,
+                    asr_model=asr_model,
+                    module_specs=module_specs,
+                    tokenizer=tokenizer,
+                    audio_batch=audio_batch,
+                    recording_lengths=recording_lengths,
+                    reference_texts=reference_texts,
+                    recording_ids=recording_ids,
+                    recording_indexes=batch_indexes,
+                    device=device,
+                    dtype=dtype,
+                )
             variant_rows.extend(rows)
             batch_summaries.append(batch_summary)
             print(
