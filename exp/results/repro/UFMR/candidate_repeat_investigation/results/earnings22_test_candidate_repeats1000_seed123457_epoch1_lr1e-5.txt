@@ -1,0 +1,1 @@
+ID: ROB-177-earnings22-test-UFMR-candidate-repeats1000-trial2-seed123457-epoch1-lr1e-5 - Dataset: earnings22 - Split: test - Epochs: 1 - Original_WER: 0.23523885382840104 - Updated_WER: 0.18949002307865123

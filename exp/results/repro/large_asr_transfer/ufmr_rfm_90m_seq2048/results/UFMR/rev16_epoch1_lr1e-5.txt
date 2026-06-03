@@ -1,0 +1,1 @@
+ID: ROB-158-rev16-test-UFMR-rev16_epoch1_lr1e-5-repeat1 - Dataset: rev16 - Split: test - Epochs: 1 - Original_WER: 0.15268111094657183 - Updated_WER: 0.14087513340448238

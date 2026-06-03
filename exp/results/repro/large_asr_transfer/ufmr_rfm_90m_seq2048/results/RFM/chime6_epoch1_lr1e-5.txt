@@ -1,0 +1,1 @@
+ID: ROB-158-chime6-test-RFM-chime6_epoch1_lr1e-5-repeat1 - Dataset: chime6 - Split: test - Epochs: 1 - Original_WER: 0.8526965103983081 - Updated_WER: 0.6070673246387028
