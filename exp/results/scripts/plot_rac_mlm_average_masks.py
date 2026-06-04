@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import PercentFormatter
 import numpy as np
 import torch
+import torchaudio
 from omegaconf import OmegaConf
 
 
@@ -32,6 +33,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from l2augment.utils.datasets import AudioRewardConditionedMaskLMDataset
 from l2augment.utils.helpers import load_model as load_policy
 from l2augment.utils.helpers import load_rl_models
+from lcasr.utils.audio_tools import total_frames
 
 
 DEFAULT_CONFIG = Path(
@@ -44,9 +46,11 @@ DEFAULT_CHECKPOINT = Path(
     "audio_ssl_hubert_base_tedlium_per_utterance_transformer384_dropout0p1_500ep_lr1e3.pt"
 )
 DEFAULT_ROLLOUT_ROOT = Path("/store/store4/data/l2augment_rollout_uvqmlm/train")
+DEFAULT_TEDLIUM_BASE = Path("/store/store4/data/TEDLIUM_release-3/legacy")
 DEFAULT_OUTPUT_DIR = Path(
     "exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/"
-    "rob132_hubert_base_transformer384/visualizations/rac_mlm_average_masks_5x1000"
+    "rob132_hubert_base_transformer384/visualizations/"
+    "rac_mlm_average_masks_tedlium_test_5x1000"
 )
 
 
@@ -59,6 +63,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CHECKPOINT)
+    parser.add_argument("--source", choices=("tedlium-test", "rollout"), default="tedlium-test")
+    parser.add_argument("--tedlium-base", type=Path, default=DEFAULT_TEDLIUM_BASE)
     parser.add_argument("--rollout-root", type=Path, default=DEFAULT_ROLLOUT_ROOT)
     parser.add_argument("--rollout", action="append", type=Path, default=None)
     parser.add_argument("--num-rollouts", type=int, default=5)
@@ -105,6 +111,60 @@ def rollout_audio_length(path: Path) -> int | None:
     return int(audio.shape[-1])
 
 
+def load_ssl_features_for_segment(
+    helper: AudioRewardConditionedMaskLMDataset,
+    *,
+    sph_path: Path,
+    start_s: float,
+    end_s: float,
+) -> torch.Tensor:
+    bundle, ssl_model = helper._load_ssl_model()
+    waveform, sample_rate = helper._load_waveform_segment(str(sph_path), start_s, end_s)
+    if sample_rate != bundle.sample_rate:
+        waveform = torchaudio.functional.resample(waveform, sample_rate, bundle.sample_rate)
+    waveform = waveform.to(helper.ssl_device)
+    lengths = torch.tensor([waveform.size(-1)], dtype=torch.long, device=waveform.device)
+    with torch.no_grad():
+        extracted = ssl_model.extract_features(waveform, lengths=lengths)
+    if isinstance(extracted, tuple):
+        features, feature_lengths = extracted
+    else:
+        features, feature_lengths = extracted, None
+    if isinstance(features, (list, tuple)):
+        features = features[-1]
+    if feature_lengths is not None:
+        features = features[:, : int(feature_lengths[0].item())]
+    return features.squeeze(0).cpu().contiguous().to(dtype=torch.float16)
+
+
+def select_tedlium_test_segments(base: Path, count: int) -> list[dict]:
+    split_root = base / "test"
+    selected: list[dict] = []
+    for sph_path in sorted((split_root / "sph").glob("*.sph")):
+        recording_id = sph_path.stem
+        stm_path = split_root / "stm" / f"{recording_id}.stm"
+        utterances = AudioRewardConditionedMaskLMDataset._parse_stm(stm_path)
+        if not utterances:
+            continue
+        utterance = utterances[0]
+        selected.append(
+            {
+                "source_kind": "tedlium",
+                "split": "test",
+                "recording_id": recording_id,
+                "utterance_index": 0,
+                "sph_path": sph_path,
+                "stm_path": stm_path,
+                "start": float(utterance["start"]),
+                "end": float(utterance["end"]),
+                "text": utterance["text"],
+            }
+        )
+        if len(selected) == count:
+            return selected
+    raise ValueError(f"Found only {len(selected)} TED-LIUM test segments under {split_root}, need {count}")
+
+
 def load_audio_item(config, rollout_path: Path, device: torch.device) -> dict:
     dataset_config = OmegaConf.to_container(config.get("dataset", {}), resolve=True)
     dataset_config["ssl_device"] = device.type
@@ -113,6 +173,57 @@ def load_audio_item(config, rollout_path: Path, device: torch.device) -> dict:
     if item is None:
         raise RuntimeError(f"Failed to load audio-conditioned item for {rollout_path}")
     return item
+
+
+def build_sample_specs(args: argparse.Namespace, config, model, device: torch.device) -> list[dict]:
+    if args.source == "rollout":
+        rollouts = args.rollout or select_distinct_recording_rollouts(args.rollout_root, args.num_rollouts)
+        if len(rollouts) != args.num_rollouts:
+            raise ValueError(f"Expected {args.num_rollouts} rollouts, got {len(rollouts)}")
+        specs = []
+        for rollout_path in rollouts:
+            item = load_audio_item(config, rollout_path, device)
+            specs.append(
+                {
+                    "source_kind": "rollout",
+                    "split": rollout_path.parent.name,
+                    "source_path": rollout_path,
+                    "rollout": str(rollout_path),
+                    "recording_id": rollout_recording_id(rollout_path),
+                    "audio_features": item["audio_features"],
+                    "audio_feature_length": item["audio_feature_length"],
+                    "target_prediction_steps": int(item["generation_length"]),
+                    "target_output_length": rollout_audio_length(rollout_path),
+                }
+            )
+        return specs
+
+    dataset_config = OmegaConf.to_container(config.get("dataset", {}), resolve=True)
+    dataset_config["ssl_device"] = device.type
+    helper = AudioRewardConditionedMaskLMDataset([], **dataset_config)
+    specs = []
+    for segment in select_tedlium_test_segments(args.tedlium_base, args.num_rollouts):
+        audio_features = load_ssl_features_for_segment(
+            helper,
+            sph_path=segment["sph_path"],
+            start_s=segment["start"],
+            end_s=segment["end"],
+        )
+        duration_s = segment["end"] - segment["start"]
+        target_output_length = total_frames(duration_s)
+        target_prediction_steps = int(model.mask_enc.calc_downsampled_length(target_output_length).item())
+        specs.append(
+            {
+                **segment,
+                "source_path": segment["sph_path"],
+                "audio_features": audio_features,
+                "audio_feature_length": torch.tensor(audio_features.shape[0], dtype=torch.long),
+                "target_prediction_steps": target_prediction_steps,
+                "target_output_length": target_output_length,
+                "duration_seconds": duration_s,
+            }
+        )
+    return specs
 
 
 @torch.no_grad()
@@ -226,20 +337,17 @@ def main() -> None:
     model.eval()
     model.mask_enc.eval()
 
-    rollouts = args.rollout or select_distinct_recording_rollouts(args.rollout_root, args.num_rollouts)
-    if len(rollouts) != args.num_rollouts:
-        raise ValueError(f"Expected {args.num_rollouts} rollouts, got {len(rollouts)}")
+    sample_specs = build_sample_specs(args, config, model, device)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     summaries: list[dict] = []
     npz_payload: dict[str, np.ndarray] = {}
 
-    for sample_index, rollout_path in enumerate(rollouts, start=1):
-        item = load_audio_item(config, rollout_path, device)
-        audio_features = item["audio_features"].to(device)
-        audio_feature_length = item["audio_feature_length"].to(device)
-        target_prediction_steps = int(item["generation_length"])
-        target_output_length = rollout_audio_length(rollout_path)
+    for sample_index, sample_spec in enumerate(sample_specs, start=1):
+        audio_features = sample_spec["audio_features"].to(device)
+        audio_feature_length = sample_spec["audio_feature_length"].to(device)
+        target_prediction_steps = int(sample_spec["target_prediction_steps"])
+        target_output_length = sample_spec["target_output_length"]
 
         torch.manual_seed(args.seed + sample_index * 100_000)
         if device.type == "cuda":
@@ -277,12 +385,12 @@ def main() -> None:
                 example_tokens.append([int(item) for item in row.tolist()])
             generated += current_batch
             print(
-                f"sample={sample_index}/{len(rollouts)} generated={generated}/{args.samples_per_rollout}",
+                f"sample={sample_index}/{len(sample_specs)} generated={generated}/{args.samples_per_rollout}",
                 flush=True,
             )
 
         if running_average is None:
-            raise RuntimeError(f"No masks generated for {rollout_path}")
+            raise RuntimeError(f"No masks generated for {sample_spec['source_path']}")
 
         average_keep_mask = running_average.numpy().astype(np.float32)
         sample_key = f"sample_{sample_index}"
@@ -292,14 +400,16 @@ def main() -> None:
         summaries.append(
             {
                 "sample_index": sample_index,
-                "rollout": str(rollout_path),
-                "recording_id": rollout_recording_id(rollout_path),
+                "source_kind": sample_spec["source_kind"],
+                "split": sample_spec["split"],
+                "source_path": str(sample_spec["source_path"]),
+                "recording_id": sample_spec["recording_id"],
                 "conditioning_reward": float(args.conditioning_reward),
                 "samples": int(args.samples_per_rollout),
                 "target_prediction_steps": target_prediction_steps,
                 "target_output_length": target_output_length,
-                "audio_feature_shape": list(item["audio_features"].shape),
-                "audio_feature_length": int(item["audio_feature_length"]),
+                "audio_feature_shape": list(sample_spec["audio_features"].shape),
+                "audio_feature_length": int(sample_spec["audio_feature_length"]),
                 "average_keep_mask": average_keep_mask,
                 "average_keep_fraction": average_keep_fraction,
                 "average_keep_percentage": average_keep_fraction * 100.0,
@@ -310,10 +420,26 @@ def main() -> None:
                 "sample_keep_fraction_max": sample_keep_max,
                 "sample_masked_fraction_mean": 1.0 - sample_keep_mean,
                 "example_token_sequences": example_tokens,
+                **{
+                    key: str(value) if isinstance(value, Path) else value
+                    for key, value in sample_spec.items()
+                    if key
+                    in {
+                        "rollout",
+                        "utterance_index",
+                        "sph_path",
+                        "stm_path",
+                        "start",
+                        "end",
+                        "duration_seconds",
+                        "text",
+                    }
+                },
             }
         )
 
-    artifact_stem = f"rac_mlm_average_masks_{len(rollouts)}x{args.samples_per_rollout}"
+    source_label = "tedlium_test" if args.source == "tedlium-test" else "rollout"
+    artifact_stem = f"rac_mlm_average_masks_{source_label}_{len(sample_specs)}x{args.samples_per_rollout}"
     pdf_path = args.output_dir / f"{artifact_stem}.pdf"
     png_path = args.output_dir / f"{artifact_stem}.png"
     save_grid(summaries, pdf_path, png_path)
@@ -325,6 +451,9 @@ def main() -> None:
         "config": str(args.config),
         "checkpoint": str(args.checkpoint),
         "checkpoint_bytes": int(args.checkpoint.stat().st_size),
+        "source": args.source,
+        "tedlium_base": str(args.tedlium_base),
+        "rollout_root": str(args.rollout_root),
         "conditioning_reward": float(args.conditioning_reward),
         "samples_per_rollout": int(args.samples_per_rollout),
         "batch_size": int(args.batch_size),

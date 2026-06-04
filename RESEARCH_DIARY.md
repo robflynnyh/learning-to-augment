@@ -336,3 +336,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/visualizations/rac_mlm_average_masks_5x1000/`.
   The PDF averages `1000` sampled reward-`1.0` masks for each of five distinct
   TED-LIUM train recordings using the ROB-132 HuBERT-base audio SSL checkpoint.
+- Regenerated the ROB-196 deliverable on TED-LIUM test audio after review
+  clarification. The primary handoff is now
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/visualizations/rac_mlm_average_masks_tedlium_test_5x1000/rac_mlm_average_masks_tedlium_test_5x1000.pdf`;
+  it plots average masked probability only, not masks applied over audio.
