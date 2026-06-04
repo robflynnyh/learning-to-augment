@@ -7,11 +7,11 @@
 - Reward controls: fixed `conditioning_reward: 1.0` and fixed `conditioning_reward: 0.0` as separate runs
 - Datasets: `tedlium`, `earnings22`, `rev16`, `TAL`, `chime6`; all `test` split
 - Adaptation: `epochs=1` and `epochs=5`, `lr=1e-5`, multistep rollout
-- Branch: `symphony/ROB-132-audio-conditioned-vq-mask-lm`
-- Commit: `eb3a34d806b8257e019127a4b78481c8412ec189`
-- Main log: `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/logs`
-- Screen log: `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/logs`
-- Queued command: `ROB-132 artifact consolidation from completed TED-LIUM/Earnings22 plus Rev16/TAL/CHiME-6 test-set results`
+- Branch: `symphony/ROB-201-complete-rev16-tal-epoch5-audio-ssl`
+- Commit: `fc922ba`
+- Main log: `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/logs/rob201_rev16_tal_epoch5_mimas_corrected.log`
+- Screen log: `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/logs/rob201_rev16_tal_epoch5_mimas_corrected.screen.log`
+- Queued command: `ROB-201 corrected Mimas Rev16/TAL epoch-5 preparation; previous batch-size-4 run cancelled after equivalence validation failed`
 
 Completed cells: `16/20`.
 

@@ -49,7 +49,7 @@ def make_audio_ssl_feature_fn(config, rec_dict):
     dataset_config = config.get('dataset', {})
     bundle_name = dataset_config.get('ssl_bundle', 'HUBERT_BASE')
     ssl_device = dataset_config.get('ssl_device', config.get('training', {}).get('device', 'cuda'))
-    ssl_extraction_batch_size = int(dataset_config.get('ssl_extraction_batch_size', 4))
+    ssl_extraction_batch_size = int(dataset_config.get('ssl_extraction_batch_size', 1))
     ssl_precompute = bool(dataset_config.get('ssl_precompute', True))
     feature_cache = {}
 
@@ -131,34 +131,39 @@ def make_audio_ssl_feature_fn(config, rec_dict):
         if len(waveforms) == 0:
             return
 
-        max_length = max(lengths)
-        padded = [
-            torch.nn.functional.pad(waveform, (0, max_length - waveform.size(-1)))
-            for waveform in waveforms
-        ]
-        waveform_batch = torch.cat(padded, dim=0).to(target_device)
-        length_tensor = torch.tensor(lengths, dtype=torch.long, device=target_device)
-        with torch.no_grad():
-            extracted = model.extract_features(waveform_batch, lengths=length_tensor)
-        if isinstance(extracted, tuple):
-            features, feature_lengths = extracted
-        else:
-            features, feature_lengths = extracted, None
-        if isinstance(features, (list, tuple)):
-            features = features[-1]
-        if feature_lengths is None:
-            feature_lengths = torch.full(
-                (features.size(0),),
-                int(features.size(1)),
+        grouped = {}
+        for waveform, length, cache_key in zip(waveforms, lengths, cache_keys):
+            grouped.setdefault(length, []).append((waveform, cache_key))
+
+        for length, items in grouped.items():
+            waveform_batch = torch.cat([waveform for waveform, _ in items], dim=0).to(target_device)
+            length_tensor = torch.full(
+                (len(items),),
+                int(length),
                 dtype=torch.long,
-                device=features.device,
+                device=target_device,
             )
-        for row, cache_key in enumerate(cache_keys):
-            feature_length = int(feature_lengths[row].item())
-            feature_cache[cache_key] = (
-                features[row, :feature_length].detach().cpu().contiguous(),
-                feature_length,
-            )
+            with torch.no_grad():
+                extracted = model.extract_features(waveform_batch, lengths=length_tensor)
+            if isinstance(extracted, tuple):
+                features, feature_lengths = extracted
+            else:
+                features, feature_lengths = extracted, None
+            if isinstance(features, (list, tuple)):
+                features = features[-1]
+            if feature_lengths is None:
+                feature_lengths = torch.full(
+                    (features.size(0),),
+                    int(features.size(1)),
+                    dtype=torch.long,
+                    device=features.device,
+                )
+            for row, (_, cache_key) in enumerate(items):
+                feature_length = int(feature_lengths[row].item())
+                feature_cache[cache_key] = (
+                    features[row, :feature_length].detach().cpu().contiguous(),
+                    feature_length,
+                )
 
     def precompute_features(chunk_start_frames, training_data, device):
         if not ssl_precompute:

@@ -239,6 +239,7 @@ evaluation:
 dataset:
   ssl_bundle: HUBERT_BASE
   ssl_device: cuda
+  ssl_extraction_batch_size: 1
   tedlium_base: /store/store4/data/TEDLIUM_release-3/legacy
 
 policy:
