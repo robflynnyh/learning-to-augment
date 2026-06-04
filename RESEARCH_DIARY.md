@@ -333,10 +333,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
 ## 2026-06-04
 
 - Added the ROB-196 RAC-MLM visualization under
-  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/visualizations/rac_mlm_average_masks_5x1000/`.
-  The PDF averages `1000` sampled reward-`1.0` masks for each of five distinct
-  TED-LIUM train recordings using the ROB-132 HuBERT-base audio SSL checkpoint.
-- Regenerated the ROB-196 deliverable on TED-LIUM test audio after review
-  clarification. The primary handoff is now
-  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/visualizations/rac_mlm_average_masks_tedlium_test_5x1000/rac_mlm_average_masks_tedlium_test_5x1000.pdf`;
-  it plots average masked probability only, not masks applied over audio.
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/visualizations/rac_mlm_masks_tedlium_test_samples3to5_rewards1p0_0p0/`.
+  The primary averaged PDF removes TED-LIUM test samples 1-2, uses samples 3-5,
+  and plots reward-`1.0` and reward-`0.0` columns from `1000` sampled masks per
+  panel. A matching single-generation PDF uses the same audio/reward panels.
+  Both PDFs plot masked probability only, not masks applied over audio.

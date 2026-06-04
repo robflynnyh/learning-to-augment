@@ -50,7 +50,7 @@ DEFAULT_TEDLIUM_BASE = Path("/store/store4/data/TEDLIUM_release-3/legacy")
 DEFAULT_OUTPUT_DIR = Path(
     "exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/"
     "rob132_hubert_base_transformer384/visualizations/"
-    "rac_mlm_average_masks_tedlium_test_5x1000"
+    "rac_mlm_masks_tedlium_test_samples3to5_rewards1p0_0p0"
 )
 
 
@@ -67,10 +67,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tedlium-base", type=Path, default=DEFAULT_TEDLIUM_BASE)
     parser.add_argument("--rollout-root", type=Path, default=DEFAULT_ROLLOUT_ROOT)
     parser.add_argument("--rollout", action="append", type=Path, default=None)
-    parser.add_argument("--num-rollouts", type=int, default=5)
+    parser.add_argument("--num-rollouts", type=int, default=3)
+    parser.add_argument(
+        "--segment-start-index",
+        type=int,
+        default=3,
+        help="One-based index into the distinct source recordings to start from.",
+    )
     parser.add_argument("--samples-per-rollout", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=100)
-    parser.add_argument("--conditioning-reward", type=float, default=1.0)
+    parser.add_argument(
+        "--conditioning-reward",
+        "--conditioning-rewards",
+        action="append",
+        dest="conditioning_rewards",
+        type=float,
+        default=None,
+        help="Conditioning reward to plot. Repeat to create multiple columns.",
+    )
     parser.add_argument("--seed", type=int, default=20260604)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument(
@@ -82,15 +96,24 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def select_distinct_recording_rollouts(root: Path, count: int) -> list[Path]:
+def format_reward_for_path(reward: float) -> str:
+    return f"{reward:.1f}".replace("-", "m").replace(".", "p")
+
+
+def select_distinct_recording_rollouts(root: Path, count: int, start_index: int) -> list[Path]:
     selected: list[Path] = []
     seen_recordings: set[str] = set()
+    source_index = 0
     for path in sorted(root.glob("*.pt")):
         recording_id = path.stem.rsplit("_", 1)[0]
         if recording_id in seen_recordings:
             continue
+        source_index += 1
         selected.append(path)
         seen_recordings.add(recording_id)
+        if source_index < start_index:
+            selected.pop()
+            continue
         if len(selected) == count:
             return selected
     raise ValueError(f"Found only {len(selected)} distinct recordings under {root}, need {count}")
@@ -137,20 +160,25 @@ def load_ssl_features_for_segment(
     return features.squeeze(0).cpu().contiguous().to(dtype=torch.float16)
 
 
-def select_tedlium_test_segments(base: Path, count: int) -> list[dict]:
+def select_tedlium_test_segments(base: Path, count: int, start_index: int) -> list[dict]:
     split_root = base / "test"
     selected: list[dict] = []
+    source_index = 0
     for sph_path in sorted((split_root / "sph").glob("*.sph")):
         recording_id = sph_path.stem
         stm_path = split_root / "stm" / f"{recording_id}.stm"
         utterances = AudioRewardConditionedMaskLMDataset._parse_stm(stm_path)
         if not utterances:
             continue
+        source_index += 1
+        if source_index < start_index:
+            continue
         utterance = utterances[0]
         selected.append(
             {
                 "source_kind": "tedlium",
                 "split": "test",
+                "source_sample_index": source_index,
                 "recording_id": recording_id,
                 "utterance_index": 0,
                 "sph_path": sph_path,
@@ -177,16 +205,21 @@ def load_audio_item(config, rollout_path: Path, device: torch.device) -> dict:
 
 def build_sample_specs(args: argparse.Namespace, config, model, device: torch.device) -> list[dict]:
     if args.source == "rollout":
-        rollouts = args.rollout or select_distinct_recording_rollouts(args.rollout_root, args.num_rollouts)
+        rollouts = args.rollout or select_distinct_recording_rollouts(
+            args.rollout_root,
+            args.num_rollouts,
+            args.segment_start_index,
+        )
         if len(rollouts) != args.num_rollouts:
             raise ValueError(f"Expected {args.num_rollouts} rollouts, got {len(rollouts)}")
         specs = []
-        for rollout_path in rollouts:
+        for sample_offset, rollout_path in enumerate(rollouts):
             item = load_audio_item(config, rollout_path, device)
             specs.append(
                 {
                     "source_kind": "rollout",
                     "split": rollout_path.parent.name,
+                    "source_sample_index": args.segment_start_index + sample_offset,
                     "source_path": rollout_path,
                     "rollout": str(rollout_path),
                     "recording_id": rollout_recording_id(rollout_path),
@@ -202,7 +235,7 @@ def build_sample_specs(args: argparse.Namespace, config, model, device: torch.de
     dataset_config["ssl_device"] = device.type
     helper = AudioRewardConditionedMaskLMDataset([], **dataset_config)
     specs = []
-    for segment in select_tedlium_test_segments(args.tedlium_base, args.num_rollouts):
+    for segment in select_tedlium_test_segments(args.tedlium_base, args.num_rollouts, args.segment_start_index):
         audio_features = load_ssl_features_for_segment(
             helper,
             sph_path=segment["sph_path"],
@@ -286,33 +319,189 @@ def generate_mask_batch(
     return masks, tokens
 
 
-def save_grid(summaries: list[dict], pdf_path: Path, png_path: Path) -> None:
-    fig, axes = plt.subplots(len(summaries), 1, figsize=(10.0, 2.35 * len(summaries)), constrained_layout=True)
-    axes = np.asarray(axes).reshape(-1)
+def save_grid(
+    summaries: list[dict],
+    *,
+    rewards: list[float],
+    pdf_path: Path,
+    png_path: Path,
+    title: str,
+    mask_key: str,
+) -> None:
+    rows = sorted({int(summary["source_sample_index"]) for summary in summaries})
+    summary_by_panel = {
+        (int(summary["source_sample_index"]), float(summary["conditioning_reward"])): summary
+        for summary in summaries
+    }
+    fig, axes = plt.subplots(
+        len(rows),
+        len(rewards),
+        figsize=(5.6 * len(rewards), 2.45 * len(rows)),
+        squeeze=False,
+        constrained_layout=True,
+    )
+    fig.suptitle(title)
     image = None
-    for index, (ax, summary) in enumerate(zip(axes, summaries, strict=True), start=1):
-        masked_rate = 1.0 - summary["average_keep_mask"]
-        image = ax.imshow(
-            masked_rate,
-            aspect="auto",
-            origin="lower",
-            interpolation="nearest",
-            cmap="viridis",
-            vmin=0.0,
-            vmax=1.0,
-        )
-        ax.set_title(
-            f"Sample {index}: {summary['recording_id']} "
-            f"(masked {summary['average_masked_percentage']:.1f}%)"
-        )
-        ax.set_xlabel("time frame")
-        ax.set_ylabel("mel bin")
+    for row_index, source_sample_index in enumerate(rows):
+        for column_index, reward in enumerate(rewards):
+            ax = axes[row_index, column_index]
+            summary = summary_by_panel[(source_sample_index, reward)]
+            masked_rate = 1.0 - summary[mask_key]
+            masked_percentage = float(masked_rate.mean() * 100.0)
+            image = ax.imshow(
+                masked_rate,
+                aspect="auto",
+                origin="lower",
+                interpolation="nearest",
+                cmap="viridis",
+                vmin=0.0,
+                vmax=1.0,
+            )
+            ax.set_title(
+                f"Sample {summary['source_sample_index']}: reward {reward:g}\n"
+                f"{summary['recording_id']} ({masked_percentage:.1f}% masked)"
+            )
+            if row_index == len(rows) - 1:
+                ax.set_xlabel("time frame")
+            if column_index == 0:
+                ax.set_ylabel("mel bin")
     if image is not None:
-        colorbar = fig.colorbar(image, ax=axes.tolist(), label="masked probability")
+        colorbar = fig.colorbar(image, ax=axes.ravel().tolist(), label="masked probability")
         colorbar.ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0))
     fig.savefig(pdf_path)
     fig.savefig(png_path, dpi=180)
     plt.close(fig)
+
+
+def stream_mask_summary(
+    model,
+    *,
+    sample_index: int,
+    sample_spec: dict,
+    conditioning_reward: float,
+    samples_per_rollout: int,
+    batch_size: int,
+    device: torch.device,
+) -> dict:
+    audio_features = sample_spec["audio_features"].to(device)
+    audio_feature_length = sample_spec["audio_feature_length"].to(device)
+    target_prediction_steps = int(sample_spec["target_prediction_steps"])
+    target_output_length = sample_spec["target_output_length"]
+
+    generated = 0
+    running_average: torch.Tensor | None = None
+    single_keep_mask: np.ndarray | None = None
+    sample_keep_sum = 0.0
+    sample_keep_min = float("inf")
+    sample_keep_max = float("-inf")
+    example_tokens: list[list[int]] = []
+
+    while generated < samples_per_rollout:
+        current_batch = min(batch_size, samples_per_rollout - generated)
+        masks, tokens = generate_mask_batch(
+            model,
+            audio_features=audio_features,
+            audio_feature_length=audio_feature_length,
+            conditioning_reward=conditioning_reward,
+            batch_size=current_batch,
+            target_prediction_steps=target_prediction_steps,
+            target_output_length=target_output_length,
+            device=device,
+        )
+        masks_cpu = masks.detach().cpu()
+        if running_average is None:
+            running_average = torch.zeros(masks_cpu.shape[1:], dtype=torch.float64)
+            single_keep_mask = masks_cpu[0].numpy().astype(np.float32)
+        running_average += masks_cpu.sum(dim=0).to(dtype=torch.float64) / samples_per_rollout
+
+        keep_fraction = masks_cpu.mean(dim=(1, 2))
+        sample_keep_sum += float(keep_fraction.sum().item())
+        sample_keep_min = min(sample_keep_min, float(keep_fraction.min().item()))
+        sample_keep_max = max(sample_keep_max, float(keep_fraction.max().item()))
+        for row in tokens.detach().cpu()[: max(0, 3 - len(example_tokens))]:
+            example_tokens.append([int(item) for item in row.tolist()])
+        generated += current_batch
+        print(
+            "sample="
+            f"{sample_index} reward={conditioning_reward:g} "
+            f"generated={generated}/{samples_per_rollout}",
+            flush=True,
+        )
+
+    if running_average is None or single_keep_mask is None:
+        raise RuntimeError(f"No masks generated for {sample_spec['source_path']}")
+
+    average_keep_mask = running_average.numpy().astype(np.float32)
+    average_keep_fraction = float(average_keep_mask.mean())
+    single_keep_fraction = float(single_keep_mask.mean())
+    sample_keep_mean = sample_keep_sum / samples_per_rollout
+    return {
+        "sample_index": sample_index,
+        "source_sample_index": int(sample_spec["source_sample_index"]),
+        "source_kind": sample_spec["source_kind"],
+        "split": sample_spec["split"],
+        "source_path": str(sample_spec["source_path"]),
+        "recording_id": sample_spec["recording_id"],
+        "conditioning_reward": float(conditioning_reward),
+        "samples": int(samples_per_rollout),
+        "target_prediction_steps": target_prediction_steps,
+        "target_output_length": target_output_length,
+        "audio_feature_shape": list(sample_spec["audio_features"].shape),
+        "audio_feature_length": int(sample_spec["audio_feature_length"]),
+        "average_keep_mask": average_keep_mask,
+        "single_keep_mask": single_keep_mask,
+        "average_keep_fraction": average_keep_fraction,
+        "average_keep_percentage": average_keep_fraction * 100.0,
+        "average_masked_fraction": 1.0 - average_keep_fraction,
+        "average_masked_percentage": (1.0 - average_keep_fraction) * 100.0,
+        "single_keep_fraction": single_keep_fraction,
+        "single_keep_percentage": single_keep_fraction * 100.0,
+        "single_masked_fraction": 1.0 - single_keep_fraction,
+        "single_masked_percentage": (1.0 - single_keep_fraction) * 100.0,
+        "sample_keep_fraction_min": sample_keep_min,
+        "sample_keep_fraction_mean": sample_keep_mean,
+        "sample_keep_fraction_max": sample_keep_max,
+        "sample_masked_fraction_mean": 1.0 - sample_keep_mean,
+        "example_token_sequences": example_tokens,
+        **{
+            key: str(value) if isinstance(value, Path) else value
+            for key, value in sample_spec.items()
+            if key
+            in {
+                "rollout",
+                "utterance_index",
+                "sph_path",
+                "stm_path",
+                "start",
+                "end",
+                "duration_seconds",
+                "text",
+            }
+        },
+    }
+
+
+def metadata_summary(summary: dict) -> dict:
+    return {
+        key: value
+        for key, value in summary.items()
+        if key not in {"average_keep_mask", "single_keep_mask"}
+    }
+
+
+def artifact_stem(args: argparse.Namespace, sample_specs: list[dict], rewards: list[float]) -> str:
+    source_label = "tedlium_test" if args.source == "tedlium-test" else "rollout"
+    sample_indexes = [int(sample["source_sample_index"]) for sample in sample_specs]
+    sample_label = f"samples{sample_indexes[0]}to{sample_indexes[-1]}"
+    reward_label = "_".join(f"reward{format_reward_for_path(reward)}" for reward in rewards)
+    return f"rac_mlm_masks_{source_label}_{sample_label}_{reward_label}"
+
+
+def add_npz_arrays(npz_payload: dict[str, np.ndarray], summary: dict) -> None:
+    reward_label = format_reward_for_path(float(summary["conditioning_reward"]))
+    sample_label = f"sample_{summary['source_sample_index']}_reward_{reward_label}"
+    npz_payload[f"average_keep_mask_{sample_label}"] = summary["average_keep_mask"]
+    npz_payload[f"single_keep_mask_{sample_label}"] = summary["single_keep_mask"]
 
 
 def main() -> None:
@@ -323,6 +512,9 @@ def main() -> None:
         raise ValueError("--batch-size must be positive")
     if args.num_rollouts < 1:
         raise ValueError("--num-rollouts must be positive")
+    if args.segment_start_index < 1:
+        raise ValueError("--segment-start-index must be positive")
+    rewards = args.conditioning_rewards or [1.0, 0.0]
 
     if args.device == "auto":
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -344,106 +536,45 @@ def main() -> None:
     npz_payload: dict[str, np.ndarray] = {}
 
     for sample_index, sample_spec in enumerate(sample_specs, start=1):
-        audio_features = sample_spec["audio_features"].to(device)
-        audio_feature_length = sample_spec["audio_feature_length"].to(device)
-        target_prediction_steps = int(sample_spec["target_prediction_steps"])
-        target_output_length = sample_spec["target_output_length"]
-
-        torch.manual_seed(args.seed + sample_index * 100_000)
-        if device.type == "cuda":
-            torch.cuda.manual_seed_all(args.seed + sample_index * 100_000)
-
-        generated = 0
-        running_average: torch.Tensor | None = None
-        sample_keep_sum = 0.0
-        sample_keep_min = float("inf")
-        sample_keep_max = float("-inf")
-        example_tokens: list[list[int]] = []
-
-        while generated < args.samples_per_rollout:
-            current_batch = min(args.batch_size, args.samples_per_rollout - generated)
-            masks, tokens = generate_mask_batch(
+        for reward_index, conditioning_reward in enumerate(rewards):
+            seed = args.seed + int(sample_spec["source_sample_index"]) * 100_000 + reward_index * 10_000
+            torch.manual_seed(seed)
+            if device.type == "cuda":
+                torch.cuda.manual_seed_all(seed)
+            summary = stream_mask_summary(
                 model,
-                audio_features=audio_features,
-                audio_feature_length=audio_feature_length,
-                conditioning_reward=args.conditioning_reward,
-                batch_size=current_batch,
-                target_prediction_steps=target_prediction_steps,
-                target_output_length=target_output_length,
+                sample_index=sample_index,
+                sample_spec=sample_spec,
+                conditioning_reward=conditioning_reward,
+                samples_per_rollout=args.samples_per_rollout,
+                batch_size=args.batch_size,
                 device=device,
             )
-            masks_cpu = masks.detach().cpu()
-            if running_average is None:
-                running_average = torch.zeros(masks_cpu.shape[1:], dtype=torch.float64)
-            running_average += masks_cpu.sum(dim=0).to(dtype=torch.float64) / args.samples_per_rollout
+            summaries.append(summary)
+            add_npz_arrays(npz_payload, summary)
 
-            keep_fraction = masks_cpu.mean(dim=(1, 2))
-            sample_keep_sum += float(keep_fraction.sum().item())
-            sample_keep_min = min(sample_keep_min, float(keep_fraction.min().item()))
-            sample_keep_max = max(sample_keep_max, float(keep_fraction.max().item()))
-            for row in tokens.detach().cpu()[: max(0, 3 - len(example_tokens))]:
-                example_tokens.append([int(item) for item in row.tolist()])
-            generated += current_batch
-            print(
-                f"sample={sample_index}/{len(sample_specs)} generated={generated}/{args.samples_per_rollout}",
-                flush=True,
-            )
-
-        if running_average is None:
-            raise RuntimeError(f"No masks generated for {sample_spec['source_path']}")
-
-        average_keep_mask = running_average.numpy().astype(np.float32)
-        sample_key = f"sample_{sample_index}"
-        npz_payload[sample_key] = average_keep_mask
-        average_keep_fraction = float(average_keep_mask.mean())
-        sample_keep_mean = sample_keep_sum / args.samples_per_rollout
-        summaries.append(
-            {
-                "sample_index": sample_index,
-                "source_kind": sample_spec["source_kind"],
-                "split": sample_spec["split"],
-                "source_path": str(sample_spec["source_path"]),
-                "recording_id": sample_spec["recording_id"],
-                "conditioning_reward": float(args.conditioning_reward),
-                "samples": int(args.samples_per_rollout),
-                "target_prediction_steps": target_prediction_steps,
-                "target_output_length": target_output_length,
-                "audio_feature_shape": list(sample_spec["audio_features"].shape),
-                "audio_feature_length": int(sample_spec["audio_feature_length"]),
-                "average_keep_mask": average_keep_mask,
-                "average_keep_fraction": average_keep_fraction,
-                "average_keep_percentage": average_keep_fraction * 100.0,
-                "average_masked_fraction": 1.0 - average_keep_fraction,
-                "average_masked_percentage": (1.0 - average_keep_fraction) * 100.0,
-                "sample_keep_fraction_min": sample_keep_min,
-                "sample_keep_fraction_mean": sample_keep_mean,
-                "sample_keep_fraction_max": sample_keep_max,
-                "sample_masked_fraction_mean": 1.0 - sample_keep_mean,
-                "example_token_sequences": example_tokens,
-                **{
-                    key: str(value) if isinstance(value, Path) else value
-                    for key, value in sample_spec.items()
-                    if key
-                    in {
-                        "rollout",
-                        "utterance_index",
-                        "sph_path",
-                        "stm_path",
-                        "start",
-                        "end",
-                        "duration_seconds",
-                        "text",
-                    }
-                },
-            }
-        )
-
-    source_label = "tedlium_test" if args.source == "tedlium-test" else "rollout"
-    artifact_stem = f"rac_mlm_average_masks_{source_label}_{len(sample_specs)}x{args.samples_per_rollout}"
-    pdf_path = args.output_dir / f"{artifact_stem}.pdf"
-    png_path = args.output_dir / f"{artifact_stem}.png"
-    save_grid(summaries, pdf_path, png_path)
-    npz_path = args.output_dir / f"{artifact_stem}.npz"
+    stem = artifact_stem(args, sample_specs, rewards)
+    average_pdf_path = args.output_dir / f"{stem}_average{args.samples_per_rollout}.pdf"
+    average_png_path = args.output_dir / f"{stem}_average{args.samples_per_rollout}.png"
+    single_pdf_path = args.output_dir / f"{stem}_single.pdf"
+    single_png_path = args.output_dir / f"{stem}_single.png"
+    save_grid(
+        summaries,
+        rewards=rewards,
+        pdf_path=average_pdf_path,
+        png_path=average_png_path,
+        title=f"RAC-MLM average masks ({args.samples_per_rollout} samples per panel)",
+        mask_key="average_keep_mask",
+    )
+    save_grid(
+        summaries,
+        rewards=rewards,
+        pdf_path=single_pdf_path,
+        png_path=single_png_path,
+        title="RAC-MLM single sampled masks",
+        mask_key="single_keep_mask",
+    )
+    npz_path = args.output_dir / f"{stem}.npz"
     np.savez_compressed(npz_path, **npz_payload)
 
     metadata = {
@@ -454,22 +585,26 @@ def main() -> None:
         "source": args.source,
         "tedlium_base": str(args.tedlium_base),
         "rollout_root": str(args.rollout_root),
-        "conditioning_reward": float(args.conditioning_reward),
+        "segment_start_index": int(args.segment_start_index),
+        "conditioning_rewards": [float(reward) for reward in rewards],
         "samples_per_rollout": int(args.samples_per_rollout),
+        "single_generation_source": (
+            "The single-generation plot uses the first generated mask from the "
+            "same streamed sampling pass as the averaged plot for each panel."
+        ),
         "batch_size": int(args.batch_size),
         "seed": int(args.seed),
         "device": str(device),
         "mask_value_semantics": (
             "Model output is a keep mask: 1.0 keeps/unmasks the bin. "
-            "The PDF plots 1.0 - average_keep_mask as masked probability."
+            "The PDFs plot 1.0 - keep_mask as masked probability."
         ),
-        "pdf": pdf_path.name,
-        "png": png_path.name,
+        "average_pdf": average_pdf_path.name,
+        "average_png": average_png_path.name,
+        "single_pdf": single_pdf_path.name,
+        "single_png": single_png_path.name,
         "npz": npz_path.name,
-        "samples": [
-            {key: value for key, value in summary.items() if key != "average_keep_mask"}
-            for summary in summaries
-        ],
+        "panels": [metadata_summary(summary) for summary in summaries],
     }
     metadata_path = args.output_dir / "metadata.json"
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
