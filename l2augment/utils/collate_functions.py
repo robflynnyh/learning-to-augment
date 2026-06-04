@@ -263,6 +263,45 @@ def RewardConditionedMaskLM_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str
     }
 
 
+def AudioRewardConditionedMaskLM_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+    collated = RewardConditionedMaskLM_fn(batch)
+    if collated is None:
+        return None
+
+    audio_features = []
+    audio_feature_lengths = []
+    audio_feature_cache_paths = []
+    audio_item_idxs = []
+    for item in batch:
+        if item is None:
+            continue
+        cur_count = item['generation'].shape[0]
+        audio_idx = len(audio_features)
+        cur_features = item['audio_features'].to(dtype=torch.float16)
+        audio_features.append(cur_features)
+        audio_feature_lengths.append(int(item['audio_feature_length']))
+        audio_feature_cache_paths.append(item['audio_feature_cache_path'])
+        audio_item_idxs.extend([audio_idx] * cur_count)
+
+    max_length = max(features.shape[0] for features in audio_features)
+    feature_dim = audio_features[0].shape[-1]
+    padded_features = []
+    for features in audio_features:
+        if features.shape[0] < max_length:
+            diff = max_length - features.shape[0]
+            features = torch.cat([
+                features,
+                torch.zeros(diff, feature_dim, dtype=features.dtype),
+            ], dim=0)
+        padded_features.append(features)
+
+    collated['audio_features'] = torch.stack(padded_features, dim=0)
+    collated['audio_feature_lengths'] = torch.tensor(audio_feature_lengths, dtype=torch.long)
+    collated['audio_item_idxs'] = torch.tensor(audio_item_idxs, dtype=torch.long)
+    collated['audio_feature_cache_paths'] = audio_feature_cache_paths
+    return collated
+
+
 def MultiStep_DTLM_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:    
 
     audio = {}
@@ -459,6 +498,7 @@ collate_functions_dict = {
     "MultiStep_DTLM": MultiStep_DTLM_fn,
     "DTLM": DTLM_fn,
     "RewardConditionedMaskLM": RewardConditionedMaskLM_fn,
+    "AudioRewardConditionedMaskLM": AudioRewardConditionedMaskLM_fn,
     "default": mask_collate_fn,
     "1dmask": mask_collate_fn,
     "mask_and_audio": mask_and_audio_collate_fn,

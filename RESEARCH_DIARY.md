@@ -306,6 +306,14 @@ reproduce results, interpret metrics, or avoid known failure modes.
 - Consolidated the ROB-158 primary outcome so `OUTCOME.md` contains
   both UFMR and RFM aggregate/per-repeat results plus the direct shared-cell
   large-ASR comparison.
+- Consolidated the ROB-132 audio+reward-conditioned test-set artifacts under
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/`.
+  The folder now covers TED-LIUM, Earnings22, Rev16, TAL, and CHiME-6 test
+  fixed-reward cells. It has `16/20` cells complete; the missing Rev16/TAL
+  epoch-5 rows were intentionally deferred after runtime estimates showed they
+  were likely to exceed the 4-day Stanage limit. CHiME uses multi-channel raw
+  audio paths, so `exp/eval.py` extracts SSL from the aligned raw channel slice
+  before averaging channels.
 - ROB-177 adds a UFMR ablation over `candidate_repeats`
   `1 2 5 10 15 20 40 100 200 1000` on Earnings22 and TED-LIUM test, with
   three seed trials per setting. Here `candidate_repeats` is the UFMR
@@ -436,3 +444,26 @@ reproduce results, interpret metrics, or avoid known failure modes.
   recordings using stitched decode variants only. Mean WERs were `0.087710`
   for `seed_asr_stitched`, `0.087530` for `step0_random_init_stitched`, and
   `0.087472` for the step-2000 `latest_checkpoint_stitched` updater.
+
+## 2026-06-03
+
+- Finalized the ROB-132 remaining-dataset fixed-reward test-set sync. The
+  result root has 8/12 cells complete: all Rev16/TAL/CHiME-6 1-epoch cells
+  improved, while both CHiME-6 5-epoch cells collapsed to WER `1.000000`. The
+  Rev16/TAL 5-epoch cells were intentionally cancelled after runtime estimates
+  showed they were likely to hit Stanage's 4-day walltime; do not rerun them
+  without a new explicit instruction.
+
+## 2026-06-04
+
+- Added the ROB-196 RAC-MLM visualization under
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/visualizations/rac_mlm_masks_tedlium_test_samples3to5_rewards1p0_0p0/`.
+  The primary averaged PDF removes TED-LIUM test samples 1-2, uses samples 3-5,
+  and plots reward-`1.0` and reward-`0.0` columns from `1000` sampled masks per
+  panel. A matching single-generation PDF uses the same audio/reward panels.
+  Both PDFs plot masked probability only, not masks applied over audio.
+- Updated the ROB-196 visualization styling follow-up: the single-generation
+  mask figure no longer has a colorbar, the averaged-mask figure uses only
+  `{recording_id} - reward {value}` panel titles without a top-level title, and
+  the same result directory now includes a spectrogram-only PDF/PNG for the
+  three TED-LIUM test audio segments.

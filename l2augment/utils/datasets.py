@@ -5,6 +5,7 @@ import json
 import pickle
 from typing import List
 import torch, torchaudio
+import torch.nn.functional as F
 from typing import Tuple
 from torch.utils.data import Dataset
 from l2augment.utils.helpers import lmap
@@ -205,7 +206,186 @@ class RewardConditionedMaskLMDataset(Dataset):
             return None
 
 
+class AudioRewardConditionedMaskLMDataset(RewardConditionedMaskLMDataset):
+    def __init__(
+            self,
+            files,
+            ssl_cache_dir=None,
+            ssl_feature_mode='on_the_fly',
+            ssl_feature_key='ssl_features',
+            ssl_feature_alignment='native',
+            ssl_bundle='HUBERT_BASE',
+            ssl_device='cpu',
+            tedlium_base='/store/store4/data/TEDLIUM_release-3/legacy',
+            write_ssl_cache=False,
+            **kwargs,
+        ):
+        super().__init__(files, **kwargs)
+        self.ssl_cache_dir = ssl_cache_dir
+        self.ssl_feature_mode = ssl_feature_mode
+        self.ssl_feature_key = ssl_feature_key
+        self.ssl_feature_alignment = ssl_feature_alignment
+        self.ssl_bundle_name = ssl_bundle
+        self.ssl_device = ssl_device
+        self.tedlium_base = tedlium_base
+        self.write_ssl_cache = write_ssl_cache
+        self._ssl_bundle = None
+        self._ssl_model = None
+        self._stm_cache = {}
+
+        valid_modes = {'on_the_fly', 'cache', 'auto'}
+        if self.ssl_feature_mode not in valid_modes:
+            raise ValueError(f"ssl_feature_mode must be one of {sorted(valid_modes)}")
+        valid_alignments = {'native', 'mask_token'}
+        if self.ssl_feature_alignment not in valid_alignments:
+            raise ValueError(f"ssl_feature_alignment must be one of {sorted(valid_alignments)}")
+
+    def _cache_path(self, rollout_path):
+        if self.ssl_cache_dir is None:
+            return None
+        split = os.path.basename(os.path.dirname(rollout_path))
+        return os.path.join(self.ssl_cache_dir, split, os.path.basename(rollout_path))
+
+    def _load_cached_features(self, rollout_path):
+        cache_path = self._cache_path(rollout_path)
+        if cache_path is None or not os.path.exists(cache_path):
+            return None
+        cached = torch.load(cache_path, map_location='cpu', weights_only=False)
+        audio_features = cached[self.ssl_feature_key].to(dtype=torch.float16)
+        if audio_features.ndim != 2:
+            raise ValueError(f"Expected 2D SSL features in {cache_path}, got {tuple(audio_features.shape)}")
+        return audio_features, cache_path
+
+    def _load_ssl_model(self):
+        if self._ssl_model is None:
+            try:
+                self._ssl_bundle = getattr(torchaudio.pipelines, self.ssl_bundle_name)
+            except AttributeError as exc:
+                raise ValueError(f"Unknown torchaudio SSL bundle: {self.ssl_bundle_name}") from exc
+            self._ssl_model = self._ssl_bundle.get_model().eval().to(self.ssl_device)
+            for param in self._ssl_model.parameters():
+                param.requires_grad = False
+        return self._ssl_bundle, self._ssl_model
+
+    @staticmethod
+    def _parse_stm(stm_path):
+        utterances = []
+        with open(stm_path, 'r') as handle:
+            for line in handle:
+                parts = line.strip().split(' ')
+                if len(parts) < 7:
+                    continue
+                _, _, _, start, end, _, *text = parts
+                text = ' '.join(text)
+                if text == 'ignore_time_segment_in_scoring':
+                    continue
+                text = re.sub(r'<[^>]*>', '', text)
+                utterances.append({'start': float(start), 'end': float(end), 'text': text})
+        return utterances
+
+    def _rollout_to_tedlium(self, rollout_path):
+        recording_id, utterance_idx = os.path.splitext(os.path.basename(rollout_path))[0].rsplit('_', 1)
+        split = os.path.basename(os.path.dirname(rollout_path))
+        split_root = os.path.join(self.tedlium_base, split)
+        sph_path = os.path.join(split_root, 'sph', f'{recording_id}.sph')
+        stm_path = os.path.join(split_root, 'stm', f'{recording_id}.stm')
+        return sph_path, stm_path, int(utterance_idx)
+
+    def _load_utterance(self, rollout_path):
+        sph_path, stm_path, utterance_idx = self._rollout_to_tedlium(rollout_path)
+        if stm_path not in self._stm_cache:
+            self._stm_cache[stm_path] = self._parse_stm(stm_path)
+        utterances = self._stm_cache[stm_path]
+        if utterance_idx >= len(utterances):
+            raise IndexError(f"{rollout_path} maps to utterance {utterance_idx}, but {stm_path} has {len(utterances)} utterances")
+        return sph_path, stm_path, utterance_idx, utterances[utterance_idx]
+
+    @staticmethod
+    def _load_waveform_segment(sph_path, start_s, end_s):
+        info = torchaudio.info(sph_path)
+        frame_offset = max(0, int(round(start_s * info.sample_rate)))
+        num_frames = max(1, int(round((end_s - start_s) * info.sample_rate)))
+        waveform, sample_rate = torchaudio.load(sph_path, frame_offset=frame_offset, num_frames=num_frames)
+        if waveform.size(0) > 1:
+            waveform = waveform.mean(dim=0, keepdim=True)
+        return waveform, sample_rate
+
+    @staticmethod
+    def _align_features(features, target_steps):
+        features = features.transpose(1, 2)
+        features = F.interpolate(features, size=target_steps, mode='linear', align_corners=False)
+        return features.transpose(1, 2).squeeze(0).contiguous()
+
+    def _extract_ssl_features(self, rollout_path, target_steps):
+        bundle, model = self._load_ssl_model()
+        sph_path, stm_path, utterance_idx, utterance = self._load_utterance(rollout_path)
+        waveform, sample_rate = self._load_waveform_segment(sph_path, utterance['start'], utterance['end'])
+        if sample_rate != bundle.sample_rate:
+            waveform = torchaudio.functional.resample(waveform, sample_rate, bundle.sample_rate)
+        waveform = waveform.to(self.ssl_device)
+        lengths = torch.tensor([waveform.size(-1)], dtype=torch.long, device=waveform.device)
+        with torch.no_grad():
+            extracted = model.extract_features(waveform, lengths=lengths)
+        if isinstance(extracted, tuple):
+            features, feature_lengths = extracted
+        else:
+            features, feature_lengths = extracted, None
+        if isinstance(features, (list, tuple)):
+            features = features[-1]
+        if feature_lengths is not None:
+            features = features[:, :int(feature_lengths[0].item())]
+        if self.ssl_feature_alignment == 'mask_token':
+            audio_features = self._align_features(features.cpu(), int(target_steps))
+        else:
+            audio_features = features.squeeze(0).cpu().contiguous()
+        audio_features = audio_features.to(dtype=torch.float16)
+
+        cache_path = self._cache_path(rollout_path)
+        if self.write_ssl_cache and cache_path is not None:
+            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+            torch.save({
+                self.ssl_feature_key: audio_features,
+                'ssl_bundle': self.ssl_bundle_name,
+                'rollout_path': rollout_path,
+                'sph_path': sph_path,
+                'stm_path': stm_path,
+                'utterance_idx': utterance_idx,
+                'start': utterance['start'],
+                'end': utterance['end'],
+                'target_steps': int(target_steps),
+                'ssl_feature_alignment': self.ssl_feature_alignment,
+            }, cache_path)
+        return audio_features, cache_path
+
+    def __getitem__(self, idx):
+        item = super().__getitem__(idx)
+        if item is None:
+            return None
+        try:
+            cache_result = None
+            if self.ssl_feature_mode in {'cache', 'auto'}:
+                cache_result = self._load_cached_features(item['source_path'])
+            if cache_result is None:
+                if self.ssl_feature_mode == 'cache':
+                    raise FileNotFoundError(f"Missing SSL cache sidecar: {self._cache_path(item['source_path'])}")
+                audio_features, cache_path = self._extract_ssl_features(
+                    item['source_path'],
+                    target_steps=int(item['generation_length']),
+                )
+            else:
+                audio_features, cache_path = cache_result
+
+            item['audio_features'] = audio_features
+            item['audio_feature_length'] = torch.tensor(audio_features.shape[0], dtype=torch.long)
+            item['audio_feature_cache_path'] = cache_path
+            return item
+        except Exception as e:
+            self.logger(f"Error loading audio-conditioned mask LM data: {e}")
+            return None
+
+
 dataset_classes_dict['default'] = CustomDataset
 dataset_classes_dict['MultiStepDataset'] = MultiStepDataset
 dataset_classes_dict['MultiStepFMDataset'] = MultiStepFMDataset
 dataset_classes_dict['RewardConditionedMaskLMDataset'] = RewardConditionedMaskLMDataset
+dataset_classes_dict['AudioRewardConditionedMaskLMDataset'] = AudioRewardConditionedMaskLMDataset

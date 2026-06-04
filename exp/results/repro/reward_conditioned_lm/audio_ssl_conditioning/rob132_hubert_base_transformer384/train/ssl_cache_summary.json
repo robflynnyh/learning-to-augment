@@ -1,0 +1,40 @@
+[
+  {
+    "status": "cached",
+    "rollout": "/store/store4/data/l2augment_rollout_uvqmlm/train/911Mothers_2010W_0.pt",
+    "output": "/exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-132/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/train/smoke/ssl_feature_cache/train/911Mothers_2010W_0.pt",
+    "shape": [
+      2,
+      768
+    ]
+  },
+  {
+    "status": "built",
+    "rollout": "/store/store4/data/l2augment_rollout_uvqmlm/train/911Mothers_2010W_1.pt",
+    "output": "/exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-132/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/train/smoke/ssl_feature_cache/train/911Mothers_2010W_1.pt",
+    "shape": [
+      24,
+      768
+    ],
+    "seconds": 8.899999999999999
+  },
+  {
+    "status": "cached",
+    "rollout": "/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt",
+    "output": "/exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-132/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/train/smoke/ssl_feature_cache/dev/AlGore_2009_0.pt",
+    "shape": [
+      29,
+      768
+    ]
+  },
+  {
+    "status": "built",
+    "rollout": "/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_1.pt",
+    "output": "/exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-132/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/train/smoke/ssl_feature_cache/dev/AlGore_2009_1.pt",
+    "shape": [
+      48,
+      768
+    ],
+    "seconds": 16.589999999999996
+  }
+]

@@ -49,7 +49,7 @@ def train_policy(
         policy = policy.train()
 
         prev_val_cer = float('inf')
-        prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
+        prev_state_dict = {k:v.detach().cpu().clone() for k,v in policy.state_dict().items()}
 
         cur_epoch = int(config['training'].get('start_epoch', 0))
         max_tolerance = config['training'].get('tolerance', 2)
@@ -65,8 +65,9 @@ def train_policy(
             pbar = tqdm(dev_dataloader)
             for i, batch in enumerate(pbar):
                 if batch == None: continue
-              
-                loss, losses = policy.forward_pass(batch, device)
+
+                with torch.no_grad():
+                    loss, losses = policy.forward_pass(batch, device)
                 if loss == None: continue
                 val_losses.append(loss.item())
         
@@ -84,7 +85,7 @@ def train_policy(
             if (avg_val_loss > prev_val_cer) or torch.isnan(torch.tensor(avg_val_loss)): remaining_tolerance -= 1
             else:
                 prev_val_cer = avg_val_loss
-                prev_state_dict = {k:v.clone() for k,v in policy.state_dict().items()}
+                prev_state_dict = {k:v.detach().cpu().clone() for k,v in policy.state_dict().items()}
                 remaining_tolerance = max_tolerance
 
             if remaining_tolerance == 0:
@@ -101,14 +102,18 @@ def train_policy(
             pbar = tqdm(dataloader)
             for i, batch in enumerate(pbar):
                 if batch == None: continue
-              
-                loss, losses = policy.forward_pass(batch, device, wandb=wandb)
+
+                if config['training'].get('policy_training_step', False):
+                    loss, losses = policy.training_step(batch, device, optim)
+                else:
+                    loss, losses = policy.forward_pass(batch, device, wandb=wandb)
                 if loss == None: continue
         
                 wandb.log({'policy_loss':loss.item(), 'epoch': cur_epoch, **{k:v.item() for k,v in losses.items()}})
                 
                 pbar.set_description(desc=f'loss: {loss.item()}')
-                backward_pass(loss, policy, optim)
+                if not config['training'].get('policy_training_step', False):
+                    backward_pass(loss, policy, optim)
 
                 if max_steps != -1 and i >= max_steps:
                     break
@@ -185,13 +190,20 @@ def main(config):
 
     collate_function = collate_functions_dict[config.get('collate_function', 'default')]
     
+    num_workers = config['training'].get('num_workers', 12)
+    prefetch_factor = config['training'].get('prefetch_factor', 6)
+    dataloader_kwargs = {
+        'num_workers': num_workers,
+    }
+    if num_workers > 0 and prefetch_factor is not None:
+        dataloader_kwargs['prefetch_factor'] = prefetch_factor
+
     train_dataloader = DataLoader(
         train_dataset, 
         batch_size=config['training']['batch_size'], 
         shuffle=True, 
         collate_fn=collate_function,
-        num_workers=config['training'].get('num_workers', 12),
-        prefetch_factor=config['training'].get('prefetch_factor', 6),
+        **dataloader_kwargs,
     )
 
     dev_dataloader = DataLoader(
@@ -199,8 +211,7 @@ def main(config):
         batch_size=config['training']['batch_size'], 
         shuffle=False, 
         collate_fn=collate_function,
-        num_workers=config['training'].get('num_workers', 12),
-        prefetch_factor=config['training'].get('prefetch_factor', 6),
+        **dataloader_kwargs,
     )
 
 

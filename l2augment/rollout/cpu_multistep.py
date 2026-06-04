@@ -132,6 +132,7 @@ def cpu_rollout(
     decoder = GreedyCTCDecoder(tokenizer = tokenizer, blank_id = asr_model.decoder.num_classes-1)
 
     ctc_loss_fn = torch.nn.CTCLoss(blank=asr_model.decoder.num_classes-1, reduction='sum')
+    audio_feature_fn = kwargs.get("audio_feature_fn")
 
 
     if seq_len > audio_n:
@@ -204,7 +205,25 @@ def cpu_rollout(
             with torch.no_grad():
                 b,c,t = audio_chunk.shape
                 augmentation_config['epoch'] = epoch
-                policy_outputs = policy.augment(audio_chunk, **augmentation_config, state=state, teacher_predictions=out_teacher['final_posteriors'], asr_model=asr_model)
+                audio_feature_kwargs = {}
+                if audio_feature_fn is not None:
+                    audio_features, audio_feature_length = audio_feature_fn(
+                        chunk_start_frame=key,
+                        audio_chunk=audio_chunk,
+                        device=device,
+                    )
+                    audio_feature_kwargs = {
+                        'audio_features': audio_features,
+                        'audio_feature_length': audio_feature_length,
+                    }
+                policy_outputs = policy.augment(
+                    audio_chunk,
+                    **augmentation_config,
+                    **audio_feature_kwargs,
+                    state=state,
+                    teacher_predictions=out_teacher['final_posteriors'],
+                    asr_model=asr_model,
+                )
                 augmented_audio_sample, mask = policy_outputs[:2]
                 if len(policy_outputs) > 2:
                     misc = policy_outputs[-1]
@@ -285,7 +304,6 @@ def cpu_rollout(
  
         
        
-
 
 
 

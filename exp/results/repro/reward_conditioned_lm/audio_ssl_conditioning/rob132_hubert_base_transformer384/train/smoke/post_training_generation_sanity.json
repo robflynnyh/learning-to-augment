@@ -1,0 +1,82 @@
+[
+  {
+    "rollout": "/store/store4/data/l2augment_rollout_uvqmlm/train/911Mothers_2010W_0.pt",
+    "cache": "exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/smoke/ssl_feature_cache/train/911Mothers_2010W_0.pt",
+    "rewards": {
+      "0.0": {
+        "ok": true,
+        "tokens": 2,
+        "mask_shape": [
+          1,
+          80,
+          157
+        ],
+        "token_prefix": [
+          1299,
+          55
+        ]
+      },
+      "1.0": {
+        "ok": true,
+        "tokens": 2,
+        "mask_shape": [
+          1,
+          80,
+          157
+        ],
+        "token_prefix": [
+          1092,
+          656
+        ]
+      }
+    }
+  },
+  {
+    "rollout": "/store/store4/data/l2augment_rollout_uvqmlm/dev/AlGore_2009_0.pt",
+    "cache": "exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/smoke/ssl_feature_cache/dev/AlGore_2009_0.pt",
+    "rewards": {
+      "0.0": {
+        "ok": true,
+        "tokens": 29,
+        "mask_shape": [
+          1,
+          80,
+          1021
+        ],
+        "token_prefix": [
+          533,
+          1006,
+          1872,
+          720,
+          2023,
+          691,
+          342,
+          1740,
+          1497,
+          1175
+        ]
+      },
+      "1.0": {
+        "ok": true,
+        "tokens": 29,
+        "mask_shape": [
+          1,
+          80,
+          1021
+        ],
+        "token_prefix": [
+          1092,
+          626,
+          1357,
+          1279,
+          828,
+          1686,
+          1842,
+          1147,
+          1956,
+          1839
+        ]
+      }
+    }
+  }
+]
