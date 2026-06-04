@@ -1,0 +1,780 @@
+import argparse
+from contextlib import nullcontext
+import copy
+from concurrent.futures import ThreadPoolExecutor
+import json
+import os
+import random
+from pathlib import Path
+from typing import Any, Dict, Optional
+from typing import List, Sequence, Tuple
+
+import torch
+from omegaconf import OmegaConf
+
+from l2augment.modelling.plasticity import (
+    PlasticityPolicy,
+    discover_attention_out_proj_modules,
+    wrap_linear_modules,
+)
+from l2augment.rollout.gpu_plasticity import rollout_recordings_with_plasticity_candidates
+from l2augment.utils.data import dataset_functions
+from l2augment.utils.eggroll import (
+    EggrollPerturbations,
+    Rank1Perturbation,
+    eggroll_update_shared_params,
+    group_normalise_rewards,
+    sample_rank1_perturbations,
+)
+
+
+SEGMENTED_DATASETS = frozenset({"tedlium3_segmented_data"})
+
+
+def load_asr_from_config(config, tokenizer, device, dtype):
+    from lcasr.utils.general import get_model_class
+    from lcasr.utils.general import load_model as load_asr_model
+
+    checkpoint = torch.load(config["checkpointing"]["asr_model"], map_location="cpu", weights_only=False)
+    asr_model_class = get_model_class(config=config)
+    asr_model = load_asr_model(
+        checkpoint["config"],
+        tokenizer.vocab_size(),
+        asr_model_class,
+    )
+    asr_model.load_state_dict(checkpoint["model"])
+    if hasattr(asr_model, "flash_attn"):
+        asr_model.flash_attn = False
+    asr_model.to(device=device, dtype=dtype)
+    asr_model.eval()
+    for param in asr_model.parameters():
+        param.requires_grad_(False)
+    return asr_model
+
+
+def normalise_processed_recording(processed) -> Tuple[torch.Tensor, str]:
+    if isinstance(processed, tuple) and len(processed) == 2:
+        audio, text = processed
+    elif isinstance(processed, dict):
+        audio = processed.get("spectrogram", processed.get("audio"))
+        text = processed.get("text", processed.get("transcript"))
+    elif isinstance(processed, list):
+        audio_parts, text_parts = [], []
+        for item in processed:
+            audio_part = item.get("spectrogram", item.get("audio"))
+            text_part = item.get("text", item.get("transcript", ""))
+            audio_parts.append(audio_part.squeeze(0) if audio_part.dim() == 3 else audio_part)
+            text_parts.append(text_part)
+        audio = torch.cat(audio_parts, dim=-1)
+        text = " ".join(text_parts)
+    else:
+        raise TypeError(f"Unsupported processed recording type: {type(processed)!r}")
+
+    if audio.dim() == 3 and audio.shape[0] == 1:
+        audio = audio.squeeze(0)
+    if audio.dim() != 2:
+        raise ValueError(f"Expected recording audio [C,S], got {tuple(audio.shape)}")
+    return audio, str(text)
+
+
+def sample_labelled_batch(data, batch_size: int) -> Tuple[torch.Tensor, torch.Tensor, List[str]]:
+    indexes = random.sample(range(len(data)), k=min(batch_size, len(data)))
+    audios, texts = [], []
+    for idx in indexes:
+        item = data[idx]
+        audio, text = normalise_processed_recording(item["process_fn"](item))
+        audios.append(audio)
+        texts.append(text)
+
+    channels = audios[0].shape[0]
+    max_len = max(audio.shape[-1] for audio in audios)
+    batch = torch.zeros(len(audios), channels, max_len, dtype=audios[0].dtype)
+    for bidx, audio in enumerate(audios):
+        if audio.shape[0] != channels:
+            raise ValueError("All recordings in a batch must have the same feature count")
+        batch[bidx, :, : audio.shape[-1]] = audio
+    lengths = torch.tensor([audio.shape[-1] for audio in audios], dtype=torch.long)
+    return batch, lengths, texts
+
+
+def validate_training_dataset(config) -> str:
+    training_cfg = config.get("training", {})
+    dataset_name = str(training_cfg.get("dataset", "tedlium"))
+    require_long_form = bool(training_cfg.get("require_long_form_recordings", True))
+    allow_segmented_debug = bool(training_cfg.get("allow_segmented_dataset_for_debug", False))
+    if require_long_form and dataset_name in SEGMENTED_DATASETS and not allow_segmented_debug:
+        raise ValueError(
+            "ROB-186 plasticity training requires unsegmented long-form recordings. "
+            f"Configured dataset {dataset_name!r} returns pre-segmented utterances; use "
+            "'tedlium' for full TED-LIUM recordings or set "
+            "training.allow_segmented_dataset_for_debug=true only for explicit debug tests."
+        )
+    if dataset_name not in dataset_functions:
+        available = ", ".join(sorted(dataset_functions))
+        raise KeyError(f"Unknown dataset {dataset_name!r}; available datasets: {available}")
+    return dataset_name
+
+
+def build_optimizer(parameters, config):
+    name = str(config.get("eggroll", {}).get("optimizer", "adam")).lower()
+    lr = float(config.get("eggroll", {}).get("lr", 1e-4))
+    weight_decay = float(config.get("eggroll", {}).get("weight_decay", 0.0))
+    if name == "sgd":
+        return torch.optim.SGD(parameters, lr=lr)
+    if name == "adam":
+        return torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay)
+    if name == "adamw":
+        return torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay)
+    raise ValueError(f"Unsupported optimizer: {name}")
+
+
+def parse_rollout_devices(config, primary_device: torch.device) -> List[torch.device]:
+    if primary_device.type == "cuda" and primary_device.index is None:
+        primary_device = torch.device("cuda:0")
+    rollout_cfg = config.get("rollout", {})
+    configured = rollout_cfg.get("devices", None)
+    if configured is None:
+        return [primary_device]
+    if isinstance(configured, str):
+        if configured.lower() == "auto":
+            if primary_device.type != "cuda" or not torch.cuda.is_available():
+                return [primary_device]
+            return [torch.device(f"cuda:{idx}") for idx in range(torch.cuda.device_count())]
+        configured = [item.strip() for item in configured.split(",") if item.strip()]
+    devices = []
+    for configured_device in configured:
+        device = torch.device(configured_device)
+        if device.type == "cuda" and device.index is None:
+            device = torch.device("cuda:0")
+        devices.append(device)
+    if not devices:
+        return [primary_device]
+    if devices[0] != primary_device:
+        devices.insert(0, primary_device)
+    deduped = []
+    seen = set()
+    for device in devices:
+        key = (device.type, device.index)
+        if key in seen:
+            continue
+        deduped.append(device)
+        seen.add(key)
+    if torch.cuda.is_available():
+        cuda_count = torch.cuda.device_count()
+        for device in deduped:
+            if device.type == "cuda" and device.index is not None and device.index >= cuda_count:
+                raise ValueError(
+                    f"Configured rollout device {device} is not visible; "
+                    f"torch.cuda.device_count()={cuda_count}"
+                )
+    return deduped
+
+
+def split_candidate_indices(num_candidates: int, num_shards: int) -> List[torch.Tensor]:
+    if num_candidates < 1:
+        raise ValueError("num_candidates must be positive")
+    if num_shards < 1:
+        raise ValueError("num_shards must be positive")
+    active_shards = min(num_candidates, num_shards)
+    return [
+        chunk.to(dtype=torch.long)
+        for chunk in torch.arange(num_candidates, dtype=torch.long).chunk(active_shards)
+        if chunk.numel() > 0
+    ]
+
+
+def subset_eggroll_perturbations(
+    perturbations: EggrollPerturbations,
+    candidate_indices: torch.Tensor,
+    device: torch.device,
+) -> EggrollPerturbations:
+    indexes = candidate_indices.to(device=perturbations_device(perturbations), dtype=torch.long)
+    return EggrollPerturbations(
+        {
+            name: Rank1Perturbation(
+                a=pert.a.index_select(0, indexes).to(device),
+                b=pert.b.index_select(0, indexes).to(device),
+                antithetic=False,
+            )
+            for name, pert in perturbations.items()
+        }
+    )
+
+
+def perturbations_device(perturbations: EggrollPerturbations) -> torch.device:
+    first = next(iter(perturbations.layers.values()), None)
+    if first is None:
+        return torch.device("cpu")
+    return first.a.device
+
+
+def combine_rollout_infos(
+    shard_infos: Sequence[dict],
+    candidate_indices: Sequence[torch.Tensor],
+    *,
+    num_candidates: int,
+    device: torch.device,
+    reward_eps: float,
+) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    if len(shard_infos) != len(candidate_indices):
+        raise ValueError("shard_infos and candidate_indices must have the same length")
+    if not shard_infos:
+        raise ValueError("at least one rollout shard is required")
+
+    B = int(shard_infos[0]["wer"].shape[0])
+    wer = torch.empty(B, num_candidates, device=device, dtype=shard_infos[0]["wer"].dtype)
+    for info, indexes in zip(shard_infos, candidate_indices):
+        wer[:, indexes.to(device)] = info["wer"].to(device)
+
+    quality = 1.0 - wer.clamp(max=1.0)
+    rewards_bn = group_normalise_rewards(quality, eps=reward_eps)
+    reward_per_candidate = rewards_bn.mean(dim=0)
+
+    combined = {
+        key: value.to(device) if torch.is_tensor(value) else value
+        for key, value in shard_infos[0].items()
+    }
+    for key in [
+        "fast_state_norm_ratio_mean",
+        "fast_weight_clipped_fraction",
+        "fast_update_norm_ratio_mean",
+    ]:
+        if key in shard_infos[0]:
+            combined[key] = torch.stack([info[key].to(device).float() for info in shard_infos]).mean()
+    for key in ["fast_state_norm_ratio_max", "fast_update_norm_ratio_max"]:
+        if key in shard_infos[0]:
+            combined[key] = torch.stack([info[key].to(device).float() for info in shard_infos]).max()
+    combined.update(
+        {
+            "wer": wer,
+            "quality": quality,
+            "rewards_bn": rewards_bn,
+            "rollout_num_devices": torch.tensor(len(shard_infos), device=device),
+            "rollout_streams": torch.tensor(B * num_candidates, device=device),
+            "rollout_streams_per_device": torch.tensor(
+                [B * len(indexes) for indexes in candidate_indices],
+                device=device,
+                dtype=torch.float32,
+            ),
+        }
+    )
+    return reward_per_candidate, combined
+
+
+class MultiDeviceRolloutRunner:
+    def __init__(
+        self,
+        *,
+        asr_model,
+        updater,
+        config,
+        module_specs,
+        devices: Sequence[torch.device],
+        secondary_asr_factory=None,
+    ) -> None:
+        self.devices = list(devices)
+        self.config = config
+        self.module_specs = module_specs
+        self.asr_models = []
+        self.updaters = []
+        for idx, device in enumerate(self.devices):
+            if device.type == "cuda":
+                torch.cuda.set_device(device)
+            if idx == 0:
+                model = asr_model
+                worker_updater = updater
+            else:
+                if secondary_asr_factory is None:
+                    model = copy.deepcopy(asr_model).to(device)
+                else:
+                    model = secondary_asr_factory(device)
+                worker_updater = copy.deepcopy(updater).to(device)
+            model.eval()
+            worker_updater.eval()
+            self.asr_models.append(model)
+            self.updaters.append(worker_updater)
+
+    @property
+    def enabled(self) -> bool:
+        return len(self.devices) > 1
+
+    def sync_updaters(self) -> None:
+        if len(self.updaters) <= 1:
+            return
+        state = self.updaters[0].state_dict()
+        for updater in self.updaters[1:]:
+            updater.load_state_dict(state)
+
+    def run(
+        self,
+        *,
+        recording_audio_batch: torch.Tensor,
+        reference_text_batch: Sequence[str],
+        tokenizer,
+        candidate_perturbations: EggrollPerturbations,
+        reward_eps: float,
+        recording_lengths: Optional[torch.Tensor] = None,
+        wer_fn=None,
+        progress_log_fn=None,
+        progress_context: Optional[dict] = None,
+    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        if not self.enabled:
+            return rollout_recordings_with_plasticity_candidates(
+                asr_model=self.asr_models[0],
+                updater=self.updaters[0],
+                recording_audio_batch=recording_audio_batch,
+                recording_lengths=recording_lengths,
+                reference_text_batch=reference_text_batch,
+                tokenizer=tokenizer,
+                candidate_perturbations=candidate_perturbations,
+                config=self.config,
+                module_specs=self.module_specs,
+                wer_fn=wer_fn,
+                progress_log_fn=progress_log_fn,
+                progress_context=progress_context,
+            )
+
+        self.sync_updaters()
+        candidate_splits = split_candidate_indices(
+            candidate_perturbations.num_candidates,
+            len(self.devices),
+        )
+
+        def run_shard(shard_idx: int):
+            device = self.devices[shard_idx]
+            if device.type == "cuda":
+                torch.cuda.set_device(device)
+            indexes = candidate_splits[shard_idx]
+            with torch.cuda.device(device) if device.type == "cuda" else nullcontext():
+                _, info = rollout_recordings_with_plasticity_candidates(
+                    asr_model=self.asr_models[shard_idx],
+                    updater=self.updaters[shard_idx],
+                    recording_audio_batch=recording_audio_batch.to(device),
+                    recording_lengths=None if recording_lengths is None else recording_lengths.to(device),
+                    reference_text_batch=reference_text_batch,
+                    tokenizer=tokenizer,
+                    candidate_perturbations=subset_eggroll_perturbations(
+                        candidate_perturbations,
+                        indexes,
+                        device,
+                    ),
+                    config=self.config,
+                    module_specs=self.module_specs,
+                    wer_fn=wer_fn,
+                    progress_log_fn=progress_log_fn,
+                    progress_context={
+                        **(progress_context or {}),
+                        "shard_index": shard_idx,
+                        "candidate_start": int(indexes[0]),
+                        "candidate_stop": int(indexes[-1]) + 1,
+                    },
+                )
+            return info
+
+        with ThreadPoolExecutor(max_workers=len(candidate_splits)) as executor:
+            shard_infos = list(executor.map(run_shard, range(len(candidate_splits))))
+
+        return combine_rollout_infos(
+            shard_infos,
+            candidate_splits,
+            num_candidates=candidate_perturbations.num_candidates,
+            device=self.devices[0],
+            reward_eps=reward_eps,
+        )
+
+
+def build_checkpoint_payload(updater, optimizer, config, step: int, metrics: dict) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "checkpoint_type": "plasticity_updater_only",
+        "contains_asr_model_state": False,
+        "updater_state_dict": updater.state_dict(),
+        "config": OmegaConf.to_container(config, resolve=True),
+        "step": step,
+        "metrics": metrics,
+    }
+    if bool(config.get("training", {}).get("save_optimizer_state", True)):
+        payload["optimizer_state_dict"] = optimizer.state_dict()
+    return payload
+
+
+def _checkpoint_paths(config, step: int) -> Tuple[Path, Optional[Path]]:
+    training_cfg = config.get("training", {})
+    checkpoint_dir = training_cfg.get("checkpoint_dir")
+    model_save_path = training_cfg.get("model_save_path")
+    if checkpoint_dir:
+        root = Path(checkpoint_dir)
+        step_path = root / f"updater_step_{step:08d}.pt"
+        latest_path = Path(model_save_path) if model_save_path else root / "latest.pt"
+        return step_path, latest_path
+    if not model_save_path:
+        raise ValueError("training.model_save_path or training.checkpoint_dir is required")
+    return Path(model_save_path), None
+
+
+def _prune_old_checkpoints(checkpoint_dir: Path, keep_last: int) -> None:
+    if keep_last <= 0:
+        return
+    checkpoints = sorted(checkpoint_dir.glob("updater_step_*.pt"))
+    for old_path in checkpoints[:-keep_last]:
+        old_path.unlink(missing_ok=True)
+
+
+def save_checkpoint(updater, optimizer, config, step: int, metrics: dict) -> Path:
+    save_path, latest_path = _checkpoint_paths(config, step)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = build_checkpoint_payload(updater, optimizer, config, step, metrics)
+    torch.save(payload, save_path)
+
+    if latest_path is not None:
+        latest_path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(payload, latest_path)
+        keep_last = int(config.get("training", {}).get("keep_last_checkpoints", 3))
+        _prune_old_checkpoints(save_path.parent, keep_last)
+    return save_path
+
+
+def load_updater_checkpoint(updater, optimizer, path: str, device) -> int:
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
+    state_dict = checkpoint.get("updater_state_dict", checkpoint.get("model_state_dict"))
+    if state_dict is None:
+        raise KeyError(f"Checkpoint {path} does not contain updater_state_dict")
+    updater.load_state_dict(state_dict)
+    if optimizer is not None and "optimizer_state_dict" in checkpoint:
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    return int(checkpoint.get("step", 0))
+
+
+def init_wandb(config):
+    training_cfg = config.get("training", {})
+    enabled = bool(training_cfg.get("wandb_enabled", False))
+    if not enabled:
+        return None
+
+    import wandb
+
+    kwargs = {
+        "project": training_cfg.get("wandb_project", "l2augment"),
+        "config": OmegaConf.to_container(config, resolve=True),
+    }
+    optional_fields = {
+        "name": "wandb_name",
+        "mode": "wandb_mode",
+        "id": "wandb_id",
+        "resume": "wandb_resume",
+        "group": "wandb_group",
+        "dir": "wandb_dir",
+    }
+    for wandb_key, config_key in optional_fields.items():
+        value = training_cfg.get(config_key)
+        if value is not None:
+            kwargs[wandb_key] = value
+    return wandb.init(**kwargs)
+
+
+def log_metrics(wandb_run, metrics: dict) -> None:
+    if wandb_run is not None:
+        wandb_run.log(metrics, step=int(metrics["step"]))
+
+
+def merge_dotlist_overrides(config, overrides: Sequence[str]):
+    if not overrides:
+        return config
+    return OmegaConf.merge(config, OmegaConf.from_dotlist(list(overrides)))
+
+
+def parse_training_dtype(config) -> torch.dtype:
+    name = str(config.get("training", {}).get("dtype", "float32")).lower()
+    aliases = {
+        "float": torch.float32,
+        "float32": torch.float32,
+        "fp32": torch.float32,
+        "bfloat16": torch.bfloat16,
+        "bf16": torch.bfloat16,
+        "float16": torch.float16,
+        "fp16": torch.float16,
+    }
+    try:
+        return aliases[name]
+    except KeyError as exc:
+        supported = ", ".join(sorted(aliases))
+        raise ValueError(f"Unsupported training.dtype {name!r}; supported values: {supported}") from exc
+
+
+def _metric_float(value: torch.Tensor) -> float:
+    return float(value.detach().float().cpu())
+
+
+def _fast_weight_metrics(info: dict) -> Dict[str, float]:
+    keys = [
+        "fast_state_norm_ratio_mean",
+        "fast_state_norm_ratio_max",
+        "fast_weight_clipped_fraction",
+        "fast_update_norm_ratio_mean",
+        "fast_update_norm_ratio_max",
+    ]
+    return {key: _metric_float(info[key]) for key in keys if key in info}
+
+
+def _candidate_spread_metrics(info: dict) -> Dict[str, float]:
+    quality = info["quality"].detach().float()
+    rewards_bn = info["rewards_bn"].detach().float()
+    quality_std_by_recording = quality.std(dim=1, unbiased=False)
+    reward_std_by_recording = rewards_bn.std(dim=1, unbiased=False)
+    return {
+        "quality_std_over_candidates_mean": _metric_float(quality_std_by_recording.mean()),
+        "quality_std_over_candidates_max": _metric_float(quality_std_by_recording.max()),
+        "reward_group_std_mean": _metric_float(reward_std_by_recording.mean()),
+        "reward_active_recording_fraction": _metric_float((reward_std_by_recording > 0).float().mean()),
+    }
+
+
+def _chunk_metrics(info: dict) -> Dict[str, float]:
+    chunks_per_recording = info["chunks_per_recording"].detach().float()
+    metrics = {
+        "chunks_per_recording_mean": _metric_float(chunks_per_recording.mean()),
+        "chunks_per_recording_min": _metric_float(chunks_per_recording.min()),
+        "chunks_per_recording_max": _metric_float(chunks_per_recording.max()),
+        "chunk_length_frames_mean": _metric_float(info["chunk_length_frames_mean"]),
+        "chunk_size_frames": _metric_float(info["chunk_size_frames"]),
+        "chunk_overlap_frames": _metric_float(info["chunk_overlap_frames"]),
+        "rollout_chunk_steps": _metric_float(info["rollout_chunk_steps"]),
+        "rollout_streams": _metric_float(info["rollout_streams"]),
+    }
+    if "rollout_num_devices" in info:
+        metrics["rollout_num_devices"] = _metric_float(info["rollout_num_devices"])
+    if "rollout_streams_per_device" in info:
+        metrics["rollout_streams_per_device_min"] = _metric_float(
+            info["rollout_streams_per_device"].detach().float().min()
+        )
+        metrics["rollout_streams_per_device_max"] = _metric_float(
+            info["rollout_streams_per_device"].detach().float().max()
+        )
+    return metrics
+
+
+def _print_metrics(metrics: dict) -> None:
+    print(json.dumps(metrics, sort_keys=True), flush=True)
+
+
+def _print_event(event: dict) -> None:
+    print(json.dumps(event, sort_keys=True), flush=True)
+
+
+def _resolve_resume_path(config) -> Optional[str]:
+    training_cfg = config.get("training", {})
+    if training_cfg.get("resume_model_path"):
+        return str(training_cfg["resume_model_path"])
+    if not training_cfg.get("resume", False):
+        return None
+    if training_cfg.get("model_save_path") and os.path.exists(training_cfg["model_save_path"]):
+        return str(training_cfg["model_save_path"])
+    checkpoint_dir = training_cfg.get("checkpoint_dir")
+    if checkpoint_dir:
+        latest_path = Path(checkpoint_dir) / "latest.pt"
+        if latest_path.exists():
+            return str(latest_path)
+    return None
+
+
+def assert_asr_frozen(asr_model) -> None:
+    trainable = [name for name, param in asr_model.named_parameters() if param.requires_grad]
+    if trainable:
+        preview = ", ".join(trainable[:5])
+        raise RuntimeError(f"ASR model must remain frozen; trainable params include: {preview}")
+
+
+def resolve_target_modules(asr_model, config) -> List[str]:
+    configured = config["plasticity"].get("target_modules", [])
+    if isinstance(configured, str):
+        configured = [configured]
+    target_modules = list(configured)
+    if target_modules == ["auto_attention_out_proj"]:
+        target_modules = discover_attention_out_proj_modules(asr_model)
+    if not target_modules:
+        raise ValueError("plasticity.target_modules must select at least one module")
+    return target_modules
+
+
+def adaptation_parameter_count(module) -> int:
+    return sum(param.numel() for param in module.parameters() if param.requires_grad)
+
+
+def write_run_summary(config, metrics: dict, checkpoint_path: Optional[Path]) -> None:
+    summary_path = config.get("training", {}).get("summary_path")
+    if not summary_path:
+        return
+    path = Path(summary_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint_text = str(checkpoint_path) if checkpoint_path is not None else "not yet saved"
+    path.write_text(
+        "\n".join(
+            [
+                "# ROB-186 Plasticity EGGROLL Run",
+                "",
+                f"- Last step: `{metrics['step']}`",
+                f"- Last checkpoint: `{checkpoint_text}`",
+                f"- Mean WER: `{metrics['wer_mean']:.6f}`",
+                f"- Mean quality: `{metrics['quality_mean']:.6f}`",
+                f"- Reward std: `{metrics['reward_std']:.6f}`",
+                f"- Plasticity modules: `{metrics.get('plasticity_num_modules', 'unknown')}`",
+                "- Checkpoint payload type: `plasticity_updater_only`",
+                "- Seed ASR checkpoint is loaded as frozen context and is not saved in updater checkpoints.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def main(config):
+    from lcasr.utils.audio_tools import load_tokenizer
+
+    seed = int(config.get("training", {}).get("seed", 0))
+    random.seed(seed)
+    torch.manual_seed(seed)
+
+    device = torch.device(config.get("training", {}).get("device", "cuda" if torch.cuda.is_available() else "cpu"))
+    if device.type == "cuda" and device.index is None:
+        device = torch.device("cuda:0")
+    dtype = parse_training_dtype(config)
+    tokenizer = load_tokenizer()
+    asr_model = load_asr_from_config(config, tokenizer, device, dtype)
+    assert_asr_frozen(asr_model)
+
+    target_modules = resolve_target_modules(asr_model, config)
+    module_specs = wrap_linear_modules(asr_model, target_modules)
+
+    updater = PlasticityPolicy(
+        module_specs,
+        token_dim=int(config["plasticity"].get("token_dim", 128)),
+        comm_dim=int(config["plasticity"].get("comm_dim", 128)),
+        update_rank=int(config["plasticity"].get("update_rank", 1)),
+        max_eta=float(config["plasticity"].get("max_eta", 1e-4)),
+        default_rho=float(config["plasticity"].get("default_rho", 0.95)),
+    ).to(device=device, dtype=dtype)
+
+    optimizer = build_optimizer(updater.parameters(), config)
+    rollout_devices = parse_rollout_devices(config, device)
+
+    def load_secondary_asr_worker(worker_device):
+        worker_model = load_asr_from_config(config, tokenizer, worker_device, dtype)
+        wrap_linear_modules(worker_model, target_modules)
+        return worker_model
+
+    rollout_runner = MultiDeviceRolloutRunner(
+        asr_model=asr_model,
+        updater=updater,
+        config=config,
+        module_specs=module_specs,
+        devices=rollout_devices,
+        secondary_asr_factory=load_secondary_asr_worker,
+    )
+    resume_path = _resolve_resume_path(config)
+    start_step = 0
+    if resume_path is not None:
+        start_step = load_updater_checkpoint(updater, optimizer, resume_path, device)
+        rollout_runner.sync_updaters()
+
+    wandb_run = init_wandb(config)
+    eggroll_lr = float(config.get("eggroll", {}).get("lr", 1e-4))
+    eggroll_sigma = float(config.get("eggroll", {}).get("sigma", 1e-3))
+    print(
+        json.dumps(
+            {
+                "event": "plasticity_train_start",
+                "device": str(device),
+                "rollout_devices": [str(rollout_device) for rollout_device in rollout_devices],
+                "dtype": str(dtype).replace("torch.", ""),
+                "dataset": config["training"].get("dataset", "tedlium"),
+                "split": config["training"].get("split", "train"),
+                "target_modules": target_modules,
+                "plasticity_num_modules": len(target_modules),
+                "adaptation_parameters": adaptation_parameter_count(updater),
+                "checkpoint_type": "plasticity_updater_only",
+                "eggroll_optimizer": str(config.get("eggroll", {}).get("optimizer", "adam")),
+                "eggroll_lr": eggroll_lr,
+                "eggroll_sigma": eggroll_sigma,
+                "eggroll_lr_over_sigma": eggroll_lr / eggroll_sigma if eggroll_sigma > 0 else None,
+                "resume_step": start_step,
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
+    dataset_name = validate_training_dataset(config)
+    data = dataset_functions[dataset_name](config["training"].get("split", "train"))
+
+    num_steps = int(config["training"].get("num_steps", 1))
+    log_every = int(config["training"].get("log_every", 10))
+    checkpoint_every = int(config["training"].get("checkpoint_every", 500))
+    batch_size = int(config["rollout"].get("batch_size_recordings", 1))
+    checkpoint_path = None
+
+    try:
+        for step in range(start_step + 1, start_step + num_steps + 1):
+            audio_batch, recording_lengths, reference_text_batch = sample_labelled_batch(data, batch_size)
+            audio_batch = audio_batch.to(device=device, dtype=dtype)
+            recording_lengths = recording_lengths.to(device=device)
+            perturbations = sample_rank1_perturbations(
+                updater,
+                int(config["eggroll"].get("num_candidates", 8)),
+                antithetic=bool(config["eggroll"].get("antithetic", True)),
+                device=device,
+                dtype=dtype,
+            )
+            rewards, info = rollout_runner.run(
+                recording_audio_batch=audio_batch,
+                recording_lengths=recording_lengths,
+                reference_text_batch=reference_text_batch,
+                tokenizer=tokenizer,
+                candidate_perturbations=perturbations,
+                reward_eps=float(config.get("rollout", {}).get("reward_eps", 1e-8)),
+                progress_log_fn=_print_event,
+                progress_context={"step": step},
+            )
+            eggroll_update_shared_params(
+                updater,
+                perturbations,
+                rewards,
+                float(config["eggroll"].get("sigma", 1e-3)),
+                optimizer,
+            )
+
+            metrics = {
+                "step": step,
+                "wer_mean": _metric_float(info["wer"].mean()),
+                "quality_mean": _metric_float(info["quality"].mean()),
+                "reward_std": _metric_float(rewards.std(unbiased=False)),
+                "reward_mean": _metric_float(rewards.mean()),
+                "plasticity_num_modules": len(target_modules),
+                "adaptation_parameters": adaptation_parameter_count(updater),
+                "eggroll_lr": eggroll_lr,
+                "eggroll_sigma": eggroll_sigma,
+                "eggroll_lr_over_sigma": eggroll_lr / eggroll_sigma if eggroll_sigma > 0 else 0.0,
+            }
+            metrics.update(_fast_weight_metrics(info))
+            metrics.update(_candidate_spread_metrics(info))
+            metrics.update(_chunk_metrics(info))
+            if step % log_every == 0 or step == start_step + 1:
+                _print_metrics(metrics)
+            log_metrics(wandb_run, metrics)
+            if step % checkpoint_every == 0 or step == start_step + num_steps:
+                checkpoint_path = save_checkpoint(updater, optimizer, config, step, metrics)
+                write_run_summary(config, metrics, checkpoint_path)
+    finally:
+        if wandb_run is not None:
+            wandb_run.finish()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", "-config", type=str, required=True)
+    parser.add_argument(
+        "--set",
+        dest="overrides",
+        action="append",
+        default=[],
+        help="OmegaConf dotlist override, for example --set training.num_steps=1",
+    )
+    args = parser.parse_args()
+    main(merge_dotlist_overrides(OmegaConf.load(args.config), args.overrides))

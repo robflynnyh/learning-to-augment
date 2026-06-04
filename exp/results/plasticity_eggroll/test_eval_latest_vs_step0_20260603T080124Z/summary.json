@@ -1,0 +1,28 @@
+[
+  {
+    "checkpoint_path": null,
+    "checkpoint_step": 0,
+    "fast_state_norm_ratio_max": 0.05009814351797104,
+    "fast_state_norm_ratio_mean": 0.010433005169034004,
+    "fast_weight_clipped_fraction": 0.042145609855651855,
+    "num_recordings": 3,
+    "quality_mean": 0.8120932181676229,
+    "variant": "step0_random_init",
+    "wer_max": 0.22850020229816437,
+    "wer_mean": 0.18790678679943085,
+    "wer_min": 0.1511908918619156
+  },
+  {
+    "checkpoint_path": "exp/results/plasticity_eggroll/maxeta01_dense_n32_b8_bf16_multigpu_20260602T211050Z/checkpoints/latest.pt",
+    "checkpoint_step": 3000,
+    "fast_state_norm_ratio_max": 0.05010194703936577,
+    "fast_state_norm_ratio_mean": 0.010380090214312077,
+    "fast_weight_clipped_fraction": 0.042784176766872406,
+    "num_recordings": 3,
+    "quality_mean": 0.8125136693318685,
+    "variant": "latest_checkpoint",
+    "wer_max": 0.22766929864883423,
+    "wer_mean": 0.1874863306681315,
+    "wer_min": 0.1511908918619156
+  }
+]

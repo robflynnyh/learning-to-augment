@@ -1,0 +1,69 @@
+checkpointing:
+  asr_model: /store/store5/data/acp21rjf_checkpoints/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt
+plasticity:
+  target_modules:
+  - layers.0.attend.fn.out_proj
+  - layers.1.attend.fn.out_proj
+  - layers.2.attend.fn.out_proj
+  - layers.3.attend.fn.out_proj
+  - layers.4.attend.fn.out_proj
+  - layers.5.attend.fn.out_proj
+  token_dim: 128
+  comm_dim: 128
+  update_rank: 1
+  fast_state_mode: dense
+  max_eta: 0.1
+  default_rho: 0.95
+  max_fast_norm_ratio: 0.05
+eggroll:
+  num_candidates: 32
+  sigma: 0.001
+  antithetic: true
+  optimizer: adamw
+  lr: 0.0001
+  weight_decay: 0.0
+rollout:
+  batch_size_recordings: 8
+  chunk_size_frames: 2048
+  chunk_overlap_frames: 0
+  decode_mode: causal_chunk
+  pass_lengths: false
+  reward_eps: 1.0e-08
+  progress_log_every_chunks: 10
+  microbatch_candidates: null
+  devices:
+  - cuda:0
+training:
+  dataset: tedlium
+  require_long_form_recordings: true
+  allow_segmented_dataset_for_debug: false
+  split: train
+  device: cuda
+  dtype: bfloat16
+  seed: 0
+  num_steps: 10000
+  checkpoint_every: 500
+  keep_last_checkpoints: 3
+  log_every: 1
+  checkpoint_dir: exp/results/plasticity_eggroll/checkpoints
+  model_save_path: exp/results/plasticity_eggroll/checkpoints/latest.pt
+  summary_path: exp/results/plasticity_eggroll/OUTCOME.md
+  save_optimizer_state: true
+  resume: false
+  wandb_enabled: false
+  wandb_project: l2augment
+  wandb_name: rob186-plasticity-eggroll
+  wandb_group: rob186-plasticity-eggroll
+  wandb_mode: online
+evaluation:
+  dataset: tedlium
+  split: test
+  num_recordings: all
+  batch_size_recordings: 1
+  device: cuda
+  variants:
+  - seed_asr_stitched
+  - step0_random_init_stitched
+  - latest_checkpoint_stitched
+  latest_checkpoint: /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-186/exp/results/plasticity_eggroll/maxeta01_dense_n32_b8_bf16_multigpu_20260602T211050Z/checkpoints/updater_step_00002000.pt
+  result_dir: /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-186/exp/results/plasticity_eggroll/full_test_stitched_step2000_20260603T094621Z

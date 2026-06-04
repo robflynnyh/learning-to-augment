@@ -1,0 +1,28 @@
+[2026-06-03T08:01:25Z] Your ticket: 2c9aa580  request: 1,2  num: 1  selected: not yet  waiting: 00:00:00
+[2026-06-03T08:01:40Z] Your ticket: 2c9aa580  request: 1,2  num: 1  selected: not yet  waiting: 00:00:15
+[2026-06-03T08:01:56Z] Acquired GPU(s) 1; running: bash -lc
+  set -euo pipefail
+  cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-186
+  source /store/store4/software/bin/anaconda3/etc/profile.d/conda.sh
+  conda activate /store/store4/software/bin/anaconda3/envs/flash_attn_pytorch2
+  export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+  export L2A_TEDLIUM3_LEGACY_DIR="${L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TEDLIUM_release-3/legacy}"
+  export L2A_EARNINGS22_DIR="${L2A_EARNINGS22_DIR:-/store/store4/data/earnings-22}"
+  export TMPDIR="/exp/exp4/acp21rjf/.tmp"
+  python3 exp/eval_plasticity_eggroll.py \
+    --config exp/configs/plasticity_eggroll.yaml \
+    --set evaluation.dataset=tedlium \
+    --set evaluation.split=test \
+    --set evaluation.num_recordings=3 \
+    --set evaluation.start_index=0 \
+    --set evaluation.device=cuda \
+    --set evaluation.result_dir=exp/results/plasticity_eggroll/test_eval_latest_vs_step0_20260603T080124Z \
+    --set evaluation.latest_checkpoint=exp/results/plasticity_eggroll/maxeta01_dense_n32_b8_bf16_multigpu_20260602T211050Z/checkpoints/latest.pt \
+    --set training.dtype=bfloat16 \
+    --set rollout.progress_log_every_chunks=0 \
+    --set training.wandb_enabled=false
+
+/exp/exp4/acp21rjf/long-context-asr/lcasr/utils/general.py:53: UserWarning: No model_class specified in model config or args, defaulting to SCConformerXL
+  warnings.warn('No model_class specified in model config or args, defaulting to SCConformerXL')
+{"checkpoint_path": null, "checkpoint_step": 0, "fast_state_norm_ratio_max": 0.05009814351797104, "fast_state_norm_ratio_mean": 0.010433005169034004, "fast_weight_clipped_fraction": 0.042145609855651855, "num_recordings": 3, "quality_mean": 0.8120932181676229, "variant": "step0_random_init", "wer_max": 0.22850020229816437, "wer_mean": 0.18790678679943085, "wer_min": 0.1511908918619156}
+{"checkpoint_path": "exp/results/plasticity_eggroll/maxeta01_dense_n32_b8_bf16_multigpu_20260602T211050Z/checkpoints/latest.pt", "checkpoint_step": 3000, "fast_state_norm_ratio_max": 0.05010194703936577, "fast_state_norm_ratio_mean": 0.010380090214312077, "fast_weight_clipped_fraction": 0.042784176766872406, "num_recordings": 3, "quality_mean": 0.8125136693318685, "variant": "latest_checkpoint", "wer_max": 0.22766929864883423, "wer_mean": 0.1874863306681315, "wer_min": 0.1511908918619156}

@@ -3,6 +3,19 @@
 Keep concise dated notes for project changes that future agents need in order to
 reproduce results, interpret metrics, or avoid known failure modes.
 
+## 2026-06-03
+
+- ROB-186: stopped the active `max_eta=0.1` dense B=8/N=32 run after the user
+  requested a checkpoint test. The latest persisted updater checkpoint was
+  `exp/results/plasticity_eggroll/maxeta01_dense_n32_b8_bf16_multigpu_20260602T211050Z/checkpoints/latest.pt`
+  at step 3000; logs had reached about step 3285 but that state was not saved.
+- Added `exp/eval_plasticity_eggroll.py` for fixed-recording plasticity
+  evaluation with `N=1`, zero EGGROLL perturbation, and no training update. On
+  the first three TED-LIUM test recordings, step-3000 `latest.pt` had mean WER
+  `0.187486` versus step-0 random-init mean WER `0.187907`; durable outputs are
+  in
+  `exp/results/plasticity_eggroll/test_eval_latest_vs_step0_20260603T080124Z/`.
+
 ## 2026-05-10
 
 - Added Symphony project wiring for the Learn-to-Augment Linear project,
@@ -320,6 +333,117 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/`. The combined
   result summary is `OUTCOME.md`; method-specific launcher summaries are
   `UFMR_OUTCOME.md` and `RFM_OUTCOME.md`.
+
+## 2026-06-02
+
+- ROB-186 added the EGGROLL-trained forward-only plasticity scaffold for ASR
+  test-time adaptation. New entry point: `exp/train_plasticity_eggroll.py`;
+  tiny config: `exp/configs/plasticity_eggroll.yaml`; design notes:
+  `docs/plasticity_eggroll.md`. This path trains only a shared updater centre
+  and keeps transcripts out of the inner rollout except for final WER reward.
+- ROB-186 follow-up made the plasticity path GPU-run ready: W&B logging is
+  enabled in the real config, `scripts/launch_rob186_plasticity_eggroll_gpu.sh`
+  provides callback/config/one-step smoke modes, and checkpoints are explicitly
+  updater-only with bounded retention under `exp/results/plasticity_eggroll/`.
+- ROB-186 GPU smoke follow-up fixed real LCASR runtime issues before queueing:
+  the plasticity target is now the callable attention output projection
+  `layers.0.attend.fn.out_proj`, the launcher exports Mimas TEDLIUM/Earnings22
+  dataset roots, the config uses 2048-frame chunks, and plasticity rollout
+  defaults to no explicit `length` for padded chunks to match existing LCASR
+  rollout behavior. One-step smoke succeeded under
+  `exp/results/plasticity_eggroll/smoke_20260602T141936Z/`.
+- ROB-186 stopped the first long GPU run at step 655 after confirming it used
+  `tedlium3_segmented_data`, which is invalid for the long-recording plasticity
+  setup. The default config now uses unsegmented `tedlium`, rejects the known
+  segmented loader unless explicitly allowed for debug, and logs extra
+  candidate-spread metrics to explain binary-looking reward standard deviation.
+- ROB-186 restart follow-up adds chunk-count logging for the unsegmented
+  long-recording run (`chunks_per_recording_*`, `rollout_chunk_steps`,
+  `rollout_streams`) and logs the EGGROLL `lr/sigma` scale after checking the
+  paper convention where `1/sigma` is absorbed into the learning rate. The
+  default updater optimizer is now AdamW with zero weight decay.
+- ROB-186 batch-size follow-up increases the real plasticity rollout batch to
+  8 recordings. A one-step Mimas smoke with `B=8`, `N=8` succeeded and logged
+  `rollout_streams=64` with chunk-count metrics before the long run restart.
+- ROB-186 PR-comment follow-up changes the real plasticity target from the
+  single-layer debug path to all six verified attention `out_proj` modules in
+  the Mimas LCASR checkpoint. Target wrapping now preserves configured order,
+  startup/step logs include `plasticity_num_modules`, and the multi-target test
+  checks activation capture, layer tokens, updates, and fast-state rank growth.
+- ROB-186 multi-GPU follow-up shards EGGROLL rollout candidates across
+  `rollout.devices` while keeping the optimizer and shared updater centre on
+  `training.device`. The default run maps `cuda:0,cuda:1` to the allocated
+  `with-gpu 1,2` devices, recombines WER over the full candidate axis before
+  group normalisation, and logs rollout device/stream counts.
+- ROB-186 decode/length follow-up hardens plasticity rollout decoding by
+  collapsing CTC predictions on CPU with the blank inferred from the model
+  output dimension, and carries true recording lengths through the padded
+  training batch so chunk metrics and rollout work exclude padded tails. A
+  two-GPU one-step `B=8`, `N=8` train smoke succeeded under
+  `exp/results/plasticity_eggroll/smoke_decode_lengths_20260602T163955Z/`.
+- ROB-186 rollout-count follow-up changes the real EGGROLL population from
+  `N=8` to `N=32` candidates for the two-GPU B=8 restart requested on
+  2026-06-02. The candidate-sharded rollout path should split this as 16
+  candidates per allocated GPU under `with-gpu 1,2 --num 2`.
+- ROB-186 N=32 slowdown follow-up stopped the silent B=8/N=32 screen after it
+  exceeded the useful first-step debug window. The default N=32 config now uses
+  `batch_size_recordings=2`, restoring the previously smoke-tested 32 streams
+  per GPU, and logs per-shard rollout-start/chunk heartbeat events so a future
+  long first step is observable before the final WER metric.
+- ROB-186 secondary-device debug found that the threaded multi-GPU rollout path
+  initializes both shards but the `cuda:1` shard stalls in native CUDA work
+  before the first chunk heartbeat. The default run is therefore back to one
+  rollout device (`cuda:0`) with N=32/B=2, preserving the validated 64-stream
+  single-device workload while avoiding the bad secondary path.
+- ROB-186 dtype follow-up changes the real N=32/B=2 single-GPU plasticity
+  config to `training.dtype=bfloat16` and documents that the prior W&B
+  comparison should be read as a different-regime/reward-spread diagnostic, not
+  as batch size alone explaining an order-of-magnitude WER change.
+- ROB-186 bf16 update follow-up fixes the EGGROLL centre-update estimator to
+  accumulate reward-weighted rank-1 perturbation deltas in float32 before
+  casting gradients back to the updater weight dtype.
+- ROB-186 multi-GPU follow-up restores the default rollout devices to
+  `cuda:0,cuda:1` and explicitly binds each rollout worker thread to its CUDA
+  device before running LCASR, targeting the earlier secondary-device stall.
+- ROB-186 padded-chunk follow-up changes the plasticity rollout loop to run
+  only recordings with positive chunk length at each chunk index, then scatter
+  updated fast weights back into the full batch. This prevents finished
+  recordings from decoding zero-padded chunks or updating fast weights from
+  padded activations. The real restart config returns to `B=8`, `N=32`,
+  yielding 128 streams per logical CUDA device under the two-GPU candidate
+  shard requested on 2026-06-02.
+- ROB-186 dense-fast-state follow-up replaces factor-history accumulation with
+  dense per-recording/per-candidate fast matrices `F`, keeps low-rank per-chunk
+  updater emissions, removes `max_fast_rank` from the default config, loosens
+  the fast-state norm cap to `5.0e-2`, and adds fast-state/update norm plus
+  clipping-fraction logs for the next run.
+- ROB-186 max-eta restart follow-up stops the dense B=8/N=32 two-GPU run at
+  the user's request and increases the default plasticity `max_eta` from
+  `1.0e-4` to `1.0e-3` for the replacement dense bf16 restart.
+- ROB-186 high-eta restart follow-up stops the `max_eta=1.0e-3` dense B=8/N=32
+  two-GPU run at the user's request after the update signal remained small, and
+  increases the default plasticity `max_eta` to `0.1` for the replacement dense
+  bf16 restart.
+- ROB-186 full-test evaluation follow-up adds an explicit `seed_asr` baseline
+  variant to the plasticity eval script, supports `evaluation.num_recordings=all`
+  with batched long-recording processing, and adds a callback-owned Mimas
+  launcher for the requested TED-LIUM test-set seed-vs-latest comparison.
+- ROB-186 step-0 full-test follow-up corrects the full TED-LIUM test launcher
+  to run the requested three-way comparison: frozen `seed_asr`,
+  `step0_random_init`, and the step-3000 `latest_checkpoint` updater.
+- ROB-186 stitched-baseline follow-up adds explicit `*_stitched` diagnostic
+  eval variants that average overlapping chunk posteriors onto one recording
+  timeline before CTC decoding, matching the older repo protocol more closely
+  than the streaming `causal_chunk` decode. A one-record TED-LIUM test smoke
+  gave stitched WERs of `0.069197` for seed ASR, `0.069869` for the step-0
+  updater, and `0.068861` for the step-3000 updater, confirming the earlier
+  16-17% full-test causal baseline was a decode-protocol artifact rather than
+  plasticity degradation.
+- ROB-186 step-2000 stitched full-test follow-up evaluates the exact
+  `updater_step_00002000.pt` checkpoint on all 11 unsegmented TED-LIUM test
+  recordings using stitched decode variants only. Mean WERs were `0.087710`
+  for `seed_asr_stitched`, `0.087530` for `step0_random_init_stitched`, and
+  `0.087472` for the step-2000 `latest_checkpoint_stitched` updater.
 
 ## 2026-06-03
 
