@@ -17,10 +17,15 @@ The masks are not applied to audio in this artifact. The PDFs plot
 - `rac_mlm_masks_tedlium_test_samples3to5_reward1p0_reward0p0_single.pdf`:
   matching two-column PDF using one generated mask for the same audio/reward
   panels.
+- `rac_mlm_masks_tedlium_test_samples3to5_reward1p0_reward0p0_spectrograms.pdf`:
+  separate PDF showing only the log-mel spectrograms for the same three
+  TED-LIUM test audio segments, with no masks applied or overlaid.
 - `rac_mlm_masks_tedlium_test_samples3to5_reward1p0_reward0p0_average1000.png`:
   PNG rendering of the averaged-mask figure.
 - `rac_mlm_masks_tedlium_test_samples3to5_reward1p0_reward0p0_single.png`:
   PNG rendering of the single-generation figure.
+- `rac_mlm_masks_tedlium_test_samples3to5_reward1p0_reward0p0_spectrograms.png`:
+  PNG rendering of the spectrogram-only figure.
 - `rac_mlm_masks_tedlium_test_samples3to5_reward1p0_reward0p0.npz`:
   compressed average and single keep-mask arrays.
 - `metadata.json`: source test paths, checkpoint/config paths, generation

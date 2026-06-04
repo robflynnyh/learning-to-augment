@@ -35,3 +35,8 @@ Average masked percentages:
 The single-generation figure uses the same audio and reward panels, taking the
 first generated mask from each panel's streamed sampling pass. The PDFs plot
 masked probability only; masks are not overlaid on, or applied to, the audio.
+
+The follow-up render removes the colorbar from the single-generation mask
+figure, removes the averaged-mask figure suptitle, and uses panel titles of the
+form `{recording_id} - reward {value}`. It also adds a separate spectrogram-only
+PDF/PNG for the same three TED-LIUM test audio segments.

@@ -325,8 +325,10 @@ def save_grid(
     rewards: list[float],
     pdf_path: Path,
     png_path: Path,
-    title: str,
+    title: str | None,
     mask_key: str,
+    show_colorbar: bool,
+    include_masked_percentage: bool,
 ) -> None:
     rows = sorted({int(summary["source_sample_index"]) for summary in summaries})
     summary_by_panel = {
@@ -340,7 +342,8 @@ def save_grid(
         squeeze=False,
         constrained_layout=True,
     )
-    fig.suptitle(title)
+    if title is not None:
+        fig.suptitle(title)
     image = None
     for row_index, source_sample_index in enumerate(rows):
         for column_index, reward in enumerate(rewards):
@@ -357,17 +360,79 @@ def save_grid(
                 vmin=0.0,
                 vmax=1.0,
             )
-            ax.set_title(
-                f"Sample {summary['source_sample_index']}: reward {reward:g}\n"
-                f"{summary['recording_id']} ({masked_percentage:.1f}% masked)"
-            )
+            panel_title = f"{summary['recording_id']} - reward {float(reward):.1f}"
+            if include_masked_percentage:
+                panel_title = f"{panel_title}\n{masked_percentage:.1f}% masked"
+            ax.set_title(panel_title)
             if row_index == len(rows) - 1:
                 ax.set_xlabel("time frame")
             if column_index == 0:
                 ax.set_ylabel("mel bin")
-    if image is not None:
+    if show_colorbar and image is not None:
         colorbar = fig.colorbar(image, ax=axes.ravel().tolist(), label="masked probability")
         colorbar.ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0))
+    fig.savefig(pdf_path)
+    fig.savefig(png_path, dpi=180)
+    plt.close(fig)
+
+
+def load_waveform_for_sample(sample_spec: dict) -> tuple[torch.Tensor, int]:
+    if sample_spec["source_kind"] != "tedlium":
+        raise ValueError("Spectrogram rendering currently requires TED-LIUM source segments")
+    waveform, sample_rate = AudioRewardConditionedMaskLMDataset._load_waveform_segment(
+        str(sample_spec["sph_path"]),
+        float(sample_spec["start"]),
+        float(sample_spec["end"]),
+    )
+    return waveform.cpu(), int(sample_rate)
+
+
+def waveform_to_log_mel_db(waveform: torch.Tensor, sample_rate: int) -> np.ndarray:
+    mel_transform = torchaudio.transforms.MelSpectrogram(
+        sample_rate=sample_rate,
+        n_fft=400,
+        hop_length=160,
+        n_mels=80,
+        power=2.0,
+    )
+    mel_spec = mel_transform(waveform).squeeze(0).numpy()
+    mel_db = 10.0 * np.log10(np.maximum(mel_spec, 1e-10))
+    return np.maximum(mel_db, float(mel_db.max()) - 80.0)
+
+
+def save_spectrogram_grid(
+    sample_specs: list[dict],
+    *,
+    pdf_path: Path,
+    png_path: Path,
+) -> None:
+    fig, axes = plt.subplots(
+        len(sample_specs),
+        1,
+        figsize=(9.0, 2.3 * len(sample_specs)),
+        squeeze=False,
+        constrained_layout=True,
+    )
+    image = None
+    for row_index, sample_spec in enumerate(sample_specs):
+        ax = axes[row_index, 0]
+        waveform, sample_rate = load_waveform_for_sample(sample_spec)
+        mel_db = waveform_to_log_mel_db(waveform, sample_rate)
+        duration_s = float(sample_spec["end"]) - float(sample_spec["start"])
+        image = ax.imshow(
+            mel_db,
+            aspect="auto",
+            origin="lower",
+            interpolation="nearest",
+            cmap="magma",
+            extent=(0.0, duration_s, 0.0, float(mel_db.shape[0])),
+        )
+        ax.set_title(str(sample_spec["recording_id"]))
+        ax.set_ylabel("mel bin")
+        if row_index == len(sample_specs) - 1:
+            ax.set_xlabel("seconds")
+    if image is not None:
+        fig.colorbar(image, ax=axes.ravel().tolist(), label="log mel power (dB)")
     fig.savefig(pdf_path)
     fig.savefig(png_path, dpi=180)
     plt.close(fig)
@@ -558,13 +623,17 @@ def main() -> None:
     average_png_path = args.output_dir / f"{stem}_average{args.samples_per_rollout}.png"
     single_pdf_path = args.output_dir / f"{stem}_single.pdf"
     single_png_path = args.output_dir / f"{stem}_single.png"
+    spectrogram_pdf_path = args.output_dir / f"{stem}_spectrograms.pdf"
+    spectrogram_png_path = args.output_dir / f"{stem}_spectrograms.png"
     save_grid(
         summaries,
         rewards=rewards,
         pdf_path=average_pdf_path,
         png_path=average_png_path,
-        title=f"RAC-MLM average masks ({args.samples_per_rollout} samples per panel)",
+        title=None,
         mask_key="average_keep_mask",
+        show_colorbar=True,
+        include_masked_percentage=False,
     )
     save_grid(
         summaries,
@@ -573,6 +642,13 @@ def main() -> None:
         png_path=single_png_path,
         title="RAC-MLM single sampled masks",
         mask_key="single_keep_mask",
+        show_colorbar=False,
+        include_masked_percentage=True,
+    )
+    save_spectrogram_grid(
+        sample_specs,
+        pdf_path=spectrogram_pdf_path,
+        png_path=spectrogram_png_path,
     )
     npz_path = args.output_dir / f"{stem}.npz"
     np.savez_compressed(npz_path, **npz_payload)
@@ -603,6 +679,8 @@ def main() -> None:
         "average_png": average_png_path.name,
         "single_pdf": single_pdf_path.name,
         "single_png": single_png_path.name,
+        "spectrogram_pdf": spectrogram_pdf_path.name,
+        "spectrogram_png": spectrogram_png_path.name,
         "npz": npz_path.name,
         "panels": [metadata_summary(summary) for summary in summaries],
     }

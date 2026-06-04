@@ -338,3 +338,8 @@ reproduce results, interpret metrics, or avoid known failure modes.
   and plots reward-`1.0` and reward-`0.0` columns from `1000` sampled masks per
   panel. A matching single-generation PDF uses the same audio/reward panels.
   Both PDFs plot masked probability only, not masks applied over audio.
+- Updated the ROB-196 visualization styling follow-up: the single-generation
+  mask figure no longer has a colorbar, the averaged-mask figure uses only
+  `{recording_id} - reward {value}` panel titles without a top-level title, and
+  the same result directory now includes a spectrogram-only PDF/PNG for the
+  three TED-LIUM test audio segments.
