@@ -8,10 +8,10 @@
 - Datasets: `tedlium`, `earnings22`, `rev16`, `TAL`, `chime6`; all `test` split
 - Adaptation: `epochs=1` and `epochs=5`, `lr=1e-5`, multistep rollout
 - Branch: `symphony/ROB-201-complete-rev16-tal-epoch5-audio-ssl`
-- Commit: `fc922ba`
-- Main log: `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/logs/rob201_rev16_tal_epoch5_mimas_corrected.log`
-- Screen log: `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/logs/rob201_rev16_tal_epoch5_mimas_corrected.screen.log`
-- Queued command: `ROB-201 corrected Mimas Rev16/TAL epoch-5 preparation; previous batch-size-4 run cancelled after equivalence validation failed`
+- Commit: `c59c6ef84eecd337a66aee3582695fb454664122`
+- Main log: `/exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-201/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/logs/rob201_rev16_tal_epoch5_mimas_corrected.log`
+- Screen log: `/exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-201/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/logs/rob201_rev16_tal_epoch5_mimas_corrected.screen.log`
+- Queued command: `screen -L -Logfile /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-201/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/logs/rob201_rev16_tal_epoch5_mimas_corrected.screen.log -dmS rob201-rev16-tal-epoch5-audio-ssl bash -lc 'cd /exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-201 && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- /exp/exp4/acp21rjf/.scratch/rob201-audio-ssl-testsets/launch/run_rob201_epoch5_mimas.sh'`
 
 Completed cells: `16/20`.
 
@@ -71,5 +71,5 @@ Completed cells: `16/20`.
 CSV artifact:
 
 ```text
-exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/rob132_audio_ssl_test_fixed_rewards.csv
+/exp/exp4/acp21rjf/symphony-workspaces-learning-to-augment/ROB-201/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/rob132_audio_ssl_test_fixed_rewards.csv
 ```

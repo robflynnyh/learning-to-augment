@@ -336,12 +336,13 @@ reproduce results, interpret metrics, or avoid known failure modes.
   audio-SSL eval cells on Mimas. The eval path now caches HuBERT features per
   recording/chunk during adaptation, `--max_steps` now bounds the selected
   adaptation chunks before SSL precompute, and bounded Rev16/TAL smoke runs
-  passed with `--max_steps 1 --dont_save`. A later old-vs-new feature
-  equivalence check showed mixed-length batch extraction changed final-chunk
-  HuBERT features, so the in-flight batch-size-4 run was cancelled and the
-  ROB-201 configs now use conservative `ssl_extraction_batch_size: 1`, which
-  matched the previous per-chunk extractor exactly on the checked Rev16/TAL
-  chunks while retaining the per-recording cache.
+  passed. A later old-vs-new feature equivalence check showed mixed-length
+  batch extraction changed final-chunk HuBERT features, so the in-flight
+  batch-size-4 run was cancelled. The corrected ROB-201 path now batches only
+  equal-length HuBERT inputs, uses `ssl_extraction_batch_size: 32` for the four
+  deferred Rev16/TAL epoch-5 cells, validates final short chunks separately,
+  and limits the Mimas wrapper to the actual Rev16/TAL run datasets while still
+  summarizing the full 20-cell canonical ROB-132 matrix.
 - Added the ROB-196 RAC-MLM visualization under
   `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/visualizations/rac_mlm_masks_tedlium_test_samples3to5_rewards1p0_0p0/`.
   The primary averaged PDF removes TED-LIUM test samples 1-2, uses samples 3-5,
