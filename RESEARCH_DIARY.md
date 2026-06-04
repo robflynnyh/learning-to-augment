@@ -329,3 +329,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
   Rev16/TAL 5-epoch cells were intentionally cancelled after runtime estimates
   showed they were likely to hit Stanage's 4-day walltime; do not rerun them
   without a new explicit instruction.
+
+## 2026-06-04
+
+- Added the ROB-196 RAC-MLM visualization under
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/visualizations/rac_mlm_average_masks_5x1000/`.
+  The PDF averages `1000` sampled reward-`1.0` masks for each of five distinct
+  TED-LIUM train recordings using the ROB-132 HuBERT-base audio SSL checkpoint.
