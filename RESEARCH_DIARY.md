@@ -329,3 +329,17 @@ reproduce results, interpret metrics, or avoid known failure modes.
   Rev16/TAL 5-epoch cells were intentionally cancelled after runtime estimates
   showed they were likely to hit Stanage's 4-day walltime; do not rerun them
   without a new explicit instruction.
+
+## 2026-06-04
+
+- Added the ROB-196 RAC-MLM visualization under
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/visualizations/rac_mlm_masks_tedlium_test_samples3to5_rewards1p0_0p0/`.
+  The primary averaged PDF removes TED-LIUM test samples 1-2, uses samples 3-5,
+  and plots reward-`1.0` and reward-`0.0` columns from `1000` sampled masks per
+  panel. A matching single-generation PDF uses the same audio/reward panels.
+  Both PDFs plot masked probability only, not masks applied over audio.
+- Updated the ROB-196 visualization styling follow-up: the single-generation
+  mask figure no longer has a colorbar, the averaged-mask figure uses only
+  `{recording_id} - reward {value}` panel titles without a top-level title, and
+  the same result directory now includes a spectrogram-only PDF/PNG for the
+  three TED-LIUM test audio segments.
