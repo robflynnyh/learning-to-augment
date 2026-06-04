@@ -49,6 +49,9 @@ def make_audio_ssl_feature_fn(config, rec_dict):
     dataset_config = config.get('dataset', {})
     bundle_name = dataset_config.get('ssl_bundle', 'HUBERT_BASE')
     ssl_device = dataset_config.get('ssl_device', config.get('training', {}).get('device', 'cuda'))
+    ssl_extraction_batch_size = int(dataset_config.get('ssl_extraction_batch_size', 4))
+    ssl_precompute = bool(dataset_config.get('ssl_precompute', True))
+    feature_cache = {}
 
     def load_ssl_model(device):
         target_device = str(device if ssl_device == 'same' else ssl_device)
@@ -97,34 +100,92 @@ def make_audio_ssl_feature_fn(config, rec_dict):
         ]
         return torch.stack(waveforms, dim=0).mean(dim=0), sample_rate
 
-    def extract_features(chunk_start_frame, audio_chunk, device):
+    def extract_feature_batch(requests, device):
+        if len(requests) == 0:
+            return
         bundle, model, target_device = load_ssl_model(device)
         first_audio_path = audio_path if isinstance(audio_path, str) else audio_path[0]
         info = torchaudio.info(first_audio_path)
         recording_offset_s = float(rec_dict.get('stimes', 0.0))
-        start_s = recording_offset_s + total_seconds(int(chunk_start_frame))
-        duration_s = total_seconds(int(audio_chunk.shape[-1]))
-        frame_offset = max(0, int(round(start_s * info.sample_rate)))
-        num_frames = max(1, int(round(duration_s * info.sample_rate)))
-        waveform, sample_rate = load_waveform_segment(audio_path, frame_offset, num_frames)
-        if sample_rate != bundle.sample_rate:
-            waveform = torchaudio.functional.resample(waveform, sample_rate, bundle.sample_rate)
-        waveform = waveform.to(target_device)
-        lengths = torch.tensor([waveform.size(-1)], dtype=torch.long, device=target_device)
+
+        waveforms = []
+        lengths = []
+        cache_keys = []
+        for chunk_start_frame, audio_chunk in requests:
+            chunk_start_frame = int(chunk_start_frame)
+            chunk_frames = int(audio_chunk.shape[-1])
+            cache_key = (chunk_start_frame, chunk_frames)
+            if cache_key in feature_cache:
+                continue
+            start_s = recording_offset_s + total_seconds(chunk_start_frame)
+            duration_s = total_seconds(chunk_frames)
+            frame_offset = max(0, int(round(start_s * info.sample_rate)))
+            num_frames = max(1, int(round(duration_s * info.sample_rate)))
+            waveform, sample_rate = load_waveform_segment(audio_path, frame_offset, num_frames)
+            if sample_rate != bundle.sample_rate:
+                waveform = torchaudio.functional.resample(waveform, sample_rate, bundle.sample_rate)
+            waveforms.append(waveform)
+            lengths.append(int(waveform.size(-1)))
+            cache_keys.append(cache_key)
+
+        if len(waveforms) == 0:
+            return
+
+        max_length = max(lengths)
+        padded = [
+            torch.nn.functional.pad(waveform, (0, max_length - waveform.size(-1)))
+            for waveform in waveforms
+        ]
+        waveform_batch = torch.cat(padded, dim=0).to(target_device)
+        length_tensor = torch.tensor(lengths, dtype=torch.long, device=target_device)
         with torch.no_grad():
-            extracted = model.extract_features(waveform, lengths=lengths)
+            extracted = model.extract_features(waveform_batch, lengths=length_tensor)
         if isinstance(extracted, tuple):
             features, feature_lengths = extracted
         else:
             features, feature_lengths = extracted, None
         if isinstance(features, (list, tuple)):
             features = features[-1]
-        if feature_lengths is not None:
-            feature_length = int(feature_lengths[0].item())
-            features = features[:, :feature_length]
-        else:
-            feature_length = int(features.size(1))
-        return features.squeeze(0).contiguous(), feature_length
+        if feature_lengths is None:
+            feature_lengths = torch.full(
+                (features.size(0),),
+                int(features.size(1)),
+                dtype=torch.long,
+                device=features.device,
+            )
+        for row, cache_key in enumerate(cache_keys):
+            feature_length = int(feature_lengths[row].item())
+            feature_cache[cache_key] = (
+                features[row, :feature_length].detach().cpu().contiguous(),
+                feature_length,
+            )
+
+    def precompute_features(chunk_start_frames, training_data, device):
+        if not ssl_precompute:
+            return
+        pending = [
+            (key, training_data[key])
+            for key in chunk_start_frames
+            if (int(key), int(training_data[key].shape[-1])) not in feature_cache
+        ]
+        if len(pending) == 0:
+            return
+        batch_size = max(1, ssl_extraction_batch_size)
+        print(
+            f"[audio-ssl] precomputing {len(pending)} chunk feature sets "
+            f"(batch_size={batch_size})"
+        )
+        for start in range(0, len(pending), batch_size):
+            extract_feature_batch(pending[start:start + batch_size], device)
+
+    def extract_features(chunk_start_frame, audio_chunk, device):
+        cache_key = (int(chunk_start_frame), int(audio_chunk.shape[-1]))
+        if cache_key not in feature_cache:
+            extract_feature_batch([(chunk_start_frame, audio_chunk)], device)
+        features, feature_length = feature_cache[cache_key]
+        return features.to(device), feature_length
+
+    extract_features.precompute = precompute_features
 
     return extract_features
 

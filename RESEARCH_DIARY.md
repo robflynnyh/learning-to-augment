@@ -332,6 +332,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
 
 ## 2026-06-04
 
+- Prepared ROB-201 to resume the deferred ROB-132 Rev16/TAL 5-epoch
+  audio-SSL eval cells on Mimas. The eval path now batches and caches HuBERT
+  features per recording/chunk during adaptation, `--max_steps` now bounds the
+  selected adaptation chunks before SSL precompute, and bounded Rev16/TAL smoke
+  runs passed with `--max_steps 1 --dont_save`.
 - Added the ROB-196 RAC-MLM visualization under
   `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/visualizations/rac_mlm_masks_tedlium_test_samples3to5_rewards1p0_0p0/`.
   The primary averaged PDF removes TED-LIUM test samples 1-2, uses samples 3-5,
