@@ -4,6 +4,7 @@
 set -euo pipefail
 
 REPO_DIR="${REPO_DIR:-/mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-132}"
+LINEAR_ISSUE="${LINEAR_ISSUE:-ROB-132}"
 RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1}"
 SCRATCH_ROOT="${SCRATCH_ROOT:-/mnt/parscratch/users/acp21rjf/rob132-audio-ssl-scratch}"
 CHECKPOINT_PATH="${CHECKPOINT_PATH:-/mnt/parscratch/users/acp21rjf/l2augment_model/reward_conditioned_mask_lm/audio_ssl_hubert_base_tedlium_per_utterance_transformer384_dropout0p1_500ep_lr1e3.pt}"
@@ -18,12 +19,16 @@ EPOCHS="${ROB132_TESTSETS_EPOCHS:-1 5}"
 LR="${ROB132_TESTSETS_LR:-1e-5}"
 CSV_NAME="${ROB132_TESTSETS_CSV_NAME:-rob132_audio_ssl_test_fixed_rewards.csv}"
 PARTITIONS="${ROB132_TESTSETS_PARTITIONS:-gpu-h100-nvl gpu-h100 gpu}"
+SSL_EXTRACTION_BATCH_SIZE="${ROB132_TESTSETS_SSL_EXTRACTION_BATCH_SIZE:-32}"
+SUMMARY_DATASETS="${ROB132_TESTSETS_SUMMARY_DATASETS:-${DATASETS}}"
+SUMMARY_EPOCHS="${ROB132_TESTSETS_SUMMARY_EPOCHS:-${EPOCHS}}"
+SUMMARY_FIXED_REWARDS="${ROB132_TESTSETS_SUMMARY_FIXED_REWARDS:-${FIXED_REWARDS}}"
 
 cd "${REPO_DIR}"
 
 mkdir -p "${RESULT_ROOT}"
 
-python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${CHECKPOINT_PATH}" "${MASK_VAE_CKPT}" "${DATASETS}" "${FIXED_REWARDS}" "${EPOCHS}" "${LR}" <<'PY'
+python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${CHECKPOINT_PATH}" "${MASK_VAE_CKPT}" "${DATASETS}" "${FIXED_REWARDS}" "${EPOCHS}" "${LR}" "${LINEAR_ISSUE}" "${SSL_EXTRACTION_BATCH_SIZE}" <<'PY'
 import sys
 from pathlib import Path
 
@@ -35,6 +40,8 @@ dataset_tags = tuple(sys.argv[5].split())
 fixed_rewards = tuple(sys.argv[6].split())
 epochs = tuple(int(item) for item in sys.argv[7].split())
 lr = sys.argv[8]
+linear_issue = sys.argv[9]
+ssl_extraction_batch_size = int(sys.argv[10])
 
 datasets = {
     "tedlium": ("tedlium", "test"),
@@ -75,7 +82,7 @@ training:
   num_workers: 0
 
 evaluation:
-  id: ROB-132-{dataset_tag}-{split}-audio-ssl-transformer384-reward{reward_tag(reward)}-epoch{epoch_count}-lr{lr}
+  id: {linear_issue}-{dataset_tag}-{split}-audio-ssl-transformer384-reward{reward_tag(reward)}-epoch{epoch_count}-lr{lr}
   dataset: {dataset}
   split: {split}
   rollout_fn: multistep
@@ -92,6 +99,7 @@ evaluation:
 dataset:
   ssl_bundle: HUBERT_BASE
   ssl_device: cuda
+  ssl_extraction_batch_size: {ssl_extraction_batch_size}
   tedlium_base: /mnt/parscratch/users/acp21rjf/TEDLIUM_release-3/legacy
 
 policy:
@@ -153,7 +161,7 @@ finalizer_id="$(
   sbatch --parsable \
     --partition="${FINALIZER_PARTITION}" \
     --dependency="afterany:${dependency}" \
-    --export=ALL,REPO_DIR="${REPO_DIR}",RESULT_ROOT="${RESULT_ROOT}",CHECKPOINT_PATH="${CHECKPOINT_PATH}",ROB132_FIXED_REWARDS="${FIXED_REWARDS}",ROB132_DATASETS="${DATASETS}",ROB132_EPOCHS="${EPOCHS}",ROB132_LR="${LR}",CSV_NAME="${CSV_NAME}",QUEUED_COMMAND="scripts/submit_rob132_audio_ssl_testsets_stanage.sh" \
+    --export=ALL,REPO_DIR="${REPO_DIR}",LINEAR_ISSUE="${LINEAR_ISSUE}",RESULT_ROOT="${RESULT_ROOT}",CHECKPOINT_PATH="${CHECKPOINT_PATH}",ROB132_FIXED_REWARDS="${SUMMARY_FIXED_REWARDS}",ROB132_DATASETS="${SUMMARY_DATASETS}",ROB132_EPOCHS="${SUMMARY_EPOCHS}",ROB132_LR="${LR}",CSV_NAME="${CSV_NAME}",QUEUED_COMMAND="scripts/submit_rob132_audio_ssl_testsets_stanage.sh" \
     "${FINALIZER_SCRIPT}"
 )"
 echo "finalizer|${finalizer_id}|afterany:${dependency}"
