@@ -354,3 +354,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `{recording_id} - reward {value}` panel titles without a top-level title, and
   the same result directory now includes a spectrogram-only PDF/PNG for the
   three TED-LIUM test audio segments.
+
+## 2026-06-14
+
+- Finalized ROB-201's deferred ROB-132 Rev16/TAL 5-epoch audio-SSL cells under
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1/`.
+  The consolidated matrix is now `20/20` complete. The new 5-epoch updated WERs
+  are Rev16 reward `1.0`: `0.159355`, Rev16 reward `0.0`: `0.160693`, TAL
+  reward `1.0`: `0.155679`, and TAL reward `0.0`: `0.157095`.
