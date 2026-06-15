@@ -27,6 +27,14 @@ FIXED_REWARDS="${ROB132_TESTSETS_FIXED_REWARDS:-1.0 0.0}"
 EPOCHS="${ROB132_TESTSETS_EPOCHS:-1 5}"
 LR="${ROB132_TESTSETS_LR:-1e-5}"
 CSV_NAME="${ROB132_TESTSETS_CSV_NAME:-rob132_audio_ssl_test_fixed_rewards.csv}"
+SSL_EXTRACTION_BATCH_SIZE="${ROB132_TESTSETS_SSL_EXTRACTION_BATCH_SIZE:-32}"
+RUN_REWARDS="${ROB132_TESTSETS_RUN_FIXED_REWARDS:-${FIXED_REWARDS}}"
+RUN_DATASETS="${ROB132_TESTSETS_RUN_DATASETS:-${DATASETS}}"
+RUN_EPOCHS="${ROB132_TESTSETS_RUN_EPOCHS:-${EPOCHS}}"
+CONFIG_REWARDS="${ROB132_TESTSETS_CONFIG_FIXED_REWARDS:-${RUN_REWARDS}}"
+CONFIG_DATASETS="${ROB132_TESTSETS_CONFIG_DATASETS:-${RUN_DATASETS}}"
+CONFIG_EPOCHS="${ROB132_TESTSETS_CONFIG_EPOCHS:-${RUN_EPOCHS}}"
+EVAL_SCRIPT="${ROB132_TESTSETS_EVAL_SCRIPT:-eval.py}"
 QUEUED_COMMAND="${QUEUED_COMMAND:-screen -L -Logfile ${SCREEN_LOG_PATH} -dmS ${SCREEN_NAME} bash -lc 'cd ${REPO_DIR} && /store/store5/software/simple-gpu-schedule/with-gpu 1,2 -- scripts/launch_rob132_audio_ssl_self_train_test_sets.sh'}"
 GIT_BRANCH="${GIT_BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || printf 'unknown')}"
 GIT_COMMIT="${GIT_COMMIT:-$(git rev-parse HEAD 2>/dev/null || printf 'unknown')}"
@@ -100,6 +108,10 @@ echo "[rob132-testsets] datasets=${DATASETS}"
 echo "[rob132-testsets] fixed_rewards=${FIXED_REWARDS}"
 echo "[rob132-testsets] epochs=${EPOCHS}"
 echo "[rob132-testsets] lr=${LR}"
+echo "[rob132-testsets] ssl_extraction_batch_size=${SSL_EXTRACTION_BATCH_SIZE}"
+echo "[rob132-testsets] config_datasets=${CONFIG_DATASETS}"
+echo "[rob132-testsets] config_fixed_rewards=${CONFIG_REWARDS}"
+echo "[rob132-testsets] config_epochs=${CONFIG_EPOCHS}"
 echo "[rob132-testsets] log_path=${LOG_PATH}"
 echo "[rob132-testsets] screen_log_path=${SCREEN_LOG_PATH}"
 echo "[rob132-testsets] queued_command=${QUEUED_COMMAND}"
@@ -135,11 +147,11 @@ done
 
 export L2A_TEDLIUM3_LEGACY_DIR="${L2A_TEDLIUM3_LEGACY_DIR:-/store/store4/data/TEDLIUM_release-3/legacy/}"
 export L2A_EARNINGS22_DIR="${L2A_EARNINGS22_DIR:-/store/store4/data/earnings-22}"
-export L2A_REV16_DIR="${L2A_REV16_DIR:-/mnt/parscratch/users/acp21rjf/rev_benchmark}"
+export L2A_REV16_DIR="${L2A_REV16_DIR:-/store/store4/data/rev_benchmark}"
 export L2A_TAL_DIR="${L2A_TAL_DIR:-/store/store5/data/this_american_life}"
 export L2A_CHIME6_DIR="${L2A_CHIME6_DIR:-/mnt/parscratch/users/acp21rjf/chime6}"
 
-for dataset_tag in ${DATASETS}; do
+for dataset_tag in ${RUN_DATASETS}; do
   case "${dataset_tag}" in
     tedlium)
       required_dir="${L2A_TEDLIUM3_LEGACY_DIR}"
@@ -167,7 +179,7 @@ for dataset_tag in ${DATASETS}; do
   fi
 done
 
-python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${CHECKPOINT_PATH}" "${MASK_VAE_CKPT}" "${LINEAR_ISSUE}" "${DATASETS}" "${FIXED_REWARDS}" "${EPOCHS}" "${LR}" <<'PY'
+python3 - "${RESULT_ROOT}" "${ASR_CKPT}" "${CHECKPOINT_PATH}" "${MASK_VAE_CKPT}" "${LINEAR_ISSUE}" "${CONFIG_DATASETS}" "${CONFIG_REWARDS}" "${CONFIG_EPOCHS}" "${LR}" "${SSL_EXTRACTION_BATCH_SIZE}" <<'PY'
 import sys
 from pathlib import Path
 
@@ -180,6 +192,7 @@ dataset_tags = tuple(sys.argv[6].split())
 fixed_rewards = tuple(sys.argv[7].split())
 epochs = tuple(int(item) for item in sys.argv[8].split())
 lr = sys.argv[9]
+ssl_extraction_batch_size = int(sys.argv[10])
 
 datasets = {
     "tedlium": ("tedlium", "test"),
@@ -239,6 +252,7 @@ evaluation:
 dataset:
   ssl_bundle: HUBERT_BASE
   ssl_device: cuda
+  ssl_extraction_batch_size: {ssl_extraction_batch_size}
   tedlium_base: /store/store4/data/TEDLIUM_release-3/legacy
 
 policy:
@@ -284,11 +298,6 @@ if [ "${ROB132_TESTSETS_CONFIG_ONLY:-0}" = "1" ]; then
   exit 0
 fi
 
-RUN_REWARDS="${ROB132_TESTSETS_RUN_FIXED_REWARDS:-${FIXED_REWARDS}}"
-RUN_DATASETS="${ROB132_TESTSETS_RUN_DATASETS:-${DATASETS}}"
-RUN_EPOCHS="${ROB132_TESTSETS_RUN_EPOCHS:-${EPOCHS}}"
-EVAL_SCRIPT="${ROB132_TESTSETS_EVAL_SCRIPT:-eval.py}"
-
 if [ "${ROB132_TESTSETS_SMOKE:-0}" = "1" ]; then
   RUN_REWARDS="${ROB132_TESTSETS_SMOKE_FIXED_REWARDS:-1.0}"
   RUN_DATASETS="${ROB132_TESTSETS_SMOKE_DATASETS:-tedlium}"
@@ -297,6 +306,7 @@ if [ "${ROB132_TESTSETS_SMOKE:-0}" = "1" ]; then
   ROB132_TESTSETS_DONT_SAVE="${ROB132_TESTSETS_DONT_SAVE:-1}"
   echo "[rob132-testsets] smoke mode: rewards=${RUN_REWARDS}; datasets=${RUN_DATASETS}; epochs=${RUN_EPOCHS}; indexes=${ROB132_TESTSETS_INDEXES}; dont_save=${ROB132_TESTSETS_DONT_SAVE}"
 fi
+export ROB132_TESTSETS_INDEXES ROB132_TESTSETS_MAX_STEPS ROB132_TESTSETS_DONT_SAVE
 
 cd "${REPO_DIR}/exp"
 for reward in ${RUN_REWARDS}; do

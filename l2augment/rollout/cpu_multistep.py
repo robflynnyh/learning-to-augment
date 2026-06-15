@@ -187,15 +187,17 @@ def cpu_rollout(
 
   
     for epoch in range(epochs):
-        total_steps = len(training_keys)
         masks = None
-        if max_steps != None and max_steps < len(training_keys): total_steps = max_steps
-        if shuffle: random.shuffle(training_keys)
+        epoch_keys = list(training_keys)
+        if shuffle: random.shuffle(epoch_keys)
+        if max_steps is not None:
+            epoch_keys = epoch_keys[:max_steps]
+        total_steps = len(epoch_keys)
+        if audio_feature_fn is not None and hasattr(audio_feature_fn, "precompute"):
+            audio_feature_fn.precompute(epoch_keys, training_data, device)
         state = None
 
-        for i, key in tqdm(enumerate(training_keys), total=total_steps):
-            if max_steps != None and i > max_steps: break
-
+        for i, key in tqdm(enumerate(epoch_keys), total=total_steps):
             audio_chunk = training_data[key].clone().to(device)
 
 
@@ -304,7 +306,6 @@ def cpu_rollout(
  
         
        
-
 
 
 
