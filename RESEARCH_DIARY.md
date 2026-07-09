@@ -362,3 +362,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
   The consolidated matrix is now `20/20` complete. The new 5-epoch updated WERs
   are Rev16 reward `1.0`: `0.159355`, Rev16 reward `0.0`: `0.160693`, TAL
   reward `1.0`: `0.155679`, and TAL reward `0.0`: `0.157095`.
+
+## 2026-07-09
+
+- Prepared ROB-340 Stanage submission scripts for the two additional
+  large-ASR UFMR/RFM thesis-table repeats. The queued matrix is 20 GPU cells:
+  datasets TED-LIUM, Earnings-22, CHiME-6, Rev16, and TAL; methods UFMR/RFM;
+  repeats 2 and 3; one adaptation epoch; `lr=1e-5`. The finalizer summarizes
+  repeats 1-3 into `ROB-340_OUTCOME.md` and moves the Linear issue back to
+  `Todo` when the Slurm jobs finish.
