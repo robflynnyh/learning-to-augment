@@ -362,3 +362,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   The consolidated matrix is now `20/20` complete. The new 5-epoch updated WERs
   are Rev16 reward `1.0`: `0.159355`, Rev16 reward `0.0`: `0.160693`, TAL
   reward `1.0`: `0.155679`, and TAL reward `0.0`: `0.157095`.
+
+## 2026-07-09
+
+- Prepared ROB-338 Stanage orchestration for two additional RC-MLM no-audio
+  fixed-reward repeats. The submitter creates repeat-aware configs for repeats
+  `1 2 3`, submits only repeats `2 3` as separate GPU jobs per
+  dataset/reward/epoch/repeat cell, and uses a finalizer to regenerate the
+  ROB-124 fixed-reward CSV/`OUTCOME.md` with `N=3` checks before waking Linear.
