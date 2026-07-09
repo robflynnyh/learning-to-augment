@@ -97,9 +97,11 @@ if command -v module >/dev/null 2>&1; then
   module load Anaconda3/2022.10
 fi
 source activate /mnt/parscratch/users/acp21rjf/conda/main
+PYTHON_BIN="${PYTHON_BIN:-/mnt/parscratch/users/acp21rjf/conda/main/bin/python}"
+export PATH="$(dirname "${PYTHON_BIN}"):${PATH}"
 export PYTHONPATH="${REPO_DIR}:${REPO_DIR}/exp:/mnt/parscratch/users/acp21rjf/lcasr:/mnt/parscratch/users/acp21rjf/language_modelling${PYTHONPATH:+:${PYTHONPATH}}"
 
-python - <<'PY'
+"${PYTHON_BIN}" - <<'PY'
 import sys
 import torch
 import torchaudio
@@ -113,7 +115,7 @@ if torch.cuda.is_available():
     print("[rob337-cell] cuda_device=" + torch.cuda.get_device_name(0))
 PY
 
-args=(python eval.py --config "${config}")
+args=("${PYTHON_BIN}" eval.py --config "${config}")
 if [ -n "${ROB337_INDEXES:-}" ]; then
   read -r -a indexes <<< "${ROB337_INDEXES}"
   args+=(--indexes "${indexes[@]}")
