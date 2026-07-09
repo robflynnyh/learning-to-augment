@@ -3,6 +3,15 @@
 Keep concise dated notes for project changes that future agents need in order to
 reproduce results, interpret metrics, or avoid known failure modes.
 
+## 2026-07-09
+
+- Added ROB-339 Stanage launch/finalizer support for two additional RAC-MLM
+  HuBERT audio-SSL fixed-reward test-set repeats. Use
+  `scripts/submit_rob339_rac_mlm_fixed_reward_repeats_stanage.sh`; it writes
+  repeat 2/3 outputs under
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1_rob339_repeats/`
+  and aggregates them with the historical repeat 1 root.
+
 ## 2026-05-10
 
 - Added Symphony project wiring for the Learn-to-Augment Linear project,
