@@ -1,0 +1,1 @@
+ID: ROB-338-chime6-test-384d-dropout0p1-reward0-epoch5-lr1e-5-repeat2 - Dataset: chime6 - Split: test - Epochs: 5 - Original_WER: 0.8436376454000705 - Updated_WER: 0.8160909411350018

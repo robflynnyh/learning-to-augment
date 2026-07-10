@@ -1,0 +1,1 @@
+ID: ROB-338-TAL-test-384d-dropout0p1-reward0-epoch5-lr1e-5-repeat3 - Dataset: this_american_life - Split: test - Epochs: 5 - Original_WER: 0.16568551161033485 - Updated_WER: 0.15956738956366795

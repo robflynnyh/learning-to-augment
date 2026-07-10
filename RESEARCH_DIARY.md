@@ -370,3 +370,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `1 2 3`, submits only repeats `2 3` as separate GPU jobs per
   dataset/reward/epoch/repeat cell, and uses a finalizer to regenerate the
   ROB-124 fixed-reward CSV/`OUTCOME.md` with `N=3` checks before waking Linear.
+
+## 2026-07-10
+
+- Completed ROB-338's RC-MLM no-audio fixed-reward repeat fill-in on Stanage.
+  All 40 new repeat-2/repeat-3 GPU cells finished with Slurm exit `0:0`, and
+  the finalizer regenerated the ROB-124 fixed-reward result summary with
+  `60/60` complete per-cell rows and `N=3` for every reward/dataset/epoch
+  aggregate.
