@@ -16,7 +16,7 @@ set -euo pipefail
 REPO_DIR="${REPO_DIR:-/mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-340}"
 RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/large_asr_transfer/ufmr_rfm_90m_seq2048/results}"
 SCRATCH_ROOT="${SCRATCH_ROOT:-/mnt/parscratch/users/acp21rjf/rob340-large-asr-repeats-scratch}"
-ASR_CKPT="${ASR_CKPT:-/mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt}"
+ASR_CKPT="${ASR_CKPT:-/mnt/parscratch/users/acp21rjf/SAP_LCASR/n_seq_sched_2048_rp_1/step_105360.pt}"
 UFMR_CKPT="${UFMR_CKPT:-/mnt/parscratch/users/acp21rjf/l2augment_model/ufm/test_wer/model.pt}"
 ROB340_METHOD="${ROB340_METHOD:?ROB340_METHOD is required}"
 ROB340_DATASET="${ROB340_DATASET:?ROB340_DATASET is required}"

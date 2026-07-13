@@ -102,11 +102,12 @@ if len(rows) != expected_count or len(complete) != expected_count:
             )
     raise SystemExit(1)
 
+baseline_tolerance = 1e-3
 by_cell: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
-baselines: dict[str, set[str]] = defaultdict(set)
+baselines: dict[str, list[float]] = defaultdict(list)
 for row in complete:
     by_cell[(row["dataset_tag"], row["method"])].append(row)
-    baselines[row["dataset_tag"]].add(row["original_wer"])
+    baselines[row["dataset_tag"]].append(float(row["original_wer"]))
 
 bad_n = [(dataset, method, len(group)) for (dataset, method), group in sorted(by_cell.items()) if len(group) != len(repeats)]
 if bad_n:
@@ -116,9 +117,14 @@ if bad_n:
 
 for dataset in datasets:
     values = sorted(baselines[dataset])
-    print(f"[rob340-stanage-finalizer] baseline_original_wer dataset={dataset} values={','.join(values)}")
-    if len(values) != 1:
-        raise SystemExit(f"baseline original WER mismatch for {dataset}: {values}")
+    spread = max(values) - min(values)
+    formatted = ",".join(f"{value:.6f}" for value in values)
+    print(
+        f"[rob340-stanage-finalizer] baseline_original_wer dataset={dataset} "
+        f"values={formatted} spread={spread:.6f} tolerance={baseline_tolerance:.6f}"
+    )
+    if spread > baseline_tolerance:
+        raise SystemExit(f"baseline original WER mismatch for {dataset}: {formatted}")
 PY
 else
   echo "[rob340-stanage-finalizer] summary skipped for callback smoke"

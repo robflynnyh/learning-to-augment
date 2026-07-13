@@ -371,3 +371,15 @@ reproduce results, interpret metrics, or avoid known failure modes.
   repeats 2 and 3; one adaptation epoch; `lr=1e-5`. The finalizer summarizes
   repeats 1-3 into `ROB-340_OUTCOME.md` and moves the Linear issue back to
   `Todo` when the Slurm jobs finish.
+
+## 2026-07-13
+
+- The first ROB-340 Stanage finalizer found 30/30 completed rows but failed the
+  provenance check because repeats 2-3 used the older Stanage `spotify/...`
+  ASR checkpoint, giving no-adaptation baselines that did not match ROB-158
+  repeat 1. The ROB-158 SAP_LCASR checkpoint was transferred to
+  `/mnt/parscratch/users/acp21rjf/SAP_LCASR/n_seq_sched_2048_rp_1/step_105360.pt`
+  with SHA-256
+  `de1eeb19bc3301546be847ebdfb8bf06d90b9dd46e41a9e4cc970743bfa8d1f9`,
+  and ROB-340 defaults were updated so reruns extend the actual table
+  provenance.
