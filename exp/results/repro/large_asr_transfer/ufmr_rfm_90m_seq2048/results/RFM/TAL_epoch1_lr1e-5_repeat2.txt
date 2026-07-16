@@ -1,0 +1,1 @@
+ID: ROB-340-this_american_life-test-RFM-TAL_epoch1_lr1e-5_repeat2-repeat2 - Dataset: this_american_life - Split: test - Epochs: 1 - Original_WER: 0.13974974907241375 - Updated_WER: 0.13316078537515083

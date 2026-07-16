@@ -383,3 +383,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `de1eeb19bc3301546be847ebdfb8bf06d90b9dd46e41a9e4cc970743bfa8d1f9`,
   and ROB-340 defaults were updated so reruns extend the actual table
   provenance.
+
+## 2026-07-16
+
+- Finalized the corrected ROB-340 SAP_LCASR rerun. The aggregate
+  `rob340_large_asr_rfm_ufmr_repeats.csv` has 30/30 complete rows and N=3 for
+  every large-ASR UFMR/RFM thesis-table cell at one epoch and `lr=1e-5`.
+  Baseline original-WER spreads are below `0.001` for every dataset. The
+  generated summary is `ROB-340_OUTCOME.md`.
