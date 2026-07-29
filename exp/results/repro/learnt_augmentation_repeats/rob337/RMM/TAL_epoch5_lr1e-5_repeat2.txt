@@ -1,0 +1,1 @@
+ID: ROB-337-TAL-test-RMM-epoch5-lr1e-5-repeat2-seed223456 - Dataset: this_american_life - Split: test - Epochs: 5 - Original_WER: 0.16569115043249766 - Updated_WER: 0.15613616627758795

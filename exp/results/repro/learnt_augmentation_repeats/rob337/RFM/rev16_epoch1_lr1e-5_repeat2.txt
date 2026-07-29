@@ -1,0 +1,1 @@
+ID: ROB-337-rev16-test-RFM-epoch1-lr1e-5-repeat2-seed223456 - Dataset: rev16 - Split: test - Epochs: 1 - Original_WER: 0.17257561289466025 - Updated_WER: 0.16550326043108157

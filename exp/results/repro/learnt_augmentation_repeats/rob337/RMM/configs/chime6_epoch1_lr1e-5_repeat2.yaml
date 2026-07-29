@@ -1,0 +1,24 @@
+checkpointing:
+  asr_model: /mnt/parscratch/users/acp21rjf/spotify/rotary_pos_6l_256d_seq_sched/n_seq_sched_2048_rp_1/step_105360.pt
+training:
+  device: cuda
+  random_seed: 223456
+  batch_size: 84
+  epochs: 100
+evaluation:
+  id: ROB-337-chime6-test-RMM-epoch1-lr1e-5-repeat2-seed223456
+  dataset: chime6
+  split: test
+  rollout_setting: policy
+  use_cer: false
+  epochs: 1
+  augmentation_config:
+    repeats: 1
+    seed: 223456
+    use_random: true
+  optim_args:
+    lr: 1.0e-05
+  save_path: /mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-337/exp/results/repro/learnt_augmentation_repeats/rob337/RMM/chime6_epoch1_lr1e-5_repeat2.txt
+policy:
+  lr: 0.0001
+  class: MixedMaskingRanker

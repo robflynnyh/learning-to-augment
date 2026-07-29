@@ -362,3 +362,21 @@ reproduce results, interpret metrics, or avoid known failure modes.
   The consolidated matrix is now `20/20` complete. The new 5-epoch updated WERs
   are Rev16 reward `1.0`: `0.159355`, Rev16 reward `0.0`: `0.160693`, TAL
   reward `1.0`: `0.155679`, and TAL reward `0.0`: `0.157095`.
+
+## 2026-07-09
+
+- Added ROB-337 Stanage launch scaffolding for two additional repeats of the
+  main learnt augmentation WER table cells. The submitter generates
+  repeat-specific configs from the existing ROB-108 templates, queues one GPU
+  Slurm job per method/dataset/epoch/repeat cell, and uses a CPU finalizer to
+  aggregate repeat 1 plus repeats 2-3 under
+  `exp/results/repro/learnt_augmentation_repeats/rob337/`.
+
+## 2026-07-15
+
+- Completed ROB-337's learnt augmentation repeat matrix on Stanage. The final
+  summary under `exp/results/repro/learnt_augmentation_repeats/rob337/` reports
+  `120/120` per-repeat rows complete and `40/40` method/dataset/epoch
+  aggregates at `N=3`. The first queue failed because Slurm cells used a bare
+  `python` without Torch; the retry fixed the cell wrapper to call
+  `/mnt/parscratch/users/acp21rjf/conda/main/bin/python` explicitly.

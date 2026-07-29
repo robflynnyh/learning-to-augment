@@ -1,0 +1,1 @@
+ID: ROB-337-chime6-test-RMM-epoch1-lr1e-5-repeat2-seed223456 - Dataset: chime6 - Split: test - Epochs: 1 - Original_WER: 0.8436200211491012 - Updated_WER: 0.836852308776877
