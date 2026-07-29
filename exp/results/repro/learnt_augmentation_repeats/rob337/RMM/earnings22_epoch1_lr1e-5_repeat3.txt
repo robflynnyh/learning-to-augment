@@ -1,0 +1,1 @@
+ID: ROB-337-earnings22-test-RMM-epoch1-lr1e-5-repeat3-seed323456 - Dataset: earnings22 - Split: test - Epochs: 1 - Original_WER: 0.23523885382840104 - Updated_WER: 0.19612768825439617
