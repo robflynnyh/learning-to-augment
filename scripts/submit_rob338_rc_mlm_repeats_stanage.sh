@@ -105,6 +105,7 @@ evaluation:
   augmentation_config:
     conditioning_reward: {reward}
     sample: true
+    seed: {seed}
   optim_args:
     lr: {lr}
   save_path: {save_path}

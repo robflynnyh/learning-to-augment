@@ -90,11 +90,38 @@ counts = defaultdict(set)
 for row in complete:
     counts[(row["reward"], row["dataset_tag"], row["epochs"])].add(row["repeat"])
 
+seed_mismatches = []
+for row in rows:
+    config_path = Path(row["config_path"])
+    expected_seed = row["seed"]
+    text = config_path.read_text(encoding="utf-8")
+    in_augmentation_config = False
+    observed_seed = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == "augmentation_config:":
+            in_augmentation_config = True
+            continue
+        if in_augmentation_config and line and not line.startswith(" "):
+            in_augmentation_config = False
+        if in_augmentation_config and stripped.startswith("seed:"):
+            observed_seed = stripped.split(":", 1)[1].strip()
+            break
+    if observed_seed != expected_seed:
+        seed_mismatches.append((row, observed_seed))
+
 bad = []
 for key, repeats in sorted(counts.items(), key=lambda item: (float(item[0][0]), item[0][1], int(item[0][2]))):
     if len(repeats) != 3:
         bad.append((key, repeats))
-if missing or bad or len(complete) != len(rows):
+if seed_mismatches:
+    for row, observed_seed in seed_mismatches:
+        print(
+            "[rob338-stanage-finalizer] seed mismatch "
+            f"reward={row['reward']} dataset={row['dataset_tag']} epoch={row['epochs']} "
+            f"repeat={row['repeat']} expected={row['seed']} observed={observed_seed}"
+        )
+if missing or bad or seed_mismatches or len(complete) != len(rows):
     for (reward, dataset, epochs), repeats in bad:
         print(
             "[rob338-stanage-finalizer] incomplete aggregate "
