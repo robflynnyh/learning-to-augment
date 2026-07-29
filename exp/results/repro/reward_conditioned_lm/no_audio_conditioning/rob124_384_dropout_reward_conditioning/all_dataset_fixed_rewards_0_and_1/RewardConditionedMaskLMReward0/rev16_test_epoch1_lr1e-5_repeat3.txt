@@ -1,0 +1,1 @@
+ID: ROB-338-rev16-test-384d-dropout0p1-reward0-epoch1-lr1e-5-repeat3 - Dataset: rev16 - Split: test - Epochs: 1 - Original_WER: 0.17257561289466025 - Updated_WER: 0.16701475236553595
