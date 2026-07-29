@@ -1,0 +1,1 @@
+ID: ROB-337-earnings22-test-UVQLM-epoch5-lr1e-5-repeat2-seed223456 - Dataset: earnings22 - Split: test - Epochs: 5 - Original_WER: 0.23523885382840104 - Updated_WER: 0.18383268999040092

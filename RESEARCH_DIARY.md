@@ -372,6 +372,13 @@ reproduce results, interpret metrics, or avoid known failure modes.
   repeats 1-3 into `ROB-340_OUTCOME.md` and moves the Linear issue back to
   `Todo` when the Slurm jobs finish.
 
+- Added ROB-337 Stanage launch scaffolding for two additional repeats of the
+  main learnt augmentation WER table cells. The submitter generates
+  repeat-specific configs from the existing ROB-108 templates, queues one GPU
+  Slurm job per method/dataset/epoch/repeat cell, and uses a CPU finalizer to
+  aggregate repeat 1 plus repeats 2-3 under
+  `exp/results/repro/learnt_augmentation_repeats/rob337/`.
+
 ## 2026-07-13
 
 - The first ROB-340 Stanage finalizer found 30/30 completed rows but failed the
@@ -383,6 +390,15 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `de1eeb19bc3301546be847ebdfb8bf06d90b9dd46e41a9e4cc970743bfa8d1f9`,
   and ROB-340 defaults were updated so reruns extend the actual table
   provenance.
+
+## 2026-07-15
+
+- Completed ROB-337's learnt augmentation repeat matrix on Stanage. The final
+  summary under `exp/results/repro/learnt_augmentation_repeats/rob337/` reports
+  `120/120` per-repeat rows complete and `40/40` method/dataset/epoch
+  aggregates at `N=3`. The first queue failed because Slurm cells used a bare
+  `python` without Torch; the retry fixed the cell wrapper to call
+  `/mnt/parscratch/users/acp21rjf/conda/main/bin/python` explicitly.
 
 ## 2026-07-16
 
