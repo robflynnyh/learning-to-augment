@@ -3,6 +3,25 @@
 Keep concise dated notes for project changes that future agents need in order to
 reproduce results, interpret metrics, or avoid known failure modes.
 
+## 2026-07-09
+
+- Added ROB-339 Stanage launch/finalizer support for two additional RAC-MLM
+  HuBERT audio-SSL fixed-reward test-set repeats. Use
+  `scripts/submit_rob339_rac_mlm_fixed_reward_repeats_stanage.sh`; it writes
+  repeat 2/3 outputs under
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1_rob339_repeats/`
+  and aggregates them with the historical repeat 1 root.
+
+## 2026-07-29
+
+- Completed ROB-339 after Stanage callback retries avoided CUDA-driver failures
+  on the `gpu-h100` and `gpu` partitions. The final `gpu-h100-nvl` retry
+  produced `60/60` per-repeat rows and aggregate `N=3` for every RAC-MLM
+  fixed-reward WER cell. Committed result/config artifacts under
+  `exp/results/repro/reward_conditioned_lm/audio_ssl_conditioning/rob132_hubert_base_transformer384/eval/test_fixed_rewards_0_and_1_rob339_repeats/`;
+  bulky Slurm logs remain on parscratch under that directory's `logs/stanage/`
+  subdirectory.
+
 ## 2026-05-10
 
 - Added Symphony project wiring for the Learn-to-Augment Linear project,
