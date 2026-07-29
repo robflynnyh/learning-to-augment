@@ -1,0 +1,1 @@
+ID: ROB-339-rev16-test-audio-ssl-transformer384-reward1p0-epoch5-lr1e-5-repeat3 - Dataset: rev16 - Split: test - Epochs: 5 - Original_WER: 0.1725705065029898 - Updated_WER: 0.15940112238488915
