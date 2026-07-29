@@ -52,3 +52,19 @@ After RFM results are available, it writes:
 
 Final combined interpretation lives in `OUTCOME.md`. Method-specific generated
 summaries live in `UFMR_OUTCOME.md` and `RFM_OUTCOME.md`.
+
+## ROB-340 Thesis-Table Repeats
+
+ROB-340 extends the thesis-table large-ASR UFMR/RFM cells to three independent
+repeats for the shared one-epoch `lr=1e-5` setting. It keeps the ROB-158
+SAP_LCASR checkpoint provenance and adds repeats 2 and 3 with seeds `123457`
+and `123458`.
+
+The N=3 aggregate for the affected thesis cells lives in:
+
+- `ROB-340_OUTCOME.md`
+- `rob340_large_asr_rfm_ufmr_repeats.csv`
+
+Per-repeat result files and generated configs are under `results/UFMR/` and
+`results/RFM/`. Stanage logs for the queued run remain external under the same
+directory on `/mnt/parscratch/users/acp21rjf/.../logs/stanage/`.

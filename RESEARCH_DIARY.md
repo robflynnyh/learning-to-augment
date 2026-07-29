@@ -365,12 +365,31 @@ reproduce results, interpret metrics, or avoid known failure modes.
 
 ## 2026-07-09
 
+- Prepared ROB-340 Stanage submission scripts for the two additional
+  large-ASR UFMR/RFM thesis-table repeats. The queued matrix is 20 GPU cells:
+  datasets TED-LIUM, Earnings-22, CHiME-6, Rev16, and TAL; methods UFMR/RFM;
+  repeats 2 and 3; one adaptation epoch; `lr=1e-5`. The finalizer summarizes
+  repeats 1-3 into `ROB-340_OUTCOME.md` and moves the Linear issue back to
+  `Todo` when the Slurm jobs finish.
+
 - Added ROB-337 Stanage launch scaffolding for two additional repeats of the
   main learnt augmentation WER table cells. The submitter generates
   repeat-specific configs from the existing ROB-108 templates, queues one GPU
   Slurm job per method/dataset/epoch/repeat cell, and uses a CPU finalizer to
   aggregate repeat 1 plus repeats 2-3 under
   `exp/results/repro/learnt_augmentation_repeats/rob337/`.
+
+## 2026-07-13
+
+- The first ROB-340 Stanage finalizer found 30/30 completed rows but failed the
+  provenance check because repeats 2-3 used the older Stanage `spotify/...`
+  ASR checkpoint, giving no-adaptation baselines that did not match ROB-158
+  repeat 1. The ROB-158 SAP_LCASR checkpoint was transferred to
+  `/mnt/parscratch/users/acp21rjf/SAP_LCASR/n_seq_sched_2048_rp_1/step_105360.pt`
+  with SHA-256
+  `de1eeb19bc3301546be847ebdfb8bf06d90b9dd46e41a9e4cc970743bfa8d1f9`,
+  and ROB-340 defaults were updated so reruns extend the actual table
+  provenance.
 
 ## 2026-07-15
 
@@ -380,3 +399,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   aggregates at `N=3`. The first queue failed because Slurm cells used a bare
   `python` without Torch; the retry fixed the cell wrapper to call
   `/mnt/parscratch/users/acp21rjf/conda/main/bin/python` explicitly.
+
+## 2026-07-16
+
+- Finalized the corrected ROB-340 SAP_LCASR rerun. The aggregate
+  `rob340_large_asr_rfm_ufmr_repeats.csv` has 30/30 complete rows and N=3 for
+  every large-ASR UFMR/RFM thesis-table cell at one epoch and `lr=1e-5`.
+  Baseline original-WER spreads are below `0.001` for every dataset. The
+  generated summary is `ROB-340_OUTCOME.md`.
