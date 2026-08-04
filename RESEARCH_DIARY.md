@@ -386,3 +386,10 @@ reproduce results, interpret metrics, or avoid known failure modes.
   their partitions went down. Hardened the finalizer to require post-seed-fix
   successful cell logs and fresh result files, and prepared a targeted requeue
   that preserves the six genuinely completed corrected cells.
+- Cancelled jobs `11118102`--`11118136` at zero runtime after Stanage announced
+  that all GPU nodes would move to EL9 and all queued GPU jobs would be deleted.
+  Prepared the cell launcher for the unified `gpu` partition, typed H100 GRES,
+  a rebuilt issue-specific EL9 Python environment, and a non-saving
+  representative evaluation with a Linear callback. The EL9 test partitions
+  were restricted to the `el9-testing` account, so the real GPU smoke remains
+  required after the outage before the 34 missing cells can be resubmitted.

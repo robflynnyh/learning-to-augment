@@ -20,7 +20,9 @@ LR="${ROB338_LR:-1e-5}"
 ALL_REPEATS="${ROB338_ALL_REPEATS:-1 2 3}"
 RUN_REPEATS="${ROB338_RUN_REPEATS:-2 3}"
 CSV_NAME="${ROB338_CSV_NAME:-rob124_384_dropout_all_dataset_fixed_rewards_0_and_1.csv}"
-PARTITIONS="${ROB338_PARTITIONS:-gpu-h100-nvl gpu-h100 gpu}"
+PARTITION="${ROB338_PARTITION:-gpu}"
+GPU_TYPE="${ROB338_GPU_TYPE:-h100}"
+PYTHON_BIN="${ROB338_PYTHON_BIN:-/mnt/parscratch/users/acp21rjf/conda/rob338-el9/bin/python}"
 SKIP_CELLS="${ROB338_SKIP_CELLS:-}"
 EXPECTED_SUBMISSIONS="${ROB338_EXPECTED_SUBMISSIONS:-}"
 SUMMARY_DATASETS="${ROB338_SUMMARY_DATASETS:-${DATASETS}}"
@@ -138,10 +140,7 @@ if [ "${ROB338_SUBMIT_CONFIG_ONLY:-0}" = "1" ]; then
   exit 0
 fi
 
-read -r -a partition_list <<< "${PARTITIONS}"
-
 job_ids=()
-cell_index=0
 for repeat in ${RUN_REPEATS}; do
   for reward in ${FIXED_REWARDS}; do
     for dataset in ${DATASETS}; do
@@ -151,8 +150,6 @@ for repeat in ${RUN_REPEATS}; do
           echo "[rob338-submit] skipping previously completed corrected cell ${cell_key}"
           continue
         fi
-        partition="${partition_list[$((cell_index % ${#partition_list[@]}))]}"
-        cell_index=$((cell_index + 1))
         reward_tag="${reward//./p}"
         reward_tag="${reward_tag//-/m}"
         dataset_tag="${dataset,,}"
@@ -160,12 +157,13 @@ for repeat in ${RUN_REPEATS}; do
         job_id="$(
           sbatch --parsable \
             --job-name="${job_name}" \
-            --partition="${partition}" \
-            --export=ALL,REPO_DIR="${REPO_DIR}",RESULT_ROOT="${RESULT_ROOT}",SCRATCH_ROOT="${SCRATCH_ROOT}",CHECKPOINT_PATH="${CHECKPOINT_PATH}",ASR_CKPT="${ASR_CKPT}",MASK_VAE_CKPT="${MASK_VAE_CKPT}",ROB338_DATASET="${dataset}",ROB338_REWARD="${reward}",ROB338_EPOCH="${epoch}",ROB338_REPEAT="${repeat}",ROB338_LR="${LR}" \
+            --partition="${PARTITION}" \
+            --gres="gpu:${GPU_TYPE}:1" \
+            --export=ALL,REPO_DIR="${REPO_DIR}",RESULT_ROOT="${RESULT_ROOT}",SCRATCH_ROOT="${SCRATCH_ROOT}",CHECKPOINT_PATH="${CHECKPOINT_PATH}",ASR_CKPT="${ASR_CKPT}",MASK_VAE_CKPT="${MASK_VAE_CKPT}",ROB338_DATASET="${dataset}",ROB338_REWARD="${reward}",ROB338_EPOCH="${epoch}",ROB338_REPEAT="${repeat}",ROB338_LR="${LR}",ROB338_GPU_TYPE="${GPU_TYPE}",ROB338_PYTHON_BIN="${PYTHON_BIN}" \
             "${CELL_SCRIPT}"
         )"
         job_ids+=("${job_id}")
-        echo "${job_id}|${partition}|${dataset}|${reward}|${epoch}|repeat${repeat}"
+        echo "${job_id}|${PARTITION}|${GPU_TYPE}|${dataset}|${reward}|${epoch}|repeat${repeat}"
       done
     done
   done

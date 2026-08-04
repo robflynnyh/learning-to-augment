@@ -3,7 +3,7 @@
 
 #SBATCH --job-name=rob338-cell
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:h100:1
 #SBATCH --qos=gpu
 #SBATCH --mem=120GB
 #SBATCH --cpus-per-task=8
@@ -24,6 +24,8 @@ ROB338_REWARD="${ROB338_REWARD:?ROB338_REWARD is required}"
 ROB338_EPOCH="${ROB338_EPOCH:?ROB338_EPOCH is required}"
 ROB338_REPEAT="${ROB338_REPEAT:?ROB338_REPEAT is required}"
 ROB338_LR="${ROB338_LR:-1e-5}"
+ROB338_GPU_TYPE="${ROB338_GPU_TYPE:-h100}"
+ROB338_PYTHON_BIN="${ROB338_PYTHON_BIN:-/mnt/parscratch/users/acp21rjf/conda/rob338-el9/bin/python}"
 LOG_DIR="${LOG_DIR:-${RESULT_ROOT}/logs/stanage/rob338}"
 
 reward_token="${ROB338_REWARD//./p}"
@@ -60,20 +62,24 @@ echo "[rob338-stanage-cell] config=${config}"
 echo "[rob338-stanage-cell] save_path=${save_path}"
 echo "[rob338-stanage-cell] log_path=${log_path}"
 echo "[rob338-stanage-cell] slurm_partition=${SLURM_JOB_PARTITION:-unknown}"
+echo "[rob338-stanage-cell] gpu_type=${ROB338_GPU_TYPE}"
 echo "[rob338-stanage-cell] cuda_visible_devices=${CUDA_VISIBLE_DEVICES:-unset}"
+if [ -f /etc/os-release ]; then
+  echo "[rob338-stanage-cell] os_release=$(grep '^PRETTY_NAME=' /etc/os-release | cut -d= -f2- | tr -d '\"')"
+fi
 
-for required_path in "${CHECKPOINT_PATH}" "${ASR_CKPT}" "${MASK_VAE_CKPT}" "${config}"; do
+for required_path in "${CHECKPOINT_PATH}" "${ASR_CKPT}" "${MASK_VAE_CKPT}" "${config}" "${ROB338_PYTHON_BIN}"; do
   if [ ! -e "${required_path}" ]; then
     echo "Missing required path: ${required_path}" >&2
     exit 1
   fi
 done
 
-if [ "${FORCE_RERUN:-0}" != "1" ] && [ -f "${save_path}" ] && grep -q "Updated_WER:" "${save_path}"; then
+if [ "${ROB338_DONT_SAVE:-0}" != "1" ] && [ "${FORCE_RERUN:-0}" != "1" ] && [ -f "${save_path}" ] && grep -q "Updated_WER:" "${save_path}"; then
   echo "[rob338-stanage-cell] skipping completed cell: ${save_path}"
   exit 0
 fi
-if [ "${FORCE_RERUN:-0}" = "1" ]; then
+if [ "${ROB338_DONT_SAVE:-0}" != "1" ] && [ "${FORCE_RERUN:-0}" = "1" ]; then
   rm -f "${save_path}"
 fi
 
@@ -93,13 +99,17 @@ export L2A_CHIME6_DIR="${L2A_CHIME6_DIR:-/mnt/parscratch/users/acp21rjf/chime6}"
 mkdir -p "${TMPDIR}" "${TORCH_HOME}" "${HF_HOME}" "${WANDB_DIR}" "${WANDB_CACHE_DIR}" "${WANDB_CONFIG_DIR}" "${XDG_CACHE_HOME}" "${MPLCONFIGDIR}"
 
 cd "${REPO_DIR}/exp"
-if command -v module >/dev/null 2>&1; then
-  module load Anaconda3/2022.10
+if [ -f /etc/profile.d/modules.sh ]; then
+  source /etc/profile.d/modules.sh
+elif [ -f /usr/share/lmod/lmod/init/bash ]; then
+  source /usr/share/lmod/lmod/init/bash
 fi
-source activate /mnt/parscratch/users/acp21rjf/conda/main
+if command -v module >/dev/null 2>&1; then
+  module purge
+fi
 export PYTHONPATH="${REPO_DIR}:${REPO_DIR}/exp:/mnt/parscratch/users/acp21rjf/lcasr:/mnt/parscratch/users/acp21rjf/language_modelling${PYTHONPATH:+:${PYTHONPATH}}"
 
-python - <<'PY'
+"${ROB338_PYTHON_BIN}" - <<'PY'
 import sys
 import torch
 import torchaudio
@@ -113,7 +123,7 @@ if torch.cuda.is_available():
     print("[rob338-stanage-cell] cuda_device=" + torch.cuda.get_device_name(0))
 PY
 
-args=(python eval.py --config "${config}")
+args=("${ROB338_PYTHON_BIN}" eval.py --config "${config}")
 if [ -n "${ROB338_INDEXES:-}" ]; then
   read -r -a indexes <<< "${ROB338_INDEXES}"
   args+=(--indexes "${indexes[@]}")

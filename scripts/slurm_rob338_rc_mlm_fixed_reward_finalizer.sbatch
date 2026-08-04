@@ -28,6 +28,7 @@ ROB338_DATASETS="${ROB338_DATASETS:-tedlium earnings22 rev16 TAL chime6}"
 ROB338_EPOCHS="${ROB338_EPOCHS:-1 5}"
 ROB338_REPEATS="${ROB338_REPEATS:-1 2 3}"
 ROB338_LR="${ROB338_LR:-1e-5}"
+ROB338_FINALIZER_PYTHON="${ROB338_FINALIZER_PYTHON:-/mnt/parscratch/users/acp21rjf/conda/main/bin/python}"
 ROB338_PROVENANCE_NOT_BEFORE="${ROB338_PROVENANCE_NOT_BEFORE:-2026-07-29T19:04:00Z}"
 CSV_NAME="${CSV_NAME:-rob124_384_dropout_all_dataset_fixed_rewards_0_and_1.csv}"
 RUNNER_LABEL="${RUNNER_LABEL:-slurm-finalizer:${SLURM_JOB_ID:-manual}}"
@@ -48,13 +49,24 @@ echo "[rob338-stanage-finalizer] branch=${GIT_BRANCH}"
 echo "[rob338-stanage-finalizer] commit=${GIT_COMMIT}"
 echo "[rob338-stanage-finalizer] queued_command=${QUEUED_COMMAND}"
 echo "[rob338-stanage-finalizer] repeats=${ROB338_REPEATS}"
+echo "[rob338-stanage-finalizer] python=${ROB338_FINALIZER_PYTHON}"
 
-if [ "${ROB338_FINALIZER_SKIP_SUMMARY:-0}" != "1" ]; then
-  if command -v module >/dev/null 2>&1; then
-    module load Anaconda3/2022.10
-  fi
-  source activate /mnt/parscratch/users/acp21rjf/conda/main
-  python3 scripts/summarize_rob124_384_dropout_all_dataset_fixed_rewards.py \
+if [ ! -x "${ROB338_FINALIZER_PYTHON}" ]; then
+  echo "Missing ROB-338 finalizer Python executable: ${ROB338_FINALIZER_PYTHON}" >&2
+  summary_status=1
+fi
+
+if [ -f /etc/profile.d/modules.sh ]; then
+  source /etc/profile.d/modules.sh
+elif [ -f /usr/share/lmod/lmod/init/bash ]; then
+  source /usr/share/lmod/lmod/init/bash
+fi
+if command -v module >/dev/null 2>&1; then
+  module purge
+fi
+
+if [ "${ROB338_FINALIZER_SKIP_SUMMARY:-0}" != "1" ] && [ "${summary_status}" -eq 0 ]; then
+  "${ROB338_FINALIZER_PYTHON}" scripts/summarize_rob124_384_dropout_all_dataset_fixed_rewards.py \
     --result-root "${RESULT_ROOT}" \
     --fixed-rewards "${ROB338_FIXED_REWARDS}" \
     --datasets "${ROB338_DATASETS}" \
@@ -70,7 +82,7 @@ if [ "${ROB338_FINALIZER_SKIP_SUMMARY:-0}" != "1" ]; then
     --csv-name "${CSV_NAME}" \
     --title "ROB-338 RC-MLM Fixed-Reward WER Repeats" || summary_status=$?
 
-  python3 scripts/validate_rob338_seed_fix_provenance.py \
+  "${ROB338_FINALIZER_PYTHON}" scripts/validate_rob338_seed_fix_provenance.py \
     --csv "${RESULT_ROOT}/${CSV_NAME}" \
     --result-root "${RESULT_ROOT}" \
     --not-before "${ROB338_PROVENANCE_NOT_BEFORE}" || summary_status=$?
@@ -106,13 +118,11 @@ if [ "${ROB338_FINALIZER_CALLBACK_DRY_RUN:-0}" = "1" ]; then
   callback_args+=(--dry-run)
 fi
 
-if command -v module >/dev/null 2>&1; then
-  module load Anaconda3/2022.10
+callback_python="${ROB338_FINALIZER_PYTHON}"
+if [ ! -x "${callback_python}" ]; then
+  callback_python="${ROB338_CALLBACK_PYTHON:-/usr/bin/python3}"
 fi
-if [ -f /mnt/parscratch/users/acp21rjf/conda/main/bin/activate ]; then
-  source activate /mnt/parscratch/users/acp21rjf/conda/main
-fi
-python3 scripts/callbacks/linear_experiment_callback.py "${callback_args[@]}"
+"${callback_python}" scripts/callbacks/linear_experiment_callback.py "${callback_args[@]}"
 callback_status=$?
 if [ "${callback_status}" -ne 0 ]; then
   echo "Linear completion callback failed with status ${callback_status}" >&2
