@@ -21,11 +21,14 @@ ALL_REPEATS="${ROB338_ALL_REPEATS:-1 2 3}"
 RUN_REPEATS="${ROB338_RUN_REPEATS:-2 3}"
 CSV_NAME="${ROB338_CSV_NAME:-rob124_384_dropout_all_dataset_fixed_rewards_0_and_1.csv}"
 PARTITIONS="${ROB338_PARTITIONS:-gpu-h100-nvl gpu-h100 gpu}"
+SKIP_CELLS="${ROB338_SKIP_CELLS:-}"
+EXPECTED_SUBMISSIONS="${ROB338_EXPECTED_SUBMISSIONS:-}"
 SUMMARY_DATASETS="${ROB338_SUMMARY_DATASETS:-${DATASETS}}"
 SUMMARY_EPOCHS="${ROB338_SUMMARY_EPOCHS:-${EPOCHS}}"
 SUMMARY_FIXED_REWARDS="${ROB338_SUMMARY_FIXED_REWARDS:-${FIXED_REWARDS}}"
 SUMMARY_REPEATS="${ROB338_SUMMARY_REPEATS:-${ALL_REPEATS}}"
 QUEUED_COMMAND="${QUEUED_COMMAND:-scripts/submit_rob338_rc_mlm_repeats_stanage.sh}"
+PROVENANCE_NOT_BEFORE="${ROB338_PROVENANCE_NOT_BEFORE:-2026-07-29T19:04:00Z}"
 
 cd "${REPO_DIR}"
 
@@ -143,6 +146,11 @@ for repeat in ${RUN_REPEATS}; do
   for reward in ${FIXED_REWARDS}; do
     for dataset in ${DATASETS}; do
       for epoch in ${EPOCHS}; do
+        cell_key="${dataset}:${reward}:${epoch}:${repeat}"
+        if [[ " ${SKIP_CELLS} " == *" ${cell_key} "* ]]; then
+          echo "[rob338-submit] skipping previously completed corrected cell ${cell_key}"
+          continue
+        fi
         partition="${partition_list[$((cell_index % ${#partition_list[@]}))]}"
         cell_index=$((cell_index + 1))
         reward_tag="${reward//./p}"
@@ -163,12 +171,21 @@ for repeat in ${RUN_REPEATS}; do
   done
 done
 
+if [ -n "${EXPECTED_SUBMISSIONS}" ] && [ "${#job_ids[@]}" -ne "${EXPECTED_SUBMISSIONS}" ]; then
+  echo "Expected ${EXPECTED_SUBMISSIONS} submitted cells, got ${#job_ids[@]}" >&2
+  exit 1
+fi
+if [ "${#job_ids[@]}" -eq 0 ]; then
+  echo "No ROB-338 cells selected for submission" >&2
+  exit 1
+fi
+
 dependency="$(IFS=:; echo "${job_ids[*]}")"
 finalizer_id="$(
   sbatch --parsable \
     --partition="${FINALIZER_PARTITION}" \
     --dependency="afterany:${dependency}" \
-    --export=ALL,REPO_DIR="${REPO_DIR}",LINEAR_ISSUE="${LINEAR_ISSUE}",RESULT_ROOT="${RESULT_ROOT}",CHECKPOINT_PATH="${CHECKPOINT_PATH}",ROB338_FIXED_REWARDS="${SUMMARY_FIXED_REWARDS}",ROB338_DATASETS="${SUMMARY_DATASETS}",ROB338_EPOCHS="${SUMMARY_EPOCHS}",ROB338_REPEATS="${SUMMARY_REPEATS}",ROB338_LR="${LR}",CSV_NAME="${CSV_NAME}",QUEUED_COMMAND="${QUEUED_COMMAND}" \
+    --export=ALL,REPO_DIR="${REPO_DIR}",LINEAR_ISSUE="${LINEAR_ISSUE}",RESULT_ROOT="${RESULT_ROOT}",CHECKPOINT_PATH="${CHECKPOINT_PATH}",ROB338_FIXED_REWARDS="${SUMMARY_FIXED_REWARDS}",ROB338_DATASETS="${SUMMARY_DATASETS}",ROB338_EPOCHS="${SUMMARY_EPOCHS}",ROB338_REPEATS="${SUMMARY_REPEATS}",ROB338_LR="${LR}",CSV_NAME="${CSV_NAME}",QUEUED_COMMAND="${QUEUED_COMMAND}",ROB338_PROVENANCE_NOT_BEFORE="${PROVENANCE_NOT_BEFORE}" \
     "${FINALIZER_SCRIPT}"
 )"
 echo "finalizer|${finalizer_id}|afterany:${dependency}"

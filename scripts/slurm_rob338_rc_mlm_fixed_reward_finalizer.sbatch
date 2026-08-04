@@ -28,6 +28,7 @@ ROB338_DATASETS="${ROB338_DATASETS:-tedlium earnings22 rev16 TAL chime6}"
 ROB338_EPOCHS="${ROB338_EPOCHS:-1 5}"
 ROB338_REPEATS="${ROB338_REPEATS:-1 2 3}"
 ROB338_LR="${ROB338_LR:-1e-5}"
+ROB338_PROVENANCE_NOT_BEFORE="${ROB338_PROVENANCE_NOT_BEFORE:-2026-07-29T19:04:00Z}"
 CSV_NAME="${CSV_NAME:-rob124_384_dropout_all_dataset_fixed_rewards_0_and_1.csv}"
 RUNNER_LABEL="${RUNNER_LABEL:-slurm-finalizer:${SLURM_JOB_ID:-manual}}"
 QUEUED_COMMAND="${QUEUED_COMMAND:-sbatch ${SLURM_SUBMIT_SCRIPT:-scripts/slurm_rob338_rc_mlm_fixed_reward_finalizer.sbatch}}"
@@ -69,66 +70,10 @@ if [ "${ROB338_FINALIZER_SKIP_SUMMARY:-0}" != "1" ]; then
     --csv-name "${CSV_NAME}" \
     --title "ROB-338 RC-MLM Fixed-Reward WER Repeats" || summary_status=$?
 
-  python3 - "${RESULT_ROOT}/${CSV_NAME}" <<'PY' || summary_status=$?
-import csv
-import sys
-from collections import defaultdict
-from pathlib import Path
-
-csv_path = Path(sys.argv[1])
-rows = list(csv.DictReader(csv_path.open()))
-complete = [row for row in rows if row["status"] == "complete"]
-print(f"[rob338-stanage-finalizer] complete={len(complete)}/{len(rows)}")
-missing = [row for row in rows if row["status"] != "complete"]
-for row in missing:
-    print(
-        "[rob338-stanage-finalizer] missing "
-        f"reward={row['reward']} dataset={row['dataset_tag']} epoch={row['epochs']} repeat={row['repeat']}"
-    )
-
-counts = defaultdict(set)
-for row in complete:
-    counts[(row["reward"], row["dataset_tag"], row["epochs"])].add(row["repeat"])
-
-seed_mismatches = []
-for row in rows:
-    config_path = Path(row["config_path"])
-    expected_seed = row["seed"]
-    text = config_path.read_text(encoding="utf-8")
-    in_augmentation_config = False
-    observed_seed = None
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped == "augmentation_config:":
-            in_augmentation_config = True
-            continue
-        if in_augmentation_config and line and not line.startswith(" "):
-            in_augmentation_config = False
-        if in_augmentation_config and stripped.startswith("seed:"):
-            observed_seed = stripped.split(":", 1)[1].strip()
-            break
-    if observed_seed != expected_seed:
-        seed_mismatches.append((row, observed_seed))
-
-bad = []
-for key, repeats in sorted(counts.items(), key=lambda item: (float(item[0][0]), item[0][1], int(item[0][2]))):
-    if len(repeats) != 3:
-        bad.append((key, repeats))
-if seed_mismatches:
-    for row, observed_seed in seed_mismatches:
-        print(
-            "[rob338-stanage-finalizer] seed mismatch "
-            f"reward={row['reward']} dataset={row['dataset_tag']} epoch={row['epochs']} "
-            f"repeat={row['repeat']} expected={row['seed']} observed={observed_seed}"
-        )
-if missing or bad or seed_mismatches or len(complete) != len(rows):
-    for (reward, dataset, epochs), repeats in bad:
-        print(
-            "[rob338-stanage-finalizer] incomplete aggregate "
-            f"reward={reward} dataset={dataset} epoch={epochs} repeats={sorted(repeats)}"
-        )
-    raise SystemExit(1)
-PY
+  python3 scripts/validate_rob338_seed_fix_provenance.py \
+    --csv "${RESULT_ROOT}/${CSV_NAME}" \
+    --result-root "${RESULT_ROOT}" \
+    --not-before "${ROB338_PROVENANCE_NOT_BEFORE}" || summary_status=$?
 else
   echo "[rob338-stanage-finalizer] summary skipped for callback smoke"
 fi

@@ -378,3 +378,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   the finalizer regenerated the ROB-124 fixed-reward result summary with
   `60/60` complete per-cell rows and `N=3` for every reward/dataset/epoch
   aggregate.
+
+## 2026-08-04
+
+- Audited the ROB-338 effective-seed rerun after its callback and found that
+  only 6/40 corrected jobs had run; 34 were cancelled at zero runtime when
+  their partitions went down. Hardened the finalizer to require post-seed-fix
+  successful cell logs and fresh result files, and prepared a targeted requeue
+  that preserves the six genuinely completed corrected cells.
