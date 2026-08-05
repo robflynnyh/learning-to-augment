@@ -393,3 +393,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   representative evaluation with a Linear callback. The EL9 test partitions
   were restricted to the `el9-testing` account, so the real GPU smoke remains
   required after the outage before the 34 missing cells can be resubmitted.
+
+## 2026-08-05
+
+- After Stanage reopened GPU access through the EL9-only `stanage9` login,
+  selected `Python/3.10.8-GCCcore-12.2.0` as ROB-338's base interpreter and
+  added a callback-backed H100 Slurm wrapper for the issue-specific environment
+  build. The environment build and representative evaluation remain separate
+  gates before the 34-cell targeted recovery can be submitted.
