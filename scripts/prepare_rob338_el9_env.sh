@@ -5,6 +5,7 @@ set -euo pipefail
 
 BASE_PYTHON="${ROB338_EL9_BASE_PYTHON:-}"
 CONDA_BIN="${ROB338_EL9_CONDA_BIN:-}"
+CONDA_CHANNEL="${ROB338_EL9_CONDA_CHANNEL:-conda-forge}"
 ENV_DIR="${ROB338_EL9_ENV_DIR:-/mnt/parscratch/users/acp21rjf/conda/rob338-el9}"
 SOURCE_PYTHON="${ROB338_FREEZE_SOURCE_PYTHON:-/mnt/parscratch/users/acp21rjf/conda/main/bin/python}"
 REQUIREMENTS_PATH="${ROB338_EL9_REQUIREMENTS_PATH:-${ENV_DIR}.requirements.txt}"
@@ -52,7 +53,14 @@ else
   mkdir -p "$(dirname "${ENV_DIR}")" "$(dirname "${REQUIREMENTS_PATH}")"
   if [ -n "${CONDA_BIN}" ]; then
     echo "[rob338-el9-env] conda_bootstrap=${CONDA_BIN}"
-    "${CONDA_BIN}" create --yes --prefix "${ENV_DIR}" python=3.10 pip
+    echo "[rob338-el9-env] conda_channel=${CONDA_CHANNEL}"
+    "${CONDA_BIN}" create \
+      --yes \
+      --override-channels \
+      --channel "${CONDA_CHANNEL}" \
+      --prefix "${ENV_DIR}" \
+      python=3.10 \
+      pip
   else
     echo "[rob338-el9-env] base_python=${BASE_PYTHON}"
     "${BASE_PYTHON}" -m venv "${ENV_DIR}"

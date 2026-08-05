@@ -401,5 +401,7 @@ reproduce results, interpret metrics, or avoid known failure modes.
   environment build. The staged Python 3.10/3.11 modules crashed with illegal
   instructions on the AMD EPYC H100 node, while `Anaconda3/2025.06-1` worked;
   the wrapper therefore uses its `conda` executable to create a fresh Python
-  3.10 prefix. The environment build and representative evaluation remain
-  separate gates before the 34-cell targeted recovery can be submitted.
+  3.10 prefix. The default Anaconda channels required interactive terms
+  acceptance, so the isolated prefix uses `conda-forge` with overridden
+  channels instead. The environment build and representative evaluation
+  remain separate gates before the 34-cell targeted recovery can be submitted.
