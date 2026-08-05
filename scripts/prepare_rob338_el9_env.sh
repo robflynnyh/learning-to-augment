@@ -3,7 +3,8 @@
 
 set -euo pipefail
 
-BASE_PYTHON="${ROB338_EL9_BASE_PYTHON:?Set ROB338_EL9_BASE_PYTHON to an EL9 Python 3.10 executable}"
+BASE_PYTHON="${ROB338_EL9_BASE_PYTHON:-}"
+CONDA_BIN="${ROB338_EL9_CONDA_BIN:-}"
 ENV_DIR="${ROB338_EL9_ENV_DIR:-/mnt/parscratch/users/acp21rjf/conda/rob338-el9}"
 SOURCE_PYTHON="${ROB338_FREEZE_SOURCE_PYTHON:-/mnt/parscratch/users/acp21rjf/conda/main/bin/python}"
 REQUIREMENTS_PATH="${ROB338_EL9_REQUIREMENTS_PATH:-${ENV_DIR}.requirements.txt}"
@@ -21,23 +22,20 @@ if [[ "${VERSION_ID:-}" != 9* ]]; then
   exit 1
 fi
 
-for required_path in "${BASE_PYTHON}" "${SOURCE_PYTHON}"; do
+if [ -n "${BASE_PYTHON}" ] && [ -n "${CONDA_BIN}" ]; then
+  echo "Set only one of ROB338_EL9_BASE_PYTHON or ROB338_EL9_CONDA_BIN" >&2
+  exit 1
+fi
+if [ -z "${BASE_PYTHON}" ] && [ -z "${CONDA_BIN}" ]; then
+  echo "Set ROB338_EL9_BASE_PYTHON or ROB338_EL9_CONDA_BIN" >&2
+  exit 1
+fi
+for required_path in "${SOURCE_PYTHON}" ${BASE_PYTHON:+"${BASE_PYTHON}"} ${CONDA_BIN:+"${CONDA_BIN}"}; do
   if [ ! -x "${required_path}" ]; then
     echo "Missing executable: ${required_path}" >&2
     exit 1
   fi
 done
-
-"${BASE_PYTHON}" - <<'PY'
-import platform
-import sys
-
-if sys.version_info[:2] != (3, 10):
-    raise SystemExit(f"ROB-338 expects Python 3.10, got {sys.version}")
-print(f"[rob338-el9-env] base_python={sys.executable}")
-print(f"[rob338-el9-env] python={platform.python_version()}")
-print(f"[rob338-el9-env] platform={platform.platform()}")
-PY
 
 if [ -e "${ENV_DIR}" ]; then
   if [ ! -x "${ENV_DIR}/bin/python" ]; then
@@ -52,8 +50,25 @@ if [ -e "${ENV_DIR}" ]; then
   echo "[rob338-el9-env] resuming environment=${ENV_DIR}"
 else
   mkdir -p "$(dirname "${ENV_DIR}")" "$(dirname "${REQUIREMENTS_PATH}")"
-  "${BASE_PYTHON}" -m venv "${ENV_DIR}"
+  if [ -n "${CONDA_BIN}" ]; then
+    echo "[rob338-el9-env] conda_bootstrap=${CONDA_BIN}"
+    "${CONDA_BIN}" create --yes --prefix "${ENV_DIR}" python=3.10 pip
+  else
+    echo "[rob338-el9-env] base_python=${BASE_PYTHON}"
+    "${BASE_PYTHON}" -m venv "${ENV_DIR}"
+  fi
 fi
+
+"${ENV_DIR}/bin/python" - <<'PY'
+import platform
+import sys
+
+if sys.version_info[:2] != (3, 10):
+    raise SystemExit(f"ROB-338 expects Python 3.10, got {sys.version}")
+print(f"[rob338-el9-env] python_executable={sys.executable}")
+print(f"[rob338-el9-env] python={platform.python_version()}")
+print(f"[rob338-el9-env] platform={platform.platform()}")
+PY
 
 "${ENV_DIR}/bin/python" -m pip install --upgrade pip setuptools wheel
 "${ENV_DIR}/bin/python" -m pip install \

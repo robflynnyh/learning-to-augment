@@ -24,7 +24,7 @@ REPO_DIR="${REPO_DIR:-/mnt/parscratch/users/acp21rjf/symphony-workspaces-learnin
 LINEAR_ISSUE="${LINEAR_ISSUE:-ROB-338}"
 RESULT_ROOT="${RESULT_ROOT:-${REPO_DIR}/exp/results/repro/reward_conditioned_lm/no_audio_conditioning/rob124_384_dropout_reward_conditioning/all_dataset_fixed_rewards_0_and_1}"
 ROB338_EL9_ENV_DIR="${ROB338_EL9_ENV_DIR:-/mnt/parscratch/users/acp21rjf/conda/rob338-el9}"
-ROB338_EL9_PYTHON_MODULE="${ROB338_EL9_PYTHON_MODULE:-Python/3.10.8-GCCcore-12.2.0}"
+ROB338_EL9_CONDA_MODULE="${ROB338_EL9_CONDA_MODULE:-Anaconda3/2025.06-1}"
 LOG_PATH="${LOG_PATH:-${RESULT_ROOT}/logs/stanage/rob338/rob338_el9_env_prepare-${SLURM_JOB_ID:-manual}.log}"
 RUNNER_LABEL="${RUNNER_LABEL:-slurm-env-prep:${SLURM_JOB_ID:-manual}}"
 QUEUED_COMMAND="${QUEUED_COMMAND:-sbatch scripts/slurm_rob338_el9_env_prepare.sbatch}"
@@ -93,21 +93,21 @@ elif [ -f /usr/share/lmod/lmod/init/bash ]; then
   source /usr/share/lmod/lmod/init/bash
 fi
 module purge
-module load "${ROB338_EL9_PYTHON_MODULE}"
+module load "${ROB338_EL9_CONDA_MODULE}"
 
-ROB338_EL9_BASE_PYTHON="$(command -v python3)"
-export ROB338_EL9_BASE_PYTHON ROB338_EL9_ENV_DIR
+ROB338_EL9_CONDA_BIN="$(command -v conda)"
+export ROB338_EL9_CONDA_BIN ROB338_EL9_ENV_DIR
 
 echo "[rob338-el9-env-wrapper] job_id=${SLURM_JOB_ID:-manual}"
 echo "[rob338-el9-env-wrapper] host=$(hostname)"
 echo "[rob338-el9-env-wrapper] os=${PRETTY_NAME:-unknown}"
-echo "[rob338-el9-env-wrapper] python_module=${ROB338_EL9_PYTHON_MODULE}"
-echo "[rob338-el9-env-wrapper] base_python=${ROB338_EL9_BASE_PYTHON}"
+echo "[rob338-el9-env-wrapper] conda_module=${ROB338_EL9_CONDA_MODULE}"
+echo "[rob338-el9-env-wrapper] conda_bin=${ROB338_EL9_CONDA_BIN}"
 echo "[rob338-el9-env-wrapper] environment=${ROB338_EL9_ENV_DIR}"
 echo "[rob338-el9-env-wrapper] branch=${GIT_BRANCH}"
 echo "[rob338-el9-env-wrapper] commit=${GIT_COMMIT}"
 
-"${ROB338_EL9_BASE_PYTHON}" --version
+"${ROB338_EL9_CONDA_BIN}" --version
 
 if [ "${ROB338_ENV_PREP_SKIP_BUILD:-0}" = "1" ]; then
   echo "[rob338-el9-env-wrapper] build skipped for wrapper/callback smoke"

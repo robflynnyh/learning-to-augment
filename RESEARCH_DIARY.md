@@ -397,7 +397,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
 ## 2026-08-05
 
 - After Stanage reopened GPU access through the EL9-only `stanage9` login,
-  selected `Python/3.10.8-GCCcore-12.2.0` as ROB-338's base interpreter and
-  added a callback-backed H100 Slurm wrapper for the issue-specific environment
-  build. The environment build and representative evaluation remain separate
-  gates before the 34-cell targeted recovery can be submitted.
+  added a callback-backed H100 Slurm wrapper for ROB-338's issue-specific
+  environment build. The staged Python 3.10/3.11 modules crashed with illegal
+  instructions on the AMD EPYC H100 node, while `Anaconda3/2025.06-1` worked;
+  the wrapper therefore uses its `conda` executable to create a fresh Python
+  3.10 prefix. The environment build and representative evaluation remain
+  separate gates before the 34-cell targeted recovery can be submitted.
