@@ -403,5 +403,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   the wrapper therefore uses its `conda` executable to create a fresh Python
   3.10 prefix. The default Anaconda channels required interactive terms
   acceptance, so the isolated prefix uses `conda-forge` with overridden
-  channels instead. The environment build and representative evaluation
-  remain separate gates before the 34-cell targeted recovery can be submitted.
+  channels instead. The old environment also contained a stale
+  `huggingface_hub==1.2.3` top-level pin that conflicted with its own pinned
+  `tokenizers==0.21.0`; the migration excludes that inconsistent pin and lets
+  the Transformers/tokenizers/datasets constraints select a compatible hub
+  version. The environment build and representative evaluation remain separate
+  gates before the 34-cell targeted recovery can be submitted.

@@ -86,7 +86,7 @@ PY
   --index-url "${TORCH_INDEX_URL}"
 
 "${SOURCE_PYTHON}" -m pip freeze | grep -Ev \
-  '(^-e | @ file:|^apex @|^flash-attn==|^torch==|^torchaudio==|^torchvision==|^triton==|^nvidia-)' \
+  '(^-e | @ file:|^apex @|^flash-attn==|^huggingface[_-]hub==|^torch==|^torchaudio==|^torchvision==|^triton==|^nvidia-)' \
   > "${REQUIREMENTS_PATH}"
 "${ENV_DIR}/bin/python" -m pip install -r "${REQUIREMENTS_PATH}"
 
