@@ -10,6 +10,7 @@ ENV_DIR="${ROB338_EL9_ENV_DIR:-/mnt/parscratch/users/acp21rjf/conda/rob338-el9}"
 SOURCE_PYTHON="${ROB338_FREEZE_SOURCE_PYTHON:-/mnt/parscratch/users/acp21rjf/conda/main/bin/python}"
 REQUIREMENTS_PATH="${ROB338_EL9_REQUIREMENTS_PATH:-${ENV_DIR}.requirements.txt}"
 TORCH_INDEX_URL="${ROB338_TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu118}"
+LCASR_ROOT="${ROB338_LCASR_ROOT:-/mnt/parscratch/users/acp21rjf/long-context-asr}"
 RESUME="${ROB338_EL9_RESUME:-0}"
 
 if [ ! -r /etc/os-release ]; then
@@ -37,6 +38,10 @@ for required_path in "${SOURCE_PYTHON}" ${BASE_PYTHON:+"${BASE_PYTHON}"} ${CONDA
     exit 1
   fi
 done
+if [ ! -f "${LCASR_ROOT}/lcasr/__init__.py" ]; then
+  echo "Missing LCASR source package: ${LCASR_ROOT}/lcasr/__init__.py" >&2
+  exit 1
+fi
 
 if [ -e "${ENV_DIR}" ]; then
   if [ ! -x "${ENV_DIR}/bin/python" ]; then
@@ -90,7 +95,7 @@ PY
   > "${REQUIREMENTS_PATH}"
 "${ENV_DIR}/bin/python" -m pip install -r "${REQUIREMENTS_PATH}"
 
-PYTHONPATH="/mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-338:/mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-338/exp:/mnt/parscratch/users/acp21rjf/lcasr:/mnt/parscratch/users/acp21rjf/language_modelling" \
+PYTHONPATH="/mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-338:/mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-338/exp:${LCASR_ROOT}:/mnt/parscratch/users/acp21rjf/language_modelling" \
   "${ENV_DIR}/bin/python" - <<'PY'
 import numpy
 import omegaconf
@@ -106,6 +111,7 @@ print(f"[rob338-el9-env] torchaudio={torchaudio.__version__}")
 print(f"[rob338-el9-env] numpy={numpy.__version__}")
 print(f"[rob338-el9-env] yaml={yaml.__version__}")
 print(f"[rob338-el9-env] cuda_build={torch.version.cuda}")
+print(f"[rob338-el9-env] lcasr_source={lcasr.__file__}")
 print("[rob338-el9-env] import_validation=passed")
 PY
 

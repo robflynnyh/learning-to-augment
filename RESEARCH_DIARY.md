@@ -407,5 +407,11 @@ reproduce results, interpret metrics, or avoid known failure modes.
   `huggingface_hub==1.2.3` top-level pin that conflicted with its own pinned
   `tokenizers==0.21.0`; the migration excludes that inconsistent pin and lets
   the Transformers/tokenizers/datasets constraints select a compatible hub
-  version. The environment build and representative evaluation remain separate
-  gates before the 34-cell targeted recovery can be submitted.
+  version. The legacy environment exposed LCASR through an editable install at
+  `/users/acp21rjf/long-context-asr`, while the old ROB-338 `PYTHONPATH` entry
+  pointed at an unrelated Hugging Face artifact checkout. A clean detached copy
+  of the legacy LCASR source commit `30fbd3b` is now staged at
+  `/mnt/parscratch/users/acp21rjf/long-context-asr`, and both environment and
+  cell validation log the imported source path. The environment build and
+  representative evaluation remain separate gates before the 34-cell targeted
+  recovery can be submitted.
