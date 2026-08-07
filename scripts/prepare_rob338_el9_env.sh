@@ -10,6 +10,7 @@ ENV_DIR="${ROB338_EL9_ENV_DIR:-/mnt/parscratch/users/acp21rjf/conda/rob338-el9}"
 SOURCE_PYTHON="${ROB338_FREEZE_SOURCE_PYTHON:-/mnt/parscratch/users/acp21rjf/conda/main/bin/python}"
 REQUIREMENTS_PATH="${ROB338_EL9_REQUIREMENTS_PATH:-${ENV_DIR}.requirements.txt}"
 TORCH_INDEX_URL="${ROB338_TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu118}"
+SETUPTOOLS_VERSION="${ROB338_SETUPTOOLS_VERSION:-73.0.1}"
 LCASR_ROOT="${ROB338_LCASR_ROOT:-/mnt/parscratch/users/acp21rjf/long-context-asr}"
 RESUME="${ROB338_EL9_RESUME:-0}"
 
@@ -83,7 +84,7 @@ print(f"[rob338-el9-env] python={platform.python_version()}")
 print(f"[rob338-el9-env] platform={platform.platform()}")
 PY
 
-"${ENV_DIR}/bin/python" -m pip install --upgrade pip setuptools wheel
+"${ENV_DIR}/bin/python" -m pip install --upgrade pip "setuptools==${SETUPTOOLS_VERSION}" wheel
 "${ENV_DIR}/bin/python" -m pip install \
   torch==2.5.1+cu118 \
   torchaudio==2.5.1+cu118 \
@@ -94,11 +95,14 @@ PY
   '(^-e | @ file:|^apex @|^flash-attn==|^huggingface[_-]hub==|^torch==|^torchaudio==|^torchvision==|^triton==|^nvidia-)' \
   > "${REQUIREMENTS_PATH}"
 "${ENV_DIR}/bin/python" -m pip install -r "${REQUIREMENTS_PATH}"
+"${ENV_DIR}/bin/python" -m pip install "setuptools==${SETUPTOOLS_VERSION}"
 
 PYTHONPATH="/mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-338:/mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-338/exp:${LCASR_ROOT}:/mnt/parscratch/users/acp21rjf/language_modelling" \
   "${ENV_DIR}/bin/python" - <<'PY'
+import importlib.metadata
 import numpy
 import omegaconf
+import pkg_resources
 import torch
 import torchaudio
 import yaml
@@ -110,6 +114,8 @@ print(f"[rob338-el9-env] torch={torch.__version__}")
 print(f"[rob338-el9-env] torchaudio={torchaudio.__version__}")
 print(f"[rob338-el9-env] numpy={numpy.__version__}")
 print(f"[rob338-el9-env] yaml={yaml.__version__}")
+print(f"[rob338-el9-env] setuptools={importlib.metadata.version('setuptools')}")
+print(f"[rob338-el9-env] pkg_resources={pkg_resources.__file__}")
 print(f"[rob338-el9-env] cuda_build={torch.version.cuda}")
 print(f"[rob338-el9-env] lcasr_source={lcasr.__file__}")
 print("[rob338-el9-env] import_validation=passed")

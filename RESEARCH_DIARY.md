@@ -412,6 +412,9 @@ reproduce results, interpret metrics, or avoid known failure modes.
   pointed at an unrelated Hugging Face artifact checkout. A clean detached copy
   of the legacy LCASR source commit `30fbd3b` is now staged at
   `/mnt/parscratch/users/acp21rjf/long-context-asr`, and both environment and
-  cell validation log the imported source path. The environment build and
+  cell validation log the imported source path. The migrated prefix also lacked
+  `pkg_resources`, which the pinned `librosa` import path requires; environment
+  preparation now restores the legacy environment's verified
+  `setuptools==73.0.1` before final import validation. The environment build and
   representative evaluation remain separate gates before the 34-cell targeted
   recovery can be submitted.
