@@ -81,10 +81,6 @@ if [ "${ROB338_DONT_SAVE:-0}" != "1" ] && [ "${FORCE_RERUN:-0}" != "1" ] && [ -f
   echo "[rob338-stanage-cell] skipping completed cell: ${save_path}"
   exit 0
 fi
-if [ "${ROB338_DONT_SAVE:-0}" != "1" ] && [ "${FORCE_RERUN:-0}" = "1" ]; then
-  rm -f "${save_path}"
-fi
-
 export TMPDIR="${SCRATCH_ROOT}/tmp"
 export TORCH_HOME="${SCRATCH_ROOT}/torch"
 export HF_HOME="${SCRATCH_ROOT}/huggingface"
@@ -128,10 +124,18 @@ print("[rob338-stanage-cell] torchaudio_version=" + torchaudio.__version__)
 print("[rob338-stanage-cell] lcasr_source=" + lcasr.__file__)
 print("[rob338-stanage-cell] whisper_version=" + whisper.__version__)
 print("[rob338-stanage-cell] whisper_source=" + whisper.__file__)
-print("[rob338-stanage-cell] cuda_available=" + str(torch.cuda.is_available()))
-if torch.cuda.is_available():
-    print("[rob338-stanage-cell] cuda_device=" + torch.cuda.get_device_name(0))
+cuda_available = torch.cuda.is_available()
+print("[rob338-stanage-cell] cuda_available=" + str(cuda_available))
+if not cuda_available:
+    raise SystemExit(
+        "ROB-338 requires an allocated CUDA GPU; refusing CPU fallback in a GPU job"
+    )
+print("[rob338-stanage-cell] cuda_device=" + torch.cuda.get_device_name(0))
 PY
+
+if [ "${ROB338_DONT_SAVE:-0}" != "1" ] && [ "${FORCE_RERUN:-0}" = "1" ]; then
+  rm -f "${save_path}"
+fi
 
 args=("${ROB338_PYTHON_BIN}" eval.py --config "${config}")
 if [ -n "${ROB338_INDEXES:-}" ]; then

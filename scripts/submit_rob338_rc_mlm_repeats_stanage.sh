@@ -23,6 +23,8 @@ CSV_NAME="${ROB338_CSV_NAME:-rob124_384_dropout_all_dataset_fixed_rewards_0_and_
 PARTITION="${ROB338_PARTITION:-gpu}"
 GPU_TYPE="${ROB338_GPU_TYPE:-h100}"
 PYTHON_BIN="${ROB338_PYTHON_BIN:-/mnt/parscratch/users/acp21rjf/conda/rob338-el9/bin/python}"
+FINALIZER_PYTHON="${ROB338_FINALIZER_PYTHON:-${PYTHON_BIN}}"
+EXCLUDE_NODES="${ROB338_EXCLUDE_NODES:-}"
 SKIP_CELLS="${ROB338_SKIP_CELLS:-}"
 EXPECTED_SUBMISSIONS="${ROB338_EXPECTED_SUBMISSIONS:-}"
 SUMMARY_DATASETS="${ROB338_SUMMARY_DATASETS:-${DATASETS}}"
@@ -154,11 +156,17 @@ for repeat in ${RUN_REPEATS}; do
         reward_tag="${reward_tag//-/m}"
         dataset_tag="${dataset,,}"
         job_name="r338-${dataset_tag:0:3}-r${reward_tag}-e${epoch}-p${repeat}"
+        sbatch_args=(
+          --parsable
+          --job-name="${job_name}"
+          --partition="${PARTITION}"
+          --gres="gpu:${GPU_TYPE}:1"
+        )
+        if [ -n "${EXCLUDE_NODES}" ]; then
+          sbatch_args+=(--exclude="${EXCLUDE_NODES}")
+        fi
         job_id="$(
-          sbatch --parsable \
-            --job-name="${job_name}" \
-            --partition="${PARTITION}" \
-            --gres="gpu:${GPU_TYPE}:1" \
+          sbatch "${sbatch_args[@]}" \
             --export=ALL,REPO_DIR="${REPO_DIR}",RESULT_ROOT="${RESULT_ROOT}",SCRATCH_ROOT="${SCRATCH_ROOT}",CHECKPOINT_PATH="${CHECKPOINT_PATH}",ASR_CKPT="${ASR_CKPT}",MASK_VAE_CKPT="${MASK_VAE_CKPT}",ROB338_DATASET="${dataset}",ROB338_REWARD="${reward}",ROB338_EPOCH="${epoch}",ROB338_REPEAT="${repeat}",ROB338_LR="${LR}",ROB338_GPU_TYPE="${GPU_TYPE}",ROB338_PYTHON_BIN="${PYTHON_BIN}" \
             "${CELL_SCRIPT}"
         )"
@@ -183,7 +191,7 @@ finalizer_id="$(
   sbatch --parsable \
     --partition="${FINALIZER_PARTITION}" \
     --dependency="afterany:${dependency}" \
-    --export=ALL,REPO_DIR="${REPO_DIR}",LINEAR_ISSUE="${LINEAR_ISSUE}",RESULT_ROOT="${RESULT_ROOT}",CHECKPOINT_PATH="${CHECKPOINT_PATH}",ROB338_FIXED_REWARDS="${SUMMARY_FIXED_REWARDS}",ROB338_DATASETS="${SUMMARY_DATASETS}",ROB338_EPOCHS="${SUMMARY_EPOCHS}",ROB338_REPEATS="${SUMMARY_REPEATS}",ROB338_LR="${LR}",CSV_NAME="${CSV_NAME}",QUEUED_COMMAND="${QUEUED_COMMAND}",ROB338_PROVENANCE_NOT_BEFORE="${PROVENANCE_NOT_BEFORE}" \
+    --export=ALL,REPO_DIR="${REPO_DIR}",LINEAR_ISSUE="${LINEAR_ISSUE}",RESULT_ROOT="${RESULT_ROOT}",CHECKPOINT_PATH="${CHECKPOINT_PATH}",ROB338_FIXED_REWARDS="${SUMMARY_FIXED_REWARDS}",ROB338_DATASETS="${SUMMARY_DATASETS}",ROB338_EPOCHS="${SUMMARY_EPOCHS}",ROB338_REPEATS="${SUMMARY_REPEATS}",ROB338_LR="${LR}",ROB338_FINALIZER_PYTHON="${FINALIZER_PYTHON}",CSV_NAME="${CSV_NAME}",QUEUED_COMMAND="${QUEUED_COMMAND}",ROB338_PROVENANCE_NOT_BEFORE="${PROVENANCE_NOT_BEFORE}" \
     "${FINALIZER_SCRIPT}"
 )"
 echo "finalizer|${finalizer_id}|afterany:${dependency}"

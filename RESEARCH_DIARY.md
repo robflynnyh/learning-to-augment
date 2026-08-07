@@ -424,3 +424,14 @@ reproduce results, interpret metrics, or avoid known failure modes.
   import and log its version/source. The environment build and representative
   evaluation remain separate gates before the 34-cell targeted recovery can be
   submitted.
+
+## 2026-08-07
+
+- The EL9 environment gate and a non-saving representative TED-LIUM evaluation
+  completed, but the latter landed on `gpu23` and silently used the evaluator's
+  CPU fallback because PyTorch reported CUDA unavailable. Stanage subsequently
+  drained `gpu23` with reason `GPU driver issue`; an earlier smoke on `gpu21`
+  had detected its allocated H100. The ROB-338 cell wrapper now fails closed
+  when CUDA is unavailable and delays force-rerun result removal until after
+  the CUDA preflight. The submitter also accepts an explicit node exclusion and
+  passes the validated issue-specific EL9 Python to the CPU finalizer.
