@@ -12,6 +12,7 @@ REQUIREMENTS_PATH="${ROB338_EL9_REQUIREMENTS_PATH:-${ENV_DIR}.requirements.txt}"
 TORCH_INDEX_URL="${ROB338_TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu118}"
 SETUPTOOLS_VERSION="${ROB338_SETUPTOOLS_VERSION:-73.0.1}"
 LCASR_ROOT="${ROB338_LCASR_ROOT:-/mnt/parscratch/users/acp21rjf/long-context-asr}"
+WHISPER_ROOT="${ROB338_WHISPER_ROOT:-/mnt/parscratch/users/acp21rjf/openai-whisper}"
 RESUME="${ROB338_EL9_RESUME:-0}"
 
 if [ ! -r /etc/os-release ]; then
@@ -41,6 +42,10 @@ for required_path in "${SOURCE_PYTHON}" ${BASE_PYTHON:+"${BASE_PYTHON}"} ${CONDA
 done
 if [ ! -f "${LCASR_ROOT}/lcasr/__init__.py" ]; then
   echo "Missing LCASR source package: ${LCASR_ROOT}/lcasr/__init__.py" >&2
+  exit 1
+fi
+if [ ! -f "${WHISPER_ROOT}/whisper/normalizers/__init__.py" ]; then
+  echo "Missing Whisper normalizers package: ${WHISPER_ROOT}/whisper/normalizers/__init__.py" >&2
   exit 1
 fi
 
@@ -96,8 +101,9 @@ PY
   > "${REQUIREMENTS_PATH}"
 "${ENV_DIR}/bin/python" -m pip install -r "${REQUIREMENTS_PATH}"
 "${ENV_DIR}/bin/python" -m pip install "setuptools==${SETUPTOOLS_VERSION}"
+"${ENV_DIR}/bin/python" -m pip install --no-deps --editable "${WHISPER_ROOT}"
 
-PYTHONPATH="/mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-338:/mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-338/exp:${LCASR_ROOT}:/mnt/parscratch/users/acp21rjf/language_modelling" \
+PYTHONPATH="/mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-338:/mnt/parscratch/users/acp21rjf/symphony-workspaces-learning-to-augment/ROB-338/exp:${LCASR_ROOT}:${WHISPER_ROOT}:/mnt/parscratch/users/acp21rjf/language_modelling" \
   "${ENV_DIR}/bin/python" - <<'PY'
 import importlib.metadata
 import numpy
@@ -105,10 +111,14 @@ import omegaconf
 import pkg_resources
 import torch
 import torchaudio
+import whisper
 import yaml
+from whisper.normalizers import EnglishTextNormalizer
 
 import l2augment
 import lcasr
+
+EnglishTextNormalizer()
 
 print(f"[rob338-el9-env] torch={torch.__version__}")
 print(f"[rob338-el9-env] torchaudio={torchaudio.__version__}")
@@ -118,6 +128,8 @@ print(f"[rob338-el9-env] setuptools={importlib.metadata.version('setuptools')}")
 print(f"[rob338-el9-env] pkg_resources={pkg_resources.__file__}")
 print(f"[rob338-el9-env] cuda_build={torch.version.cuda}")
 print(f"[rob338-el9-env] lcasr_source={lcasr.__file__}")
+print(f"[rob338-el9-env] whisper={whisper.__version__}")
+print(f"[rob338-el9-env] whisper_source={whisper.__file__}")
 print("[rob338-el9-env] import_validation=passed")
 PY
 

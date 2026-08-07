@@ -415,6 +415,12 @@ reproduce results, interpret metrics, or avoid known failure modes.
   cell validation log the imported source path. The migrated prefix also lacked
   `pkg_resources`, which the pinned `librosa` import path requires; environment
   preparation now restores the legacy environment's verified
-  `setuptools==73.0.1` before final import validation. The environment build and
-  representative evaluation remain separate gates before the 34-cell targeted
-  recovery can be submitted.
+  `setuptools==73.0.1` before final import validation. The first representative
+  evaluation then exposed another editable dependency omitted by `pip freeze`:
+  OpenAI Whisper, used for `EnglishTextNormalizer`. A clean detached copy of the
+  legacy source commit `517a43e` is staged at
+  `/mnt/parscratch/users/acp21rjf/openai-whisper` and installed editable without
+  dependency changes; environment and cell preflights validate its normalizer
+  import and log its version/source. The environment build and representative
+  evaluation remain separate gates before the 34-cell targeted recovery can be
+  submitted.

@@ -27,6 +27,7 @@ ROB338_LR="${ROB338_LR:-1e-5}"
 ROB338_GPU_TYPE="${ROB338_GPU_TYPE:-h100}"
 ROB338_PYTHON_BIN="${ROB338_PYTHON_BIN:-/mnt/parscratch/users/acp21rjf/conda/rob338-el9/bin/python}"
 ROB338_LCASR_ROOT="${ROB338_LCASR_ROOT:-/mnt/parscratch/users/acp21rjf/long-context-asr}"
+ROB338_WHISPER_ROOT="${ROB338_WHISPER_ROOT:-/mnt/parscratch/users/acp21rjf/openai-whisper}"
 LOG_DIR="${LOG_DIR:-${RESULT_ROOT}/logs/stanage/rob338}"
 
 reward_token="${ROB338_REWARD//./p}"
@@ -69,7 +70,7 @@ if [ -f /etc/os-release ]; then
   echo "[rob338-stanage-cell] os_release=$(grep '^PRETTY_NAME=' /etc/os-release | cut -d= -f2- | tr -d '\"')"
 fi
 
-for required_path in "${CHECKPOINT_PATH}" "${ASR_CKPT}" "${MASK_VAE_CKPT}" "${config}" "${ROB338_PYTHON_BIN}" "${ROB338_LCASR_ROOT}/lcasr/__init__.py"; do
+for required_path in "${CHECKPOINT_PATH}" "${ASR_CKPT}" "${MASK_VAE_CKPT}" "${config}" "${ROB338_PYTHON_BIN}" "${ROB338_LCASR_ROOT}/lcasr/__init__.py" "${ROB338_WHISPER_ROOT}/whisper/normalizers/__init__.py"; do
   if [ ! -e "${required_path}" ]; then
     echo "Missing required path: ${required_path}" >&2
     exit 1
@@ -108,19 +109,25 @@ fi
 if command -v module >/dev/null 2>&1; then
   module purge
 fi
-export PYTHONPATH="${REPO_DIR}:${REPO_DIR}/exp:${ROB338_LCASR_ROOT}:/mnt/parscratch/users/acp21rjf/language_modelling${PYTHONPATH:+:${PYTHONPATH}}"
+export PYTHONPATH="${REPO_DIR}:${REPO_DIR}/exp:${ROB338_LCASR_ROOT}:${ROB338_WHISPER_ROOT}:/mnt/parscratch/users/acp21rjf/language_modelling${PYTHONPATH:+:${PYTHONPATH}}"
 
 "${ROB338_PYTHON_BIN}" - <<'PY'
 import sys
 import lcasr
 import torch
 import torchaudio
+import whisper
+from whisper.normalizers import EnglishTextNormalizer
+
+EnglishTextNormalizer()
 
 print("[rob338-stanage-cell] python_executable=" + sys.executable)
 print("[rob338-stanage-cell] python_version=" + sys.version.split()[0])
 print("[rob338-stanage-cell] torch_version=" + torch.__version__)
 print("[rob338-stanage-cell] torchaudio_version=" + torchaudio.__version__)
 print("[rob338-stanage-cell] lcasr_source=" + lcasr.__file__)
+print("[rob338-stanage-cell] whisper_version=" + whisper.__version__)
+print("[rob338-stanage-cell] whisper_source=" + whisper.__file__)
 print("[rob338-stanage-cell] cuda_available=" + str(torch.cuda.is_available()))
 if torch.cuda.is_available():
     print("[rob338-stanage-cell] cuda_device=" + torch.cuda.get_device_name(0))
